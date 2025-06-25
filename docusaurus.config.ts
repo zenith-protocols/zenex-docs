@@ -18,7 +18,7 @@ const config: Config = {
   url: 'https://zenith-protocols.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: '/',
+  baseUrl: '/zenex-docs/',
 
   // GitHub pages deployment config.
   organizationName: 'zenith-protocols', // Your GitHub org name
@@ -26,6 +26,7 @@ const config: Config = {
 
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
+  trailingSlash: false,
 
   // Even if you don't use internationalization, you can use this field to set
   // useful metadata like html lang. For example, if your site is Chinese, you
@@ -89,7 +90,7 @@ const config: Config = {
             },
             {
               label: 'API Reference',
-              to: '/api',
+              to: '/',
             },
           ],
         },
