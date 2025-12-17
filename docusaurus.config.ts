@@ -15,10 +15,10 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://zenith-protocols.github.io',
+  url: 'https://docs.zenex.trade',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: '/zenex-docs/',
+  baseUrl: '/',
 
   // GitHub pages deployment config.
   organizationName: 'zenith-protocols', // Your GitHub org name
