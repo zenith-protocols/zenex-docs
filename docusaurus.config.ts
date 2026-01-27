@@ -26,8 +26,13 @@ const config: Config = {
   organizationName: 'zenith-protocols', // Your GitHub org name
   projectName: 'zenex-docs', // Your repo name (adjust as needed)
 
+  markdown: {
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
+  },
+
   onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
   trailingSlash: false,
 
   // Even if you don't use internationalization, you can use this field to set
@@ -102,19 +107,6 @@ const config: Config = {
     footer: {
       style: 'dark',
       links: [
-        {
-          title: 'Documentation',
-          items: [
-            {
-              label: 'Getting Started',
-              to: '/',
-            },
-            {
-              label: 'API Reference',
-              to: '/',
-            },
-          ],
-        },
         {
           title: 'Community',
           items: [

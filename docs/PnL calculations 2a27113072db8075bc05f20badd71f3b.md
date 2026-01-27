@@ -20,4 +20,4 @@ The notional size is equal to the position’s collateral multiplied with its le
 
 **Example**
 
-The workings of the PnL definition described above can be illustrated with an example: A user opens a long with a notional size of $10.000 on XLM, a 10% price increase yields a $1000 gain, which means the PnL is now $1000. If the price then decreases with 15%, PnL goes to -$500. This means upon closing the position, the user receives a payout of the collateral minus $500,-.
+The workings of the PnL definition described above can be illustrated with an example: A user opens a long with a notional size of \$10.000 on XLM, a 10% price increase yields a \$1000 gain, which means the PnL is now \$1000. If the price then decreases with 15%, PnL goes to -\$500. This means upon closing the position, the user receives a payout of the collateral minus \$500,-.
