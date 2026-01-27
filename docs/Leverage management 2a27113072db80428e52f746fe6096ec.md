@@ -4,7 +4,7 @@ By using leverage, users can amplify their position with borrowed funds. This in
 
 **How leverage works**
 
-When opening a position with leverage, the user essentially borrows funds from the protocol to amplify his own exposure. For example: A user can open a position with a notional size of $100, but only deposit a collateral of $10. The user then effectively ‘borrows’ $90 from the vault. If the price increases with 10% and the user closes the position, the payout is $10 plus the collateral, and the $90 is returned to the vault. In this case the user has doubled the $10 collateral, after only a 10% change in the price. However, a 10% price shift the other way would have led to the user losing all the collateral. 
+When opening a position with leverage, the user essentially borrows funds from the protocol to amplify his own exposure. For example: A user can open a position with a notional size of \$100, but only deposit a collateral of \$10. The user then effectively 'borrows' \$90 from the vault. If the price increases with 10% and the user closes the position, the payout is \$10 plus the collateral, and the \$90 is returned to the vault. In this case the user has doubled the \$10 collateral, after only a 10% change in the price. However, a 10% price shift the other way would have led to the user losing all the collateral. 
 
 **Leverage limits**
 

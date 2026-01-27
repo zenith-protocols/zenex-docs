@@ -1,3 +1,7 @@
+---
+slug: /
+---
+
 # About Zenex
 
 ## What is Zenex?
