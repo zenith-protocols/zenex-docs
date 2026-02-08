@@ -37,7 +37,6 @@ Price impact scalar: 5 000 000 000
 Base hourly rate: 0.0012%
 
 **ADA**
-
 Base fee: 0.05%
 Price impact scalar: 1 000 000 000
 Base hourly rate: 0.0018%
