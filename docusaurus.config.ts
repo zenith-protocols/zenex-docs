@@ -65,6 +65,22 @@ const config: Config = {
     ],
   ],
 
+  plugins: [
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'technical',
+        path: 'technical',
+        routeBasePath: 'technical',
+        sidebarPath: './sidebarsTechnical.ts',
+        editUrl:
+          'https://github.com/zenith-protocols/zenex-docs/tree/main/',
+        remarkPlugins: [remarkMath],
+        rehypePlugins: [rehypeKatex],
+      },
+    ],
+  ],
+
   // Add KaTeX stylesheet
   stylesheets: [
     {
@@ -96,6 +112,13 @@ const config: Config = {
           sidebarId: 'tutorialSidebar',
           position: 'left',
           label: 'Documentation',
+        },
+        {
+          type: 'docSidebar',
+          sidebarId: 'technicalSidebar',
+          docsPluginId: 'technical',
+          position: 'left',
+          label: 'Technical',
         },
         {
           href: 'https://github.com/zenith-protocols',

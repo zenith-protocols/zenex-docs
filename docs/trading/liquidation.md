@@ -1,3 +1,8 @@
+---
+sidebar_position: 5
+title: Liquidation
+---
+
 # Liquidation
 
 Liquidation protects the protocol from bad debt when a position no longer has enough equity to cover its risk. If your equity falls below a safety threshold, the engine will close your position to restore solvency. It is important to note that all collateral is lost in liquidation, therefore it is vital to regularly check your PnL in order to keep your position healthy in the case of market volatility (increasing collateral if necessary).
@@ -22,7 +27,7 @@ $$
 
 ### Liquidation price
 
-The liquidation price is calculated slightly differently for shorts and longs, as is shown below: 
+The liquidation price is calculated slightly differently for shorts and longs, as is shown below:
 
 $$
 liquidationPriceLong < openPrice + openPrice \times \frac{maintenanceMargin + feeBuffer - collateral}{notionalSize}
