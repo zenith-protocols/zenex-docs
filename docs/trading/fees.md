@@ -20,29 +20,3 @@ PriceImpactFee = \frac{NotionalSize}{PriceImpactScalar}
 $$
 
 The PriceImpactScalar settings for each asset can be found [here](../markets/supported-assets.md).
-
-### **3. Total Fee Calculation**
-
-Based on all the above components, the total fee is calculated as follows:
-
-If notional longs > notional shorts
-
-$$
-TotalFeeLongs = 2 \times (BaseFee + PriceImpactFee) + HourlyBorrowingRate \times \frac{notionalLongs}{totalShorts} \times Hours
-$$
-
-$$
-TotalFeeShorts = 2 \times PriceImpactFee - 0.8 \times HourlyBorrowingRate \times \left(\frac{notionalLongs}{totalShorts}\right)^2 \times Hours
-$$
-
-If notional longs < notional shorts
-
-$$
-TotalFeeLongs = 2 \times PriceImpactFee - 0.8 \times HourlyBorrowingRate \times \left(\frac{notionalShorts}{totalLongs}\right)^2 \times Hours
-$$
-
-$$
-TotalFeeShorts = 2 \times (BaseFee + PriceImpactFee) + HourlyBorrowingRate \times \frac{notionalShorts}{totalLongs} \times Hours
-$$
-
-*Similar base fees (or taker fees) are paid in [Jupiter perps](https://station.jup.ag/guides/perpetual-exchange/how-it-works), [Hyperliquid](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees) and [GMX](https://docs.gmx.io/docs/intro/).
