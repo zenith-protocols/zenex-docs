@@ -19,4 +19,4 @@ $$
 collateral >initialMargin*notionalSize
 $$
 
-So if the initial margin is 0.01, the collateral has to be at least 1% of the notional size, and thus users can only have up to 100x leverage. After the position is opened, the maximum leverage is governed by the maintenance margin, fee buffer and PnL as described [here](./liquidation.md).
+So if the initial margin is 0.01, the collateral has to be at least 1% of the notional size, and thus users can only have up to 100x leverage. After the position is opened, the maximum leverage is governed by the maintenance margin, fees accrued and PnL as described [here](./liquidation.md).
