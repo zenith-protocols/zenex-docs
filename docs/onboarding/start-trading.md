@@ -16,7 +16,7 @@ Before you begin, you need:
 
 ### Step 1: Connect or Create an Account
 
-Click **Connect** in the top-right corner. From here you can either select an existing browser wallet, connect an existing passkey account, or **create a new smart account** using a passkey. No wallet extension needed.
+Click **Connect** in the bottom-left corner. From here you can either select an existing browser wallet, connect an existing passkey account, or **create a new smart account** using a passkey. No wallet extension needed.
 
 ### Session Keys: One-Click Trading
 
