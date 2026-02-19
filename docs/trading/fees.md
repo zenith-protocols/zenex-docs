@@ -9,7 +9,7 @@ The Zenex fee structure comprises distinct trading fees: the base fee and the pr
 
 ### **1. Base Fee**
 
-The base fee is a small fee to be paid for both opening and closing a trade. This fee will initially be set to 0.05% across all assets, in order to align and be competitive with similar decentralized perpetuals exchanges*. The base fee is applied exclusively to the dominant market side: When long positions exceed short positions, the fee is levied only upon the opening or closing of a long position, and vice versa.
+The base fee is a small fee to be paid for both opening and closing a trade. This fee will initially be set to 0.05% across all assets, in order to align and be competitive with similar decentralized perpetuals exchanges. The base fee is applied exclusively to the dominant market side: When long positions exceed short positions, the fee is levied only upon the opening or closing of a long position, and vice versa.
 
 ### **2. Price Impact Fee**
 
