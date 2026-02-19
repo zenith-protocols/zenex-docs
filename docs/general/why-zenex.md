@@ -10,7 +10,7 @@ Zenex is a perps exchange built for speed, safety, and composability, so traders
 **Permissionless:**
 
 - **Open access** so anyone can trade, provide liquidity, or integrate.
-- **Composable primtiives** that any ****developers can spin up markets, stratgies, and structured products without waiting on goverance
+- **Composable primtives** that any developer can use to spin up markets, strategies, and structured products without waiting on governance
 
 **Capital Efficiency:**
 
@@ -21,4 +21,4 @@ Zenex is a perps exchange built for speed, safety, and composability, so traders
 **Security:**
 
 - **On-chain transparency** (auditable contracts, real-time metrics) so you can verify, not trust
-- **Battle-tested liquidation** are designed to protect lenders, traders, and LPs during volatile moves
+- **Battle-tested liquidation systems** are designed to protect lenders, traders, and LPs during volatile moves
