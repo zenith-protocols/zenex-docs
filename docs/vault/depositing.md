@@ -1,6 +1,6 @@
 ---
 sidebar_position: 2
-title: Depositing
+title: Depositing & Withdrawing
 ---
 
 # Depositing & Withdrawing
