@@ -30,9 +30,9 @@ $$
 The liquidation price is calculated slightly differently for shorts and longs, as is shown below:
 
 $$
-liquidationPriceLong < openPrice + openPrice \times \frac{maintenanceMargin + feeBuffer - collateral}{notionalSize}
+liquidationPriceLong < openPrice + openPrice \times \frac{maintenanceMargin + fees - collateral}{notionalSize}
 $$
 
 $$
-liquidationPriceShort > openPrice - openPrice \times \frac{maintenanceMargin + feeBuffer - collateral}{notionalSize}
+liquidationPriceShort > openPrice - openPrice \times \frac{maintenanceMargin + fees - collateral}{notionalSize}
 $$
