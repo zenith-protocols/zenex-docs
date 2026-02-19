@@ -3,15 +3,15 @@ sidebar_position: 4
 title: PnL
 ---
 
-# PnL calculations
+# PnL Calculations
 
 PnL ("profit and loss") measures how much you have gained or lost on a position as the market moves. It updates continuously and is the primary indicator of trade performance. It is also an important metric in the context of [liquidations](./liquidation.md), which is why this section will briefly elaborate on the subject.
 
-**How to calculate PnL**
+**How to Calculate PnL**
 
 After you open a long or short position, your PnL updates continuously as the market moves. PnL turns positive when price moves in your favor and negative when it moves against you. Concretely: your PnL is the amount you receive upon closing your position, if it is negative, it is taken out of the collateral of the position.
 
-The generic formula's to calculate a position's PnL are as follows:
+The generic formulas to calculate a position's PnL are as follows:
 
 $$
 PnL Long = \frac{currentPrice - openPrice}{openPrice} * notionalSize
