@@ -8,11 +8,15 @@ title: About Zenex
 
 ## What is Zenex?
 
-Zenex is a DeFi protocol that allows anyone to create or utilize an immutable perpetual market that fits its needs.
+Zenex is a decentralized perpetual futures exchange built on Stellar. It lets traders open leveraged long and short positions on crypto assets without intermediaries, expiry dates, or centralized custody of funds. All positions are settled in the vault’s collateral token.
+
+Zenex is designed for speed, transparency, and composability. Traders can access on-chain leverage, while developers and integrators can build on top of the protocol’s core primitives,
 
 ## What is a Perpetual Exchange?
 
-A "perps exchange" is a trading platform for perpetual futures ("perps") derivatives that let you bet on an asset's price (like BTC, ETH, etc.) without ever expiring. Unlike regular futures that settle on a set date, perps can be held indefinitely, as long as you have enough margin
+A perpetual exchange is a trading venue for perpetual futures, also called “perps” These are derivative contracts that let you speculate on an asset’s price without owning the asset itself and without an expiry date. On Zenex, traders can go long if they expect the price to rise or go short if they expect it to fall.
+
+Unlike traditional futures, perpetuals do not settle on a fixed date. Instead, the protocol uses margin, liquidation rules, and an imbalance-based hourly interest mechanism to keep markets functional and risk-managed.
 
 Here's how it works, fast:
 
@@ -24,3 +28,7 @@ Here's how it works, fast:
 - **Fees & mechanics you'll see:**
     - **Maker/taker fees** on each trade
     - **Funding rate** (periodic, paid between traders)
+
+## Markets on Zenex
+
+Each Zenex market represents a specific asset and has its own fee settings, margin requirements, interest parameters, and collateral limits.
