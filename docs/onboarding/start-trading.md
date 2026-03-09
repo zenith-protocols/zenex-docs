@@ -26,7 +26,7 @@ To enable session keys, toggle **Session Key** after connecting your smart accou
 
 ### Step 2: Select a Market
 
-Choose the asset you want to trade. Zenex supports **BTC**, **ETH**, **XLM**, **SOL**, and **ADA** perpetual futures markets.
+Choose the asset you want to trade like XLM and BTC.
 
 ### Step 3: Choose Your Direction
 
