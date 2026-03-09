@@ -3,22 +3,29 @@ sidebar_position: 2
 title: Why Zenex
 ---
 
-# Why should you use Zenex?
+# Why use Zenex?
 
-Zenex is a perps exchange built for speed, safety, and composability, so traders, apps, and market-makers can plug in and get deep, efficient leverage exposure with on-chain transparency.
+Zenex is a decentralized perpetual futures exchange built for speed, transparency, and capital-efficient on-chain trading. It gives traders leveraged long and short exposure, while giving developers and integrators a protocol they can build on without relying on centralized intermediaries.
 
-**Permissionless:**
+## Open by design
 
-- **Open access** so anyone can trade, provide liquidity, or integrate.
-- **Composable primtives** that any developer can use to spin up markets, strategies, and structured products without waiting on governance
+- **Open access:** Anyone can trade on Zenex through a non-custodial, on-chain system.
+- **Composable infrastructure:** Zenex is built as a protocol, so wallets, apps, aggregators, and other products can integrate its core trading primitives.
+- **Transparent execution:** Positions, fees, and market mechanics are enforced by smart contracts, not opaque off-chain systems.
 
-**Capital Efficiency:**
+## More efficient use of capital
 
-- **Reactive funding/interest mechanics** help keep prices aligned with spot and reduce idle capital
-- **Low-latency matching & deep liquidity** target tight spreads and lower slippage, even for size
-- **Portfolio margin** unlocks netting across positions to get more from the same collateral
+- **Leverage on-chain:** Traders can access leveraged exposure without needing to own the underlying asset.
+- **Dynamic market balancing:** Zenex uses an imbalance-based interest mechanism to help keep markets balanced and functioning efficiently.
+- **Deep, efficient exposure:** The protocol is designed to support larger positions with predictable execution and transparent pricing.
+- **Single-collateral settlement:** Positions are settled in the vault collateral token, simplifying margin and PnL accounting.
 
-**Security:**
+## Built for resilience
 
-- **On-chain transparency** (auditable contracts, real-time metrics) so you can verify, not trust
-- **Battle-tested liquidation systems** are designed to protect lenders, traders, and LPs during volatile moves
+- **On-chain transparency:** Market parameters, collateral flows, and contract behavior are visible and auditable.
+- **Risk controls:** Margin requirements and liquidation mechanics are designed to help protect the protocol during sharp market moves.
+- **Non-custodial architecture:** Users keep control of their assets through smart contracts rather than trusting a centralized exchange.
+
+## For traders and builders
+
+Zenex is not just a trading interface. It is a protocol layer for perpetuals that developers can build on top of, whether they are creating trading apps, vaults, strategy products, or other DeFi integrations.
