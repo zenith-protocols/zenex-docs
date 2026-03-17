@@ -40,34 +40,40 @@ Because liquidity conditions differ per pair, the PriceImpactScalar is set separ
 
 The borrow fee is a time-based fee paid when a position is closed. It accrues continuously over the lifetime of the position, but only applies to positions on the dominant side of the market.
 
-This makes it more expensive to maintain the side of the book that creates imbalance. As utilization rises, the borrow fee rises as well.
+This makes it more expensive to maintain the side of the book that creates imbalance. As utilization rises, either for the market or for the whole vault, the borrow fee rises as well.
 
 The borrow fee rate is defined as:
 
 $$
-BorrowFeeRate = BaseBorrowFeeRate + VariableBorrowFeeRate * Util^{5}
+BorrowFeeRate = BaseBorrowRate + VariableVaultRate * UtilVault^{5} + VariableMarketRate * UtilMarket^{3}
 $$
 
-With:
+with:
 
 $$
-Utilization = \frac{OpenPnL}{VaultBalance}
+UtilMarket = \frac{NotionalMarket}{MaxNotionalMarket}
+$$
+
+and:
+
+$$
+UtilVault = \frac{NotionalVault}{MaxNotionalVault}
 $$
 
 Utilization represents the share of vault liquidity that would be required to pay out all currently open positions if they were closed immediately.
 
-When utilization is near 0, the borrow fee is close to the **BaseBorrowFeeRate**. As utilization increases toward 1, the fee rises along an exponential curve until it reaches:
+When utilization is near 0, the borrow fee is close to the *BaseBorrowRate*. As utilization for both the market and the whole vault increases toward 1, the fee rises along an exponential curve until it reaches:
 
 $$
-BaseBorrowFeeRate + VariableBorrowFeeRate
+BaseBorrowRate + VariableVaultRate + VariableMarketRate
 $$
 
-Unlike the PriceImpactScalar, which is configured individually for each market, the **BaseBorrowFeeRate** and **VariableBorrowFeeRate** are global protocol parameters. They are not set on a per-market basis and therefore apply equally across all trading pairs. At launch, these parameters are set to:
+Unlike the *PriceImpactScalar* and the *VariableMarketRate*, which are configured individually for each market, the *BaseBorrowRate* and the *VariableVaultRate* are global protocol parameters. They are not set on a per-market basis and therefore apply equally across all trading pairs. At launch, these parameters are set to:
 
 $$
-BaseBorrowFeeRate = 0.45
+BaseBorrowRate = 0.45
 $$
 
 $$
-VariableBorrowFeeRate = 0.55
+VariableVaultRate = 0.3
 $$
