@@ -28,7 +28,7 @@ Markets track **open interest**, the total notional value of all open positions,
 
 ### Supported Assets
 
-Zenex currently supports the following assets: **BTC**, **XLM**, **SOL**, **ETH**, and **ADA**. Each asset has tailored parameter settings based on its liquidity profile. See [Supported Assets](./supported-assets.md) for full details.
+Zenex currently supports a select assets but that will expand over time, also with non-zenex vaults you can see other asset classes be added. Each asset has tailored parameter settings based on its liquidity profile. See [Supported Assets](./supported-assets.md) for full details.
 
 ### Adding New Markets
 
