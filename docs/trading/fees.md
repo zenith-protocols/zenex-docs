@@ -71,9 +71,9 @@ $$
 Unlike the *PriceImpactScalar* and the *VariableMarketRate*, which are configured individually for each market, the *BaseBorrowRate* and the *VariableVaultRate* are global protocol parameters. They are not set on a per-market basis and therefore apply equally across all trading pairs. At launch, these parameters are set to:
 
 $$
-BaseBorrowRate = 0.45
+BaseBorrowRate = 0.001/h
 $$
 
 $$
-VariableVaultRate = 0.3
+VariableVaultRate = 0.001/h
 $$
