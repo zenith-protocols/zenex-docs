@@ -1,0 +1,60 @@
+---
+sidebar_position: 1
+title: Price Verifier
+---
+
+# Price Verifier
+
+Zenex uses [Pyth Lazer](https://pyth.network/) for price feeds. The `PriceVerifierContract` parses and verifies Ed25519-signed binary price updates from the Pyth Lazer network, providing cryptographically authenticated price data to the trading contract.
+
+## PriceData Structure
+
+Each verified price update produces one or more `PriceData` values:
+
+```rust
+pub struct PriceData {
+    pub feed_id: u32,       // Pyth Lazer feed identifier
+    pub price: i128,        // Raw price value
+    pub exponent: i32,      // Decimal exponent (e.g., -8)
+    pub publish_time: u64,  // Unix timestamp (seconds)
+}
+```
+
+The price scalar used in downstream computation is derived from the exponent: `price_scalar = 10^(-exponent)`. For the standard exponent of `-8`, this yields `price_scalar = 100,000,000`.
+
+## Verification Flow
+
+The contract performs a sequence of checks on every incoming price update before returning parsed data.
+
+Verification begins with **envelope parsing**. The contract reads a fixed-layout binary envelope starting with magic bytes `0x821A01B9`, followed by a 64-byte Ed25519 signature, a 32-byte public key, and a `u16` payload length. If the magic bytes do not match, the update is rejected immediately.
+
+The contract then performs **signer verification**. The public key embedded in the update must match the contract's stored `trusted_signer` exactly. This ensures only Pyth Lazer's authorized key can produce accepted updates.
+
+Next, **signature verification** is performed via `env.crypto().ed25519_verify(pubkey, payload, signature)`, using Soroban's host-provided cryptographic primitives. This confirms the payload has not been tampered with since signing.
+
+With authenticity established, the contract proceeds to **payload parsing**. The payload begins with its own magic bytes (`0x93C7D375`), followed by a microsecond-precision timestamp, a channel byte, a feed count, and per-feed price/exponent/confidence properties.
+
+Finally, a **confidence check** is applied when confidence data is present. If `confidence * 10,000 > |price| * max_confidence_bps`, the contract raises `ConfidenceTooHigh`. This guards against consuming prices with excessive uncertainty relative to the configured tolerance.
+
+## Access Control
+
+The price verifier implements OZ Ownable for access control. For standard Ownable behavior, refer to [OpenZeppelin Stellar Contracts](https://github.com/OpenZeppelin/stellar-contracts).
+
+| Function | Auth |
+|---|---|
+| `verify_prices(update_data)` | Permissionless |
+| `update_trusted_signer(signer)` | Owner only (`#[only_owner]`) |
+| `update_max_confidence_bps(bps)` | Owner only |
+| `upgrade(wasm_hash)` | Owner only |
+
+## Staleness Thresholds
+
+The trading contract enforces staleness checks on all price data. The maximum acceptable age depends on the context of the action being performed.
+
+| Context | Max Age | Constant |
+|---|---|---|
+| User actions (open, close, modify) | 60 seconds | `MAX_STALENESS_USER` |
+| Keeper actions (fill, SL/TP, liquidate) | 300 seconds | `MAX_STALENESS_KEEPER` |
+| Circuit breaker / ADL | 300 seconds | `MAX_STALENESS_KEEPER` |
+
+Keeper actions use a relaxed threshold to account for the delay between price publication and keeper transaction submission.
