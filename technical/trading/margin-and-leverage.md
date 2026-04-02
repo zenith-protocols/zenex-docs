@@ -1,5 +1,5 @@
 ---
-sidebar_position: 9
+sidebar_position: 10
 title: Margin & Leverage
 ---
 
@@ -12,20 +12,20 @@ Every position must satisfy two leverage constraints.
 ### Minimum Leverage
 
 $$
-\text{notional\_size} \geq \text{collateral} \times \text{MIN\_LEVERAGE}
+\text{notional} \geq \text{col} \times \text{MIN\_LEVERAGE}
 $$
 
-`MIN_LEVERAGE = 2`. Positions must be at least 2x levered. This prevents using the trading contract as a simple spot swap mechanism.
+`MIN_LEVERAGE = 2` (not a named constant in code, but enforced in validation). Positions must be at least 2x levered. This prevents using the trading contract as a simple spot swap mechanism.
 
 ### Maximum Leverage
 
 $$
-\text{notional\_size} \times \text{init\_margin} \leq \text{collateral} \times \text{SCALAR\_7}
+\text{notional} \times \text{margin} \leq \text{col} \times \text{SCALAR\_7}
 $$
 
-Equivalently: `leverage <= 1 / init_margin`.
+Equivalently: `leverage <= 1 / margin`.
 
-| `init_margin` | Max Leverage |
+| `margin` | Max Leverage |
 |---|---|
 | `1_000_000` (10%) | 10x |
 | `500_000` (5%) | 20x |
@@ -33,39 +33,30 @@ Equivalently: `leverage <= 1 / init_margin`.
 | `100_000` (1%) | 100x |
 | `50_000` (0.5%) | 200x |
 
-## Initial vs Maintenance Margin
+## Initial Margin vs Liquidation Threshold
 
-| Property | Initial Margin | Maintenance Margin |
+| Property | Initial Margin | Liquidation Threshold |
 |---|---|---|
-| **Rate** | Configurable per market | Fixed at 0.5% |
-| **Source** | `MarketConfig.init_margin` | `SCALAR_7 / MAINTENANCE_MARGIN_DIVISOR` |
+| **Rate** | Configurable per market | Configurable per market |
+| **Source** | `MarketConfig.margin` | `MarketConfig.liq_fee` |
 | **Enforced at** | Open, modify collateral | Liquidation check |
-| **Minimum value** | 0.5% (must be >= maintenance) | 0.5% (hardcoded) |
-| **Purpose** | Buffer between opening and liquidation | Liquidation threshold |
+| **Max value** | 50% (`MAX_MARGIN`) | 25% (`MAX_LIQ_FEE`) |
+| **Purpose** | Buffer between opening and liquidation | Equity below this triggers liquidation |
 
-The validation rule `init_margin >= SCALAR_7 / MAINTENANCE_MARGIN_DIVISOR` ensures that initial margin is always at least equal to maintenance margin.
-
-## Collateral Bounds
-
-| Constraint | Enforced by |
-|---|---|
-| `collateral >= min_collateral` | `TradingConfig.min_collateral` |
-| `collateral <= max_collateral` | `TradingConfig.max_collateral` |
-
-Both are validated at open and on collateral modification.
+The validation rule `margin > liq_fee` ensures there is always a gap between the opening margin requirement and the liquidation threshold. This gap is the safety buffer that absorbs PnL and fee accrual before liquidation triggers.
 
 ## Collateral Modification
 
 When withdrawing collateral from a filled position, an additional margin check is applied:
 
 $$
-\text{equity} = \text{new\_collateral} + \text{pnl} - \text{total\_fee} - \text{vault\_skim}
+\text{equity} = \text{new\_col} + \text{pnl} - \text{total\_fee}
 $$
 
 $$
-\text{equity} \geq \text{notional} \times \frac{\text{init\_margin}}{\text{SCALAR\_7}}
+\text{equity} \geq \text{notional} \times \frac{\text{margin}}{\text{SCALAR\_7}}
 $$
 
-If this check fails, the withdrawal is rejected with `WithdrawalBreaksMargin`. This prevents users from extracting collateral to the point where their position becomes immediately liquidatable.
+Where `total_fee` includes accrued funding and borrowing at current indices. If this check fails, the withdrawal is rejected with `WithdrawalBreaksMargin`. This prevents users from extracting collateral to the point where their position becomes immediately liquidatable.
 
-Collateral withdrawal uses the initial margin requirement, not the maintenance margin. This provides an extra buffer. A user cannot withdraw collateral down to the maintenance margin level.
+Collateral withdrawal uses the initial margin requirement (`margin`), not the liquidation threshold (`liq_fee`). This provides an extra buffer. A user cannot withdraw collateral down to the liquidation threshold level.

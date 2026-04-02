@@ -1,5 +1,5 @@
 ---
-sidebar_position: 10
+sidebar_position: 11
 title: Storage & Events
 ---
 
@@ -21,7 +21,8 @@ Global state that is accessed frequently and shared across all calls.
 | `PriceVerifier` | `Address` | Pyth Lazer verifier address |
 | `Treasury` | `Address` | Protocol fee recipient |
 | `Config` | `TradingConfig` | Global trading parameters |
-| `Markets` | `Vec<u32>` | List of registered feed IDs (max 32) |
+| `Markets` | `Vec<u32>` | List of registered feed IDs (max `MAX_ENTRIES`) |
+| `TotalNotional` | `i128` | Sum of all position notionals across all markets |
 | `PositionCounter` | `u32` | Monotonically incrementing position ID allocator |
 | `LastFundingUpdate` | `u64` | Timestamp of last `apply_funding` call |
 
@@ -74,11 +75,11 @@ All events use Soroban's `#[contractevent]` derive macro. Fields marked with `#[
 | `PlaceLimit` | `feed_id, user, position_id` | `base_fee, impact_fee` |
 | `OpenMarket` | `feed_id, user, position_id` | `base_fee, impact_fee` |
 | `FillLimit` | `feed_id, user, position_id` | `base_fee, impact_fee` |
-| `ClosePosition` | `feed_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding` |
-| `TakeProfit` | `feed_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding` |
-| `StopLoss` | `feed_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding` |
-| `Liquidation` | `feed_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding` |
-| `CancelLimit` | `feed_id, user, position_id` | `base_fee, impact_fee` |
+| `ClosePosition` | `feed_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
+| `TakeProfit` | `feed_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
+| `StopLoss` | `feed_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
+| `Liquidation` | `feed_id, user, position_id` | `price, base_fee, impact_fee, funding, borrowing_fee, liq_fee` |
+| `RefundPosition` | `feed_id, user, position_id` | `amount` |
 | `ModifyCollateral` | `feed_id, user, position_id` | `amount` (positive = deposit, negative = withdraw) |
 | `SetTriggers` | `feed_id, user, position_id` | `take_profit, stop_loss` |
 
@@ -86,10 +87,10 @@ All events use Soroban's `#[contractevent]` derive macro. Fields marked with `#[
 
 | Event | Topics | Data |
 |---|---|---|
-| `ApplyFunding` | None | `rates: Map<u32, i128>` |
+| `ApplyFunding` | None | (no data) |
 | `ADLTriggered` | None | `reduction_pct, deficit` |
 
-The vault skim deduction is not reflected in any event field. The emitted `pnl` in close/TP/SL events is the gross PnL before skim, but the user's actual payout has the skim already deducted. External indexers must account for this discrepancy.
+Close events include `borrowing_fee` as a separate field alongside `base_fee`, `impact_fee`, and `funding`. The emitted `pnl` is the net PnL (after all fees, clamped to `-col`).
 
 ## Error Codes
 
@@ -108,22 +109,22 @@ All errors use `panic_with_error!(e, TradingError::Variant)`. In keeper batch ex
 | 733 | `PositionNotPending` | Fill on already-filled position |
 | 734 | `MaxPositionsReached` | User at 25-position limit |
 | 735 | `NegativeValueNotAllowed` | Negative notional, price, TP, or SL |
-| 736 | `CollateralBelowMinimum` | Below `min_collateral` |
-| 737 | `CollateralAboveMaximum` | Above `max_collateral` |
+| 736 | `NotionalBelowMinimum` | Below `min_notional` |
+| 737 | `NotionalAboveMaximum` | Above `max_notional` |
 | 738 | `LeverageBelowMinimum` | Below 2x leverage |
-| 739 | `LeverageAboveMaximum` | Exceeds `1/init_margin` |
+| 739 | `LeverageAboveMaximum` | Exceeds `1/margin` |
 | 740 | `CollateralUnchanged` | Modify to same value |
 | 741 | `WithdrawalBreaksMargin` | Withdrawal would breach initial margin |
 | 744 | `TakeProfitNotTriggered` | TP price not reached |
 | 745 | `StopLossNotTriggered` | SL price not reached |
-| 746 | `PositionNotLiquidatable` | Equity above maintenance margin |
+| 746 | `PositionNotLiquidatable` | Equity above liquidation threshold (`liq_fee`) |
 | 747 | `LimitOrderNotFillable` | Price not at limit level |
-| 748 | `PositionTooNew` | `min_open_time` not elapsed |
+| 748 | `PositionTooNew` | `MIN_OPEN_TIME` not elapsed |
 | 750 | `ActionNotAllowedForStatus` | Wrong position state for action |
 | 760 | `InvalidStatus` | Unknown status value or admin setting OnIce |
 | 761 | `ContractOnIce` | New position while not Active |
 | 762 | `ContractFrozen` | Any action while Frozen |
-| 770 | `MaxMarketsReached` | 32-market limit |
+| 770 | `MaxMarketsReached` | `MAX_ENTRIES` limit |
 | 780 | `NoDeficit` | ADL triggered but no deficit |
 | 782 | `ThresholdNotMet` | Circuit breaker threshold not met |
 | 790 | `FundingTooEarly` | `apply_funding` within same hour |

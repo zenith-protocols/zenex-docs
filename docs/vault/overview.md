@@ -5,7 +5,7 @@ title: Overview
 
 # Vault Overview
 
-The Zenex **vault** is a liquidity pool that serves as the counterparty to every trade on the platform. Liquidity providers deposit collateral (e.g., USDC) into the vault, and traders borrow against that collateral to open leveraged positions. In return, depositors earn yield from [trading fees](../trading/fees.md), [interest](../trading/interest.md), and trader losses.
+The Zenex **vault** is a liquidity pool that serves as the counterparty to every trade on the platform. Liquidity providers deposit collateral (e.g., USDC) into the vault, and traders borrow against that collateral to open leveraged positions. In return, depositors earn yield from [trading fees](../trading/fees.md), [borrowing interest](../trading/fees.md), and trader losses.
 
 ### How It Works
 

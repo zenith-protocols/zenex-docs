@@ -1,5 +1,5 @@
 ---
-sidebar_position: 6
+sidebar_position: 1
 title: Keepers
 ---
 
@@ -16,7 +16,7 @@ Without keepers, pending orders would never fill, underwater positions would acc
 Keepers can execute four types of actions:
 
 - **Fill limit orders**: When a pending limit order's trigger price is reached according to the oracle, keepers fill the order on behalf of the trader.
-- **Liquidations**: When a position's equity falls below its [maintenance margin](./trading/liquidation.md), keepers liquidate the position to protect the vault from bad debt.
+- **Liquidations**: When a position's equity falls below its [liquidation threshold](../trading/liquidation.md), keepers liquidate the position to protect the vault from bad debt.
 - **Stop-loss execution**: When the oracle price hits a position's stop-loss level, keepers trigger the position close to limit the trader's downside.
 - **Take-profit execution**: When the oracle price reaches a position's take-profit level, keepers trigger the position close to lock in gains.
 

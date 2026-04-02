@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 2
 title: Collateral
 ---
 
@@ -8,10 +8,10 @@ title: Collateral
 Upon opening a position, users deposit collateral to protect the vault from exposure if the trade takes a loss. After opening, users can still deposit and withdraw collateral to manage their position. As can be read [here](./liquidation.md), the higher the collateral, the lower the risk of liquidation (and vice versa). Note: at the opening of a position, the collateral is subject to the following lower bound:
 
 $$
-collateral >initialMargin*notionalSize
+collateral > margin \times notionalSize
 $$
 
-The initial margin is a setting that can be altered per asset. The exact settings per asset can be seen [here](../markets/supported-assets.md).
+The `margin` (initial margin) is set per market and determines the maximum leverage. The exact settings per asset can be seen [here](../markets/supported-assets.md).
 
 **Collateral token**
 

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 6
+sidebar_position: 7
 title: Liquidation
 ---
 
@@ -9,44 +9,40 @@ Liquidation protects the vault from positions that have lost more than their col
 
 ## Liquidation Condition
 
-A position is liquidatable when its equity falls below the maintenance margin:
+A position is liquidatable when its equity falls below the liquidation threshold:
 
 $$
-\text{equity} = \text{collateral} + \text{pnl} - \text{total\_fee}
-$$
-
-$$
-\text{maintenance\_margin} = \frac{\text{notional}}{200}
+\text{equity} = \text{col} + \text{pnl} - \text{total\_fee}
 $$
 
 $$
-\text{is\_liquidatable} = \text{equity} < \text{maintenance\_margin}
+\text{liq\_threshold} = \text{notional} \times \frac{\text{liq\_fee}}{\text{SCALAR\_7}}
 $$
 
-The maintenance margin is 0.5% of notional, a fixed, non-configurable constant (`MAINTENANCE_MARGIN_DIVISOR = 200`).
+$$
+\text{is\_liquidatable} = \text{equity} < \text{liq\_threshold}
+$$
 
-Note that `total_fee` includes accrued funding. A position can become liquidatable purely from funding payments, even if the underlying price has not moved.
+`liq_fee` is a per-market configurable parameter in `MarketConfig` (SCALAR_7), capped at `MAX_LIQ_FEE` (25%). The `total_fee` includes accrued funding and borrowing. A position can become liquidatable purely from fee accrual, even if the underlying price has not moved.
 
 ## Margin Gap
 
-There is a structural gap between initial margin and maintenance margin:
+There is a structural gap between initial margin and liquidation threshold:
 
 | Margin Type | Rate | Source |
 |---|---|---|
-| Initial margin | Configurable per market (`init_margin`) | `MarketConfig` |
-| Maintenance margin | Fixed at 0.5% | `MAINTENANCE_MARGIN_DIVISOR = 200` |
+| Initial margin | Configurable per market (`margin`) | `MarketConfig` |
+| Liquidation threshold | Configurable per market (`liq_fee`) | `MarketConfig` |
 
-At `init_margin = 1%` (100x leverage), there is a 0.5% buffer between opening and liquidation. At `init_margin = 0.5%` (200x, the minimum allowed), there is zero initial buffer.
-
-The validation rule `init_margin >= SCALAR_7 / 200` ensures initial margin is always at least equal to maintenance margin.
+The validation rule `margin > liq_fee` ensures there is always a buffer between the opening margin requirement and the liquidation threshold. For example, with `margin = 1%` (100x leverage) and `liq_fee = 0.5%`, there is a 0.5% buffer.
 
 ## Liquidation Execution
 
-When a keeper submits a `Liquidate` request in an `execute` batch, the contract first verifies through `check_liquidation()` that the position's equity is below the maintenance margin. Unlike a normal close, there is no profit/loss calculation for the user.
+When a keeper submits a position via the `execute` batch, the contract checks whether `equity < liq_threshold`. Unlike a normal close, there is no PnL payout to the user.
 
-The position's remaining collateral is redistributed: the keeper receives `min(total_fee * caller_take_rate, collateral)`, and the vault receives `collateral - caller_fee`. The treasury receives nothing on liquidation. There is no `min_open_time` enforcement, so a position can theoretically be liquidated in the same block it was opened if parameters are at extreme values.
+The position's remaining collateral is redistributed: `liq_fee = max(equity, 0)` is the remaining equity. The treasury receives `revenue * treasury_rate` where `revenue = min(protocol_fee + liq_fee, col)`. The keeper receives `min(trading_fee + liq_fee, col) * caller_rate`. The vault receives `col - treasury_fee - caller_fee`. There is no `MIN_OPEN_TIME` enforcement, so a position can theoretically be liquidated in the same block it was opened if parameters are at extreme values.
 
-The position is removed from storage, market stats are decremented, and the contract emits `Liquidation { feed_id, user, position_id, price, pnl, base_fee, impact_fee, funding }`. The event includes PnL and fee fields for informational purposes, even though they do not affect settlement.
+The position is removed from storage, market stats are decremented, and the contract emits `Liquidation { feed_id, user, position_id, price, base_fee, impact_fee, funding, borrowing_fee, liq_fee }`.
 
 ## Insolvency Risk
 
@@ -54,6 +50,6 @@ If a position's loss exceeds its collateral (deeply underwater), the vault absor
 
 ## Liquidation Incentives
 
-Keepers earn `caller_take_rate` (a percentage of the position's total fee) for each successful liquidation. This incentivizes timely liquidation to minimize insolvency risk. The fee is capped at the position's collateral to prevent the keeper fee from exceeding available funds.
+Keepers earn `caller_rate` (a percentage of trading fees plus liquidation fee) for each successful liquidation. This incentivizes timely liquidation to minimize insolvency risk. The fee is capped at the position's collateral to prevent the keeper fee from exceeding available funds.
 
 Since the `execute` function is fully permissionless (no authentication required), anyone can run a keeper bot and earn liquidation fees.

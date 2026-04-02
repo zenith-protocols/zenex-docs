@@ -1,5 +1,5 @@
 ---
-sidebar_position: 7
+sidebar_position: 9
 title: Security Considerations
 ---
 
@@ -23,7 +23,7 @@ Two precision scales are used throughout: SCALAR_7 (`10^7`) for token amounts an
 
 ### Permissionless Keeper Network
 
-The `execute` function requires no authentication. Any address can submit keeper requests and earn the `caller_take_rate` fee. This is intentional and creates a competitive market for position management. Keeper bots can front-run each other; the first transaction to execute a liquidation or trigger captures the fee.
+The `execute` function requires no authentication. Any address can submit keeper requests and earn the `caller_rate` fee. This is intentional and creates a competitive market for position management. Keeper bots can front-run each other; the first transaction to execute a liquidation or trigger captures the fee.
 
 ### Treasury Rate Has No Upper Bound
 
@@ -37,15 +37,11 @@ WASM hashes and the treasury address in the factory are immutable post-deploymen
 
 ### ADL Lazy Application
 
-ADL modifies market-level aggregates only. Individual position records retain their original `notional_size`. The effective notional is computed on-the-fly via `effective_notional()`. A position's stored `notional_size` is unreliable post-ADL without also checking the ADL index. External systems reading position data directly from storage must compute `effective_notional = stored_notional * current_adl_index / entry_adl_index`.
+ADL modifies market-level aggregates only. Individual position records retain their original `notional`. The effective notional is computed on-the-fly via `effective_notional()`. A position's stored `notional` is unreliable post-ADL without also checking the ADL index. External systems reading position data directly from storage must compute `effective_notional = notional * current_adl_idx / adl_idx`.
 
-### Vault Skim Not in Events
+### Liquidation Ignores MIN_OPEN_TIME
 
-The `vault_skim` deduction is not reflected in any event field. The `pnl` in close events is gross (before skim), but the actual token transfer to the user has the skim deducted. External indexers must independently compute the skim to reconcile event data with on-chain transfers.
-
-### Liquidation Ignores min_open_time
-
-Liquidation does not enforce `min_open_time`. A position can be liquidated in the same block it was opened if the entry parameters are at extreme values (e.g., maximum leverage with a volatile market). This is intentional because protecting the vault from insolvency takes priority over the minimum hold time.
+Liquidation does not enforce `MIN_OPEN_TIME`. A position can be liquidated in the same block it was opened if the entry parameters are at extreme values (e.g., maximum leverage with a volatile market). This is intentional because protecting the vault from insolvency takes priority over the minimum hold time.
 
 ## Cross-Contract Interactions
 
@@ -75,7 +71,7 @@ The `TradingAdminContract` stores queued updates in temporary storage with a 100
 
 ### Hysteresis Band
 
-The 5% gap between `UTIL_FREEZE` (95%) and `UTIL_UNFREEZE` (90%) prevents rapid oscillation between Active and OnIce states. Without this gap, a market near the threshold could alternate between states on every price update.
+The 5% gap between `UTIL_ONICE` (95%) and `UTIL_ACTIVE` (90%) prevents rapid oscillation between Active and OnIce states. Without this gap, a market near the threshold could alternate between states on every price update.
 
 ### OnIce Restrictions
 
@@ -95,4 +91,4 @@ A `cargo update` could incorporate upstream changes. Production deployments shou
 
 ### Soroban SDK
 
-The project uses `soroban-sdk = "25.0.2"` (Stellar Protocol v25). Upgrading the SDK version could affect storage layout, cryptographic primitives, or runtime behavior.
+The project uses `soroban-sdk = "25.3.0"` (Stellar Protocol v25). Upgrading the SDK version could affect storage layout, cryptographic primitives, or runtime behavior.

@@ -47,14 +47,8 @@ The price verifier implements OZ Ownable for access control. For standard Ownabl
 | `update_max_confidence_bps(bps)` | Owner only |
 | `upgrade(wasm_hash)` | Owner only |
 
-## Staleness Thresholds
+## Staleness Threshold
 
-The trading contract enforces staleness checks on all price data. The maximum acceptable age depends on the context of the action being performed.
+The price verifier enforces a single configurable `max_staleness` parameter on all price data. Any price older than `max_staleness` seconds is rejected. The threshold is set at deployment and can be updated by the owner via `update_max_staleness`.
 
-| Context | Max Age | Constant |
-|---|---|---|
-| User actions (open, close, modify) | 60 seconds | `MAX_STALENESS_USER` |
-| Keeper actions (fill, SL/TP, liquidate) | 300 seconds | `MAX_STALENESS_KEEPER` |
-| Circuit breaker / ADL | 300 seconds | `MAX_STALENESS_KEEPER` |
-
-Keeper actions use a relaxed threshold to account for the delay between price publication and keeper transaction submission.
+Prices in the future (publish_time > now) are also rejected. This prevents replay of pre-signed future prices.

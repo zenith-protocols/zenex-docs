@@ -1,5 +1,5 @@
 ---
-sidebar_position: 1
+sidebar_position: 2
 title: Start Trading
 ---
 
@@ -10,9 +10,9 @@ title: Start Trading
 Before you begin, you need:
 
 - A **Stellar wallet** or a **smart account**. You have two options:
-  - **Browser wallet**: [Freighter](https://www.freighter.app/) is recommended for beginners. Zenex also supports Ledger, xBull, Lobstr, Albedo, Hana, and Hot Wallet.
+  - **Browser wallet**: Zenex supports Freighter, xBull, Ledger, Lobstr, Albedo, Hana, and Hot Wallet.
   - **Smart account**: Create a **passkey-based smart account** directly from Zenex. No seed phrase, no extension. Just your device's biometrics (fingerprint, Face ID) or a security key.
-- **USDC** in your account to use as collateral.
+- The vault's **collateral token** (e.g., USDC) in your account.
 
 ### Step 1: Connect or Create an Account
 
@@ -34,7 +34,7 @@ Select **Long** if you expect the price to go up, or **Short** if you expect it 
 
 ### Step 4: Set Your Collateral and Leverage
 
-Enter the amount of **USDC** you want to allocate as collateral and choose a **leverage** multiplier (up to 100x). Your notional position size equals collateral multiplied by leverage. For more details, see [Leverage](../trading/leverage.md) and [Collateral](../trading/collateral.md).
+Enter the amount of collateral you want to allocate and choose a **leverage** multiplier (up to 100x). Your notional position size equals collateral multiplied by leverage. For more details, see [Leverage](../trading/leverage.md) and [Collateral](../trading/collateral.md).
 
 ### Step 5: Set Entry Price
 

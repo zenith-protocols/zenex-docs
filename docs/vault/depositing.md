@@ -41,4 +41,4 @@ $$
 sharePrice = \frac{totalAssets}{totalShares}
 $$
 
-As the vault earns [fees](../trading/fees.md) and [interest](../trading/interest.md), or absorbs trader losses, the total assets increase and the share price rises. Conversely, when traders are profitable, the vault pays out and the share price decreases. For more on what drives share price changes, see [Risks & Rewards](./risks-and-rewards.md).
+As the vault earns [fees](../trading/fees.md) and [borrowing interest](../trading/fees.md), or absorbs trader losses, the total assets increase and the share price rises. Conversely, when traders are profitable, the vault pays out and the share price decreases. For more on what drives share price changes, see [Risks & Rewards](./risks-and-rewards.md).

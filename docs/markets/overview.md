@@ -9,12 +9,7 @@ A **market** on Zenex represents a specific asset (e.g. BTC, XLM) that can be tr
 
 ### Market Configuration
 
-Every market is defined by a set of [configurable parameters](./market-parameters.md) that govern its behavior:
-
-- **Fee settings**: Base fee rate and price impact scalar, determining trading costs.
-- **Margin requirements**: Initial margin and maintenance margin, controlling maximum leverage and liquidation thresholds.
-- **Interest rates**: Base hourly borrowing rate, dynamically adjusted based on market conditions.
-- **Collateral limits**: Minimum and maximum collateral per position, plus maximum payout ratio.
+Every market is defined by a set of [configurable parameters](./market-parameters.md) that govern its behavior. These include the initial margin requirement (`margin`) which determines the maximum leverage, the liquidation threshold (`liq_fee`), the price impact fee divisor (`impact`), a per-market utilization cap (`max_util`), and a per-market variable borrowing rate (`r_var_market`).
 
 These parameters vary per asset to reflect differences in liquidity and volatility. The current settings for all assets can be found on the [Supported Assets](./supported-assets.md) page.
 
@@ -24,7 +19,7 @@ Each market is linked to an **oracle** that provides real-time price data. The o
 
 ### Open Interest
 
-Markets track **open interest**, the total notional value of all open positions, separately for longs and shorts. This long/short breakdown is critical because it drives the dynamic [interest rate](../trading/interest.md) mechanism: when one side dominates, rates adjust to incentivize balance and reduce directional risk for the vault.
+Markets track **open interest**, the total notional value of all open positions, separately for longs and shorts. This long/short breakdown is critical because it drives both the [funding rate](../trading/funding-rate.md) and the [borrowing interest](../trading/fees.md). When one side dominates, funding rates adjust to incentivize balance. Borrowing interest also increases with utilization, discouraging excessive concentration and reducing directional risk for the vault.
 
 ### Supported Assets
 

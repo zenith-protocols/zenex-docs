@@ -1,5 +1,5 @@
 ---
-sidebar_position: 2
+sidebar_position: 5
 title: Leverage
 ---
 
@@ -13,10 +13,10 @@ When opening a position with leverage, the user essentially borrows funds from t
 
 **Leverage limits**
 
-Currently the maximum leverage when opening a position on Zenex is 100x. This is achieved through the initial margin and maintenance margin. It works as follows: Upon opening a position, the following condition has to be satisfied:
+The maximum leverage depends on the market's `margin` parameter (initial margin). Upon opening a position, the following condition must be satisfied:
 
 $$
-collateral >initialMargin*notionalSize
+collateral > margin \times notionalSize
 $$
 
-So if the initial margin is 0.01, the collateral has to be at least 1% of the notional size, and thus users can only have up to 100x leverage. After the position is opened, the maximum leverage is governed by the maintenance margin, fees accrued and PnL as described [here](./liquidation.md).
+So if the margin is 0.01 (1%), the collateral has to be at least 1% of the notional size, and thus users can have up to 100x leverage. Different markets may have different margin requirements. After the position is opened, the effective leverage is governed by the liquidation threshold (`liq_fee`), fees accrued, and PnL as described [here](./liquidation.md).

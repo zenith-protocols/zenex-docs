@@ -18,7 +18,7 @@ All user actions require authentication from the position owner.
 | `place_limit` | Active | Place a limit order (pending fill) |
 | `open_market` | Active | Open a position at market price |
 | `close_position` | Not Frozen | Close a filled position |
-| `cancel_limit` | Not Frozen | Cancel a pending limit order |
+| `cancel_position` | Not Frozen | Cancel a pending limit order, or refund a filled position on a deleted market |
 | `modify_collateral` | Not Frozen | Add or remove collateral |
 | `set_triggers` | Not Frozen | Set stop-loss and take-profit prices |
 
@@ -40,6 +40,7 @@ All admin actions require the contract owner (`#[only_owner]`).
 |---|---|
 | `set_config` | Update global trading configuration |
 | `set_market` | Add or update a market |
+| `del_market` | Remove a market (existing positions can be refunded via `cancel_position`) |
 | `set_status` | Set contract status (cannot set OnIce, use `update_status` instead) |
 | `upgrade` | Upgrade contract WASM |
 | `transfer_ownership` | Transfer admin rights (OZ Ownable) |
@@ -60,20 +61,21 @@ All admin actions require the contract owner (`#[only_owner]`).
 
 ### TradingConfig
 
-Global fee and limit parameters set by the admin.
+Global fee, rate, and limit parameters set by the admin.
 
 | Field | Type | Description |
 |---|---|---|
-| `caller_take_rate` | `i128` (SCALAR_7) | Keeper's share of total fees (0 to 100%) |
-| `min_open_time` | `u64` | Minimum seconds before a filled position can be closed (0 = disabled) |
-| `vault_skim` | `i128` (SCALAR_7) | Vault's cut of funding received by a position (0 to 100%) |
-| `min_collateral` | `i128` (token decimals) | Minimum collateral to open |
-| `max_collateral` | `i128` (token decimals) | Maximum collateral per position |
-| `max_payout` | `i128` (SCALAR_7) | Maximum user payout as a ratio of collateral |
-| `base_fee_dominant` | `i128` (SCALAR_7) | Fee rate for the dominant side (heavier open interest) |
-| `base_fee_non_dominant` | `i128` (SCALAR_7) | Fee rate for the minority side |
+| `caller_rate` | `i128` (SCALAR_7) | Keeper's share of trading fees (0 to 50%) |
+| `min_notional` | `i128` (token decimals) | Minimum notional size per position |
+| `max_notional` | `i128` (token decimals) | Maximum notional size per position |
+| `fee_dom` | `i128` (SCALAR_7) | Trading fee rate for the dominant side (heavier open interest) |
+| `fee_non_dom` | `i128` (SCALAR_7) | Trading fee rate for the minority side |
+| `max_util` | `i128` (SCALAR_7) | Global utilization cap: total_notional / vault_balance |
+| `r_funding` | `i128` (SCALAR_18) | Base hourly funding rate (all markets) |
+| `r_base` | `i128` (SCALAR_18) | Base hourly borrowing rate (all markets) |
+| `r_var` | `i128` (SCALAR_18) | Vault-level variable borrowing rate at full vault utilization |
 
-`caller_take_rate` and `vault_skim` must be in `[0, SCALAR_7]`. Both base fees must be `>= 0`. `min_collateral > 0`, `max_collateral > min_collateral`, `max_payout > 0`.
+`caller_rate` in `[0, MAX_CALLER_RATE]` (50%). `fee_dom >= fee_non_dom >= 0`, both `<= MAX_FEE_RATE` (1%). `r_base`, `r_funding` in `[0, MAX_RATE_HOURLY]`. `r_var` in `[0, MAX_R_VAR]`. `min_notional > 0`, `max_notional > min_notional`, `max_util > 0`.
 
 ### MarketConfig
 
@@ -82,11 +84,13 @@ Per-market parameters set by the admin via `set_market`.
 | Field | Type | Description |
 |---|---|---|
 | `enabled` | `bool` | Whether this market accepts new positions |
-| `init_margin` | `i128` (SCALAR_7) | Initial margin ratio. Max leverage = `1 / init_margin` |
-| `base_hourly_rate` | `i128` (SCALAR_18) | Maximum hourly funding rate |
-| `price_impact_scalar` | `i128` (SCALAR_7) | Divisor for price impact fee |
+| `max_util` | `i128` (SCALAR_7) | Per-market utilization cap |
+| `r_var_market` | `i128` (SCALAR_18) | Per-market variable borrowing rate at full market utilization |
+| `margin` | `i128` (SCALAR_7) | Initial margin ratio. Max leverage = `1 / margin` |
+| `liq_fee` | `i128` (SCALAR_7) | Liquidation fee/threshold. Position liquidatable when equity < notional * liq_fee |
+| `impact` | `i128` (SCALAR_7) | Price impact fee divisor: fee = notional / impact |
 
-`init_margin >= SCALAR_7 / 200` (at least 0.5% maintenance margin), `base_hourly_rate >= 0`, `price_impact_scalar > 0`.
+`margin > liq_fee > 0`. `margin <= MAX_MARGIN` (50%). `liq_fee <= MAX_LIQ_FEE` (25%). `r_var_market` in `[0, MAX_R_VAR_MARKET]`. `impact >= MIN_IMPACT` (10x). `max_util > 0`.
 
 ### MarketData
 
@@ -94,18 +98,20 @@ Per-market mutable state, updated on every position action.
 
 | Field | Type | Description |
 |---|---|---|
-| `long_notional_size` | `i128` | Sum of all long notional sizes |
-| `short_notional_size` | `i128` | Sum of all short notional sizes |
-| `long_funding_index` | `i128` (SCALAR_18) | Cumulative funding cost index for longs |
-| `short_funding_index` | `i128` (SCALAR_18) | Cumulative funding cost index for shorts |
-| `long_entry_weighted` | `i128` | `sum(notional_i / entry_price_i)` for longs |
-| `short_entry_weighted` | `i128` | `sum(notional_i / entry_price_i)` for shorts |
-| `funding_rate` | `i128` (SCALAR_18) | Current signed funding rate (positive = longs pay) |
-| `last_update` | `u64` | Timestamp of last funding accrual |
-| `long_adl_index` | `i128` (SCALAR_18) | ADL reduction factor for longs (starts at SCALAR_18) |
-| `short_adl_index` | `i128` (SCALAR_18) | ADL reduction factor for shorts |
+| `l_notional` | `i128` | Sum of all long notional sizes (token decimals) |
+| `s_notional` | `i128` | Sum of all short notional sizes (token decimals) |
+| `l_fund_idx` | `i128` (SCALAR_18) | Cumulative long funding index |
+| `s_fund_idx` | `i128` (SCALAR_18) | Cumulative short funding index |
+| `l_borr_idx` | `i128` (SCALAR_18) | Cumulative long borrowing index |
+| `s_borr_idx` | `i128` (SCALAR_18) | Cumulative short borrowing index |
+| `l_entry_wt` | `i128` | `sum(notional_i / entry_price_i)` for longs |
+| `s_entry_wt` | `i128` | `sum(notional_i / entry_price_i)` for shorts |
+| `fund_rate` | `i128` (SCALAR_18) | Current signed funding rate (positive = longs pay) |
+| `last_update` | `u64` | Timestamp of last accrual (seconds) |
+| `l_adl_idx` | `i128` (SCALAR_18) | Long ADL reduction factor (starts at SCALAR_18) |
+| `s_adl_idx` | `i128` (SCALAR_18) | Short ADL reduction factor (starts at SCALAR_18) |
 
-The `entry_weighted` fields enable aggregate PnL computation without iterating all positions. They are used by the circuit breaker and ADL system.
+The `entry_wt` fields enable aggregate PnL computation without iterating all positions. They are used by the circuit breaker and ADL system. The `borr_idx` fields track cumulative borrowing costs per unit of notional, accrued alongside funding.
 
 ### Position
 
@@ -113,16 +119,17 @@ The `entry_weighted` fields enable aggregate PnL computation without iterating a
 |---|---|---|
 | `user` | `Address` | Position owner |
 | `filled` | `bool` | `false` = pending limit order, `true` = active position |
-| `feed_id` | `u32` | Pyth Lazer feed ID |
-| `is_long` | `bool` | Direction |
-| `stop_loss` | `i128` | SL trigger price (0 = disabled) |
-| `take_profit` | `i128` | TP trigger price (0 = disabled) |
+| `feed` | `u32` | Pyth Lazer feed ID |
+| `long` | `bool` | Direction |
+| `sl` | `i128` | Stop-loss trigger price (0 = disabled) |
+| `tp` | `i128` | Take-profit trigger price (0 = disabled) |
 | `entry_price` | `i128` | Fill price (price decimals) |
-| `collateral` | `i128` | Current collateral (token decimals) |
-| `notional_size` | `i128` | Notional value (token decimals) |
-| `entry_funding_index` | `i128` | Funding index snapshot at fill |
-| `entry_adl_index` | `i128` | ADL index snapshot at fill |
-| `created_at` | `u64` | Timestamp when filled |
+| `col` | `i128` | Current collateral (token decimals) |
+| `notional` | `i128` | Notional value, may be reduced by ADL (token decimals) |
+| `fund_idx` | `i128` (SCALAR_18) | Funding index snapshot at fill |
+| `borr_idx` | `i128` (SCALAR_18) | Borrowing index snapshot at fill |
+| `adl_idx` | `i128` (SCALAR_18) | ADL index snapshot at fill (starts at SCALAR_18) |
+| `created_at` | `u64` | Timestamp of creation or fill (seconds) |
 
 ## Contract Status System
 
@@ -146,14 +153,19 @@ Admin can set `Active`, `AdminOnIce`, or `Frozen` directly. `OnIce` can only be 
 
 | Constant | Value | Description |
 |---|---|---|
-| `SCALAR_7` | `10,000,000` | 7-decimal fixed-point base |
-| `SCALAR_18` | `10^18` | 18-decimal fixed-point base (funding/ADL) |
-| `MAINTENANCE_MARGIN_DIVISOR` | `200` | Maintenance margin = 0.5% of notional |
-| `MIN_LEVERAGE` | `2` | Minimum leverage (notional >= 2x collateral) |
-| `MAX_MARKETS` | `32` | Maximum registered markets |
-| `MAX_POSITIONS` | `25` | Maximum open positions per user |
-| `UTIL_FREEZE` | `9,500,000` | 95%. Triggers OnIce when net PnL >= 95% of vault |
-| `UTIL_UNFREEZE` | `9,000,000` | 90%. Restores Active when PnL drops below 90% |
-| `ONE_HOUR_SECONDS` | `3600` | Funding update minimum interval |
-| `MAX_STALENESS_USER` | `60` | Max price age for user actions (seconds) |
-| `MAX_STALENESS_KEEPER` | `300` | Max price age for keeper actions (seconds) |
+| `SCALAR_7` | `10,000,000` | 7-decimal fixed-point base (rates, fees, ratios) |
+| `SCALAR_18` | `10^18` | 18-decimal fixed-point base (funding, borrowing, ADL indices) |
+| `MAX_ENTRIES` | `50` | Maximum markets or positions per user |
+| `UTIL_ONICE` | `9,500,000` | 95%. Triggers OnIce when net PnL >= 95% of vault |
+| `UTIL_ACTIVE` | `9,000,000` | 90%. Restores Active when PnL drops below 90% |
+| `ONE_HOUR_SECONDS` | `3600` | Funding/borrowing update minimum interval |
+| `MIN_OPEN_TIME` | `30` | Minimum seconds before user-initiated close |
+| `MAX_CALLER_RATE` | `5,000,000` | 50% max keeper fee share |
+| `MAX_FEE_RATE` | `100,000` | 1% max base fee rate |
+| `MAX_RATE_HOURLY` | `100,000,000,000,000` | 0.01%/hr max for r_base, r_funding (~88% APR) |
+| `MAX_R_VAR` | `100,000,000,000,000` | 0.01%/hr max vault variable rate |
+| `MAX_R_VAR_MARKET` | `100,000,000,000,000` | 0.01%/hr max per-market variable rate |
+| `MAX_UTIL` | `100,000,000` | 1000% max utilization cap (10x SCALAR_7) |
+| `MIN_IMPACT` | `100,000,000` | Impact divisor floor (caps impact fee at 10%) |
+| `MAX_MARGIN` | `5,000,000` | 50% max initial margin (2x min leverage) |
+| `MAX_LIQ_FEE` | `2,500,000` | 25% max liquidation fee/threshold |

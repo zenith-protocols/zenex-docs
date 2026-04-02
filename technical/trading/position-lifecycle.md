@@ -7,19 +7,19 @@ title: Position Lifecycle
 
 ## Opening: Market Order
 
-`open_market(user, feed_id, is_long, collateral, notional_size, price_data)`
+`open_market(user, feed_id, is_long, collateral, notional, price_data)`
 
-The contract first verifies that the status is `Active` and that the user has authorized the call. The submitted price is checked against `MAX_STALENESS_USER` (60 seconds). Pending funding is then accrued via `data.accrue(e)` to bring market state up to date.
+The contract first verifies that the status is `Active` and that the user has authorized the call. The submitted price is verified via the price verifier. Pending funding and borrowing are then accrued via `data.accrue(e, ...)` to bring market state up to date.
 
-A new position ID is allocated from the monotonically incrementing counter, and the position is created with `filled = true`. Collateral and leverage are validated against the configured bounds. The position's `entry_funding_index` and `entry_adl_index` are snapshotted from the current market state, and the fee is computed based on the position's dominance at the time of opening.
+A new position ID is allocated from the monotonically incrementing counter, and the position is created with `filled = true`. Collateral and leverage are validated against the configured bounds. The position's `fund_idx`, `borr_idx`, and `adl_idx` are snapshotted from the current market state, and the fee is computed based on the position's dominance at the time of opening.
 
-Market stats (`long_notional_size` or `short_notional_size` and the corresponding `entry_weighted` sum) are incremented to reflect the new position. The user pays `collateral + base_fee + impact_fee` via token transfer. The protocol fee is sent to the treasury and the remainder flows to the vault.
+Market stats (`l_notional` or `s_notional` and the corresponding `entry_wt` sum) are incremented, and global `total_notional` is updated. The user pays `collateral` via token transfer. Open fees (base + impact) are deducted from collateral. The treasury fee is sent to the treasury and the vault fee flows to the vault.
 
 Emits `OpenMarket { feed_id, user, position_id, base_fee, impact_fee }`.
 
 ## Opening: Limit Order
 
-`place_limit(user, feed_id, is_long, entry_price, collateral, notional_size)`
+`place_limit(user, feed_id, is_long, entry_price, collateral, notional)`
 
 Limit orders follow a similar authorization and validation path but skip the price check, since the user specifies their desired entry price. The position is created with `filled = false` and `entry_price` set to the user's limit price.
 
@@ -31,9 +31,9 @@ The position is not reflected in market stats until it is filled. Emits `PlaceLi
 
 Limit orders are filled by keepers as part of an `execute` batch via `apply_fill`. The fill condition requires that the current price has reached the user's limit: for longs, `current_price <= entry_price`; for shorts, `current_price >= entry_price`.
 
-On fill, `position.entry_price` is overwritten with the actual current price, `filled` is set to `true`, and the funding and ADL indices are snapshotted. Market stats are updated to reflect the newly active position.
+On fill, `position.entry_price` is overwritten with the actual current price, `filled` is set to `true`, and `fund_idx`, `borr_idx`, and `adl_idx` are snapshotted from the current market state. Market stats are updated to reflect the newly active position.
 
-Fee reconciliation occurs at this point. If the position is non-dominant at fill time, the overpaid fee (dominant minus non-dominant) is refunded to the user. The actual fee is split between the treasury (protocol fee), the keeper (caller fee), and the vault (remainder).
+Open fees (base + impact) are computed based on the position's dominance at fill time and deducted from collateral. The fee is split between the treasury (protocol fee), the keeper (caller fee), and the vault (remainder).
 
 Emits `FillLimit { feed_id, user, position_id, base_fee, impact_fee }`.
 
@@ -43,17 +43,17 @@ Emits `FillLimit { feed_id, user, position_id, base_fee, impact_fee }`.
 
 The contract must not be `Frozen`, and the submitted price must be within the 60-second staleness window. The position owner must authorize the call, and the position must be filled.
 
-Pending funding is accrued, and any ADL reduction since fill is applied to compute the effective notional via `effective_notional()`. The `min_open_time` must have elapsed since `created_at`.
+Pending funding and borrowing are accrued, and any ADL reduction since fill is applied to compute the effective notional via `effective_notional()`. `MIN_OPEN_TIME` (30 seconds) must have elapsed since `created_at`.
 
-PnL and fees are computed (see [PnL Calculation](./pnl-calculation.md) and [Fee System](./fee-system.md)). Equity is derived as `collateral + pnl - total_fee`, and the user payout is capped by `collateral * max_payout` with the vault skim deducted. The vault transfer is then `collateral - user_payout`. If the vault transfer is negative (the user profited), the vault pays via `strategy_withdraw`. If positive (the user lost), the collateral remainder flows to the vault. The protocol fee goes to the treasury and the payout goes to the user.
+PnL and fees are computed (see [PnL Calculation](./pnl-calculation.md) and [Fee System](./fee-system.md)). Equity is derived as `col + pnl - total_fee` where `total_fee = base_fee + impact_fee + funding + borrowing_fee`. The user payout is `max(equity, 0)`. The treasury receives `protocol_fee * treasury_rate` where `protocol_fee = base_fee + impact_fee + borrowing_fee`. The vault transfer is `col - user_payout - treasury_fee`. If the vault transfer is negative (the user profited), the vault pays via `strategy_withdraw`. If positive (the user lost), the collateral remainder flows to the vault.
 
-The position is removed from storage and market stats are decremented. Emits `ClosePosition { feed_id, user, position_id, price, pnl, base_fee, impact_fee, funding }`.
+The position is removed from storage and market stats are decremented. Emits `ClosePosition { feed_id, user, position_id, price, pnl, base_fee, impact_fee, funding, borrowing_fee }`.
 
-## Cancelling a Limit Order
+## Cancelling a Position
 
-`cancel_limit(user, position_id)`
+`cancel_position(position_id)`
 
-The contract must not be `Frozen`. The position owner authorizes, and the position must be pending (`filled == false`). The full `collateral + prepaid_fee` is refunded to the user, and the position is removed from storage. Emits `CancelLimit`.
+The contract must not be `Frozen`. For pending (unfilled) positions, the position owner must authorize. For filled positions on a deleted market, the call is permissionless (anyone can clean up stranded positions). The position's collateral is refunded to the user, and the position is removed from storage. Emits `RefundPosition { feed_id, user, position_id, amount }`.
 
 ## Modifying Collateral
 
@@ -63,9 +63,9 @@ A positive `amount` deposits additional collateral; a negative `amount` withdraw
 
 For deposits to a filled position, the contract validates that the new collateral remains within bounds and that leverage limits are still satisfied, then transfers tokens from the user.
 
-For withdrawals from a filled position, the contract additionally checks the margin requirement: `equity = new_collateral + pnl - fees >= notional * init_margin`. If this check fails, the transaction is rejected with `WithdrawalBreaksMargin`.
+For withdrawals from a filled position, the contract additionally checks the margin requirement: `equity = new_col + pnl - total_fee >= notional * margin`. If this check fails, the transaction is rejected with `WithdrawalBreaksMargin`. The `total_fee` includes accrued funding and borrowing at the current indices.
 
-For pending positions, no price check is needed. Only collateral bounds and leverage limits are validated. The ADL index and effective notional are updated during modification to reflect any ADL reduction since fill.
+Note: only filled positions can have their collateral modified. Pending (unfilled) limit orders cannot be modified.
 
 ## Stop-Loss and Take-Profit Triggers
 
@@ -75,10 +75,10 @@ Sets or updates trigger prices on a position. Either value can be set to `0` to 
 
 Take-profit triggers when the price moves in the position's favor: for longs, `price >= take_profit`; for shorts, `price <= take_profit`. Stop-loss triggers when the price moves against the position: for longs, `price <= stop_loss`; for shorts, `price >= stop_loss`.
 
-Triggers are processed by keepers via the `execute` batch function. The same close logic applies, with the `caller_fee` paid to the keeper from the fee pool. The `min_open_time` constraint is enforced for TP/SL. If the position is too new, the trigger returns a non-panicking error code and the position survives.
+Triggers are processed by keepers via the `execute` batch function. The same close logic applies, with the `caller_fee` paid to the keeper from trading fees. `MIN_OPEN_TIME` is enforced for TP/SL. If the position is too new, the keeper skips it without aborting the batch.
 
 ## Liquidation
 
 Processed by keepers via the `execute` batch. See [Liquidation](./liquidation.md) for full details.
 
-The key difference from a normal close is that liquidation does not settle PnL. All remaining collateral is redistributed to the vault and keeper. There is no `min_open_time` enforcement.
+The key difference from a normal close is that liquidation does not settle PnL. All remaining collateral is redistributed to the vault and keeper. There is no `MIN_OPEN_TIME` enforcement.

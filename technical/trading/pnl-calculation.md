@@ -40,7 +40,7 @@ Both divisions use floor rounding (`fixed_div_floor`, `fixed_mul_floor`), which 
 A 10x long on BTC with $1,000 collateral, entry at $100,000, close at $110,000:
 
 ```text
-notional_size = 10,000 (in token units, e.g., 10,000 USDC)
+notional = 10,000 (in token units, e.g., 10,000 USDC)
 price_diff = 110,000 - 100,000 = 10,000
 price_change_ratio = 10,000 * 100,000,000 / 100,000 = 10,000,000  (= 0.1 in price_scalar)
 pnl = 10,000 * 10,000,000 / 100,000,000 = 1,000 USDC
@@ -53,41 +53,35 @@ User profit: $1,000 (10% return on notional, 100% return on collateral before fe
 After PnL is computed, equity and payout are derived:
 
 $$
-\text{equity} = \text{collateral} + \text{pnl} - \text{total\_fee}
+\text{equity} = \text{col} + \text{pnl} - \text{total\_fee}
 $$
 
-Where `total_fee = base_fee + impact_fee + funding` (see [Fee System](./fee-system.md)).
+Where `total_fee = base_fee + impact_fee + funding + borrowing_fee` (see [Fee System](./fee-system.md)).
 
-The user payout is capped by `max_payout`:
-
-$$
-\text{user\_payout} = \min(\text{equity},\ \text{collateral} \times \text{max\_payout} / \text{SCALAR\_7})
-$$
-
-Then the vault skim is deducted:
+The user payout is:
 
 $$
-\text{final\_payout} = \text{user\_payout} - \text{vault\_skim}
+\text{user\_payout} = \max(\text{equity},\ 0)
 $$
 
-The vault skim only applies when the position received net funding (see [Funding Rate](./funding-rate.md)).
+If equity is negative, the user receives nothing and the vault absorbs the loss.
 
 ## Vault Transfer
 
 The vault transfer represents the net flow between the trading contract and the vault:
 
 $$
-\text{vault\_transfer} = \text{collateral} - \text{final\_payout}
+\text{vault\_transfer} = \text{col} - \text{user\_payout} - \text{treasury\_fee}
 $$
 
-A positive vault transfer means the user lost money and the collateral remainder flows to the vault. A negative vault transfer means the user profited and the vault must pay the difference via `strategy_withdraw`.
+A positive vault transfer means the user lost money and the collateral remainder flows to the vault. A negative vault transfer means the user profited and the vault must pay the difference via `strategy_withdraw`. The treasury fee is `protocol_fee * treasury_rate`, where `protocol_fee = base_fee + impact_fee + borrowing_fee`.
 
 ## ADL Adjustment
 
 If Auto-Deleveraging has occurred since the position was opened, the position's effective notional is reduced before PnL computation:
 
 $$
-\text{effective\_notional} = \text{notional\_size} \times \frac{\text{current\_adl\_index}}{\text{entry\_adl\_index}}
+\text{effective\_notional} = \text{notional} \times \frac{\text{current\_adl\_idx}}{\text{entry\_adl\_idx}}
 $$
 
 This proportionally reduces both the position's profit potential and risk exposure. See [Auto-Deleveraging](./auto-deleveraging.md).
