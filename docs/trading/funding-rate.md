@@ -3,7 +3,7 @@ sidebar_position: 5
 title: Funding Rate
 ---
 
-# Interest (Funding Rate)
+# Funding Rate
 
 The funding rate is a peer-to-peer fee where one side pays the other based on the current market imbalance. It is comparable to the hourly funding rate in traditional perpetual exchanges. The funding rate ensures that the dominant side (more open interest) compensates the minority side, encouraging balanced markets.
 

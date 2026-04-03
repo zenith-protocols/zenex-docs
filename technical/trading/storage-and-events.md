@@ -72,7 +72,7 @@ All events use Soroban's `#[contractevent]` derive macro. Fields marked with `#[
 
 | Event | Topics | Data |
 |---|---|---|
-| `PlaceLimit` | `feed_id, user, position_id` | `base_fee, impact_fee` |
+| `PlaceLimit` | `feed_id, user, position_id` | (no data) |
 | `OpenMarket` | `feed_id, user, position_id` | `base_fee, impact_fee` |
 | `FillLimit` | `feed_id, user, position_id` | `base_fee, impact_fee` |
 | `ClosePosition` | `feed_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
@@ -83,11 +83,18 @@ All events use Soroban's `#[contractevent]` derive macro. Fields marked with `#[
 | `ModifyCollateral` | `feed_id, user, position_id` | `amount` (positive = deposit, negative = withdraw) |
 | `SetTriggers` | `feed_id, user, position_id` | `take_profit, stop_loss` |
 
+### Market Events
+
+| Event | Topics | Data |
+|---|---|---|
+| `DelMarket` | `feed_id` | (no data) |
+
 ### System Events
 
 | Event | Topics | Data |
 |---|---|---|
 | `ApplyFunding` | None | (no data) |
+| `ADLMarket` | `feed_id` | `factor, long` |
 | `ADLTriggered` | None | `reduction_pct, deficit` |
 
 Close events include `borrowing_fee` as a separate field alongside `base_fee`, `impact_fee`, and `funding`. The emitted `pnl` is the net PnL (after all fees, clamped to `-col`).
@@ -99,32 +106,29 @@ All errors use `panic_with_error!(e, TradingError::Variant)`. In keeper batch ex
 | Code | Name | Description |
 |---|---|---|
 | 1 | `Unauthorized` | Non-owner tried owner-only action |
-| 701 | `NotInitialized` | Reserved |
-| 702 | `InvalidConfig` | Config validation failure |
-| 710 | `MarketNotFound` | Unknown feed ID |
-| 712 | `MarketDisabled` | Market not enabled for new positions |
-| 720 | `PriceNotFound` | Feed not in price payload |
-| 721 | `PriceStale` | Price exceeds staleness threshold |
-| 730 | `PositionNotFound` | Unknown position ID |
-| 733 | `PositionNotPending` | Fill on already-filled position |
-| 734 | `MaxPositionsReached` | User at 25-position limit |
-| 735 | `NegativeValueNotAllowed` | Negative notional, price, TP, or SL |
-| 736 | `NotionalBelowMinimum` | Below `min_notional` |
-| 737 | `NotionalAboveMaximum` | Above `max_notional` |
-| 738 | `LeverageBelowMinimum` | Below 2x leverage |
-| 739 | `LeverageAboveMaximum` | Exceeds `1/margin` |
-| 740 | `CollateralUnchanged` | Modify to same value |
-| 741 | `WithdrawalBreaksMargin` | Withdrawal would breach initial margin |
-| 744 | `TakeProfitNotTriggered` | TP price not reached |
-| 745 | `StopLossNotTriggered` | SL price not reached |
-| 746 | `PositionNotLiquidatable` | Equity above liquidation threshold (`liq_fee`) |
-| 747 | `LimitOrderNotFillable` | Price not at limit level |
-| 748 | `PositionTooNew` | `MIN_OPEN_TIME` not elapsed |
-| 750 | `ActionNotAllowedForStatus` | Wrong position state for action |
-| 760 | `InvalidStatus` | Unknown status value or admin setting OnIce |
-| 761 | `ContractOnIce` | New position while not Active |
-| 762 | `ContractFrozen` | Any action while Frozen |
-| 770 | `MaxMarketsReached` | `MAX_ENTRIES` limit |
-| 780 | `NoDeficit` | ADL triggered but no deficit |
-| 782 | `ThresholdNotMet` | Circuit breaker threshold not met |
-| 790 | `FundingTooEarly` | `apply_funding` within same hour |
+| 700 | `InvalidConfig` | Config parameter out of valid range |
+| 701 | `MarketNotFound` | No market registered for the given feed_id |
+| 702 | `MarketDisabled` | Market is disabled or deleted |
+| 703 | `MaxMarketsReached` | `MAX_ENTRIES` markets already registered |
+| 710 | `InvalidPrice` | Price verification failed, feed_id mismatch, or missing feed |
+| 711 | `StalePrice` | Price data predates position open time |
+| 720 | `PositionNotFound` | Position ID not found in storage |
+| 721 | `PositionNotPending` | Position is filled; expected pending |
+| 722 | `MaxPositionsReached` | User has `MAX_ENTRIES` positions |
+| 723 | `NegativeValueNotAllowed` | A parameter is zero or negative |
+| 724 | `NotionalBelowMinimum` | Below `min_notional` |
+| 725 | `NotionalAboveMaximum` | Above `max_notional` |
+| 726 | `LeverageAboveMaximum` | Exceeds `1/margin` |
+| 727 | `CollateralUnchanged` | Modify to same value |
+| 728 | `WithdrawalBreaksMargin` | Withdrawal would breach initial margin |
+| 729 | `InvalidTakeProfitPrice` | TP price on wrong side of entry |
+| 730 | `InvalidStopLossPrice` | SL price on wrong side of entry |
+| 731 | `NotActionable` | No valid action for this position in execute batch |
+| 732 | `PositionTooNew` | `MIN_OPEN_TIME` not elapsed |
+| 733 | `ActionNotAllowedForStatus` | Action not allowed for position status |
+| 740 | `InvalidStatus` | Invalid or disallowed contract status value |
+| 741 | `ContractOnIce` | New positions blocked (OnIce, AdminOnIce, or Frozen) |
+| 742 | `ContractFrozen` | All position management blocked (Frozen) |
+| 750 | `ThresholdNotMet` | Net PnL below ADL threshold |
+| 751 | `UtilizationExceeded` | Position would exceed notional/vault cap |
+| 752 | `FundingTooEarly` | `apply_funding` called < 1 hour since last call |

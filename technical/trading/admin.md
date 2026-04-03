@@ -1,16 +1,16 @@
 ---
 sidebar_position: 13
-title: Trading Admin (Timelock)
+title: Governance (Timelock)
 ---
 
-# Trading Admin (Timelock)
+# Governance (Timelock)
 
-The `TradingAdminContract` is a timelock proxy that sits between the governance owner and the trading contract. It is an independent contract that can optionally be set as the owner of a trading contract, providing a mandatory delay for parameter changes while allowing immediate emergency actions. The admin contract is not deployed by the factory.
+The `GovernanceContract` is a timelock proxy that sits between the governance owner and the trading contract. It is an independent contract that can optionally be set as the owner of a trading contract, providing a mandatory delay for parameter changes while allowing immediate emergency actions. The governance contract is not deployed by the factory.
 
 ## Architecture
 
 ```text
-Owner --> TradingAdminContract --> TradingContract
+Owner --> GovernanceContract --> TradingContract
            (timelock delay)        (set_config, set_market, set_status)
 ```
 
@@ -45,7 +45,7 @@ Execution is permissionless: anyone can call `set_market(nonce)` after the delay
 | Temporary | `ConfigUpdate` | Pending `TradingConfig` + unlock time |
 | Temporary | `MarketUpdate(nonce)` | Pending `(feed_id, MarketConfig)` + unlock time |
 
-Queued updates use Soroban temporary storage (100-day TTL). If the ledger TTL expires before execution, the update is silently pruned. There is no event or notification on expiry.
+Queued updates use Soroban temporary storage with a TTL of twice the delay period (minimum 1 day). If the ledger TTL expires before execution, the update is silently pruned. There is no event or notification on expiry.
 
 ## Design Rationale
 

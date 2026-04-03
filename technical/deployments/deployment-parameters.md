@@ -87,7 +87,7 @@ The treasury is also deployed independently and referenced by the factory.
 
 The treasury rate determines what percentage of protocol revenue (base fees, impact fees, and borrowing fees) is retained by the protocol versus flowing to vault depositors. A rate of `1_000_000` (10% in SCALAR_7) means the treasury keeps 10% of all protocol fees. This rate can be adjusted after deployment by the treasury owner via `set_rate`.
 
-## Governance (Trading Admin)
+## Governance
 
 The governance contract is an optional timelock proxy deployed independently and assigned as the owner of a trading contract.
 

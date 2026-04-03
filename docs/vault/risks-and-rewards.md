@@ -24,20 +24,16 @@ The vault accrues value from three sources.
 
 ### Risk Mitigation
 
-The protocol includes several mechanisms designed to protect vault depositors:
+The vault's primary protection comes from balanced markets. When longs and shorts are roughly equal, trader profits on one side are offset by losses on the other, and the vault's net exposure is minimal. The protocol actively encourages this balance through several mechanisms.
 
-**Dynamic funding rates.** When long or short positions become heavily imbalanced, funding rates adjust to incentivize the minority side, naturally rebalancing the market. See [Funding Rate](../trading/funding-rate.md).
+**Funding rate.** The [funding rate](../trading/funding-rate.md) is a continuous payment from the dominant side to the minority side. This creates a direct financial incentive for traders to take the less crowded position, naturally pushing markets toward balance. When markets are balanced, the vault bears significantly less directional risk.
 
-**Borrowing interest.** As utilization increases, borrowing costs rise exponentially, discouraging excessive leverage and compensating the vault for higher risk. See [Fees](../trading/fees.md).
+**Borrowing interest.** [Borrowing interest](../trading/borrowing-interest.md) rises exponentially with utilization. When open interest is high relative to the vault's capacity, the risk of large payouts during price swings increases. Borrowing interest compensates the vault for that elevated risk, and the steep curve ensures depositors are rewarded proportionally as the vault takes on more exposure.
 
-**Price impact fees.** Larger positions incur higher fees, discouraging oversized trades that would concentrate risk.
+**Price impact fees.** Larger positions incur proportionally higher [fees](../trading/fees.md), discouraging oversized trades that would create imbalance.
 
 **Utilization limits.** The vault enforces caps on how much of its total assets can be committed, both globally and per market.
 
 **Liquidations.** Positions that fall below their liquidation threshold are [liquidated](../trading/liquidation.md) before they can accumulate bad debt.
 
 **Auto-deleveraging.** In extreme scenarios where net trader PnL approaches the vault balance, [auto-deleveraging](../trading/adl.md) proportionally reduces winning positions to protect the vault from insolvency.
-
-### Summary
-
-Vault depositors earn yield in exchange for taking on counterparty risk. Historically, across similar perpetual DEX designs, traders tend to be net unprofitable in aggregate, meaning the vault generally accrues value over time. However, past performance is not indicative of future results, and depositors should understand that short-term losses are possible during periods of strong directional trading.

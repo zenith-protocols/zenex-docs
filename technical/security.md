@@ -25,9 +25,9 @@ Two precision scales are used throughout: SCALAR_7 (`10^7`) for token amounts an
 
 The `execute` function requires no authentication. Any address can submit keeper requests and earn the `caller_rate` fee. This is intentional and creates a competitive market for position management. Keeper bots can front-run each other; the first transaction to execute a liquidation or trigger captures the fee.
 
-### Treasury Rate Has No Upper Bound
+### Treasury Rate Bounded to 50%
 
-The treasury's `set_rate` function has no upper-bound validation. A compromised treasury owner could set a rate above `SCALAR_7` (100%), causing `protocol_fee > total_fee`. While the close path caps the protocol fee at `vault_transfer`, the open path (`execute_create_market`) does not have this cap. The treasury owner should be a multi-sig or governance contract.
+The treasury's `set_rate` function validates that the rate is in `[0, SCALAR_7/2]` (0% to 50%). This prevents a compromised treasury owner from extracting more than half of protocol revenue. The treasury owner should still be a multi-sig or governance contract for defense in depth.
 
 ### Factory Immutability
 
@@ -65,7 +65,7 @@ Position records use a 45-day TTL. If a position is not accessed for 45+ days, i
 
 ### Timelock Queue Expiry
 
-The `TradingAdminContract` stores queued updates in temporary storage with a 100-day TTL. If the delay is very long and the update is not executed before the TTL expires, it is silently lost.
+The `GovernanceContract` stores queued updates in temporary storage with a TTL of twice the delay period (minimum 1 day). If the update is not executed before the TTL expires, it is silently lost.
 
 ## Circuit Breaker Design
 

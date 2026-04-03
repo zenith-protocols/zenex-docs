@@ -10,10 +10,10 @@ The factory deploys trading and vault pairs atomically with deterministic addres
 ## Constructor
 
 ```rust
-__constructor(init_meta: ZenexInitMeta)
+__constructor(init_meta: FactoryInitMeta)
 ```
 
-`ZenexInitMeta` contains three fields:
+`FactoryInitMeta` contains three fields:
 
 | Field | Type | Description |
 |---|---|---|
@@ -36,22 +36,22 @@ deploy(
     vault_symbol,
     vault_decimals_offset,
     vault_lock_time,
-) -> (Address, Address)
+) -> Address
 ```
 
 The `deploy` function begins by requiring authentication from the `admin` parameter. Any address can serve as the admin of a new pool, but it must explicitly authorize the call.
 
-Salt computation applies `keccak256` over the concatenation of the caller-provided salt, the admin's address bytes, and a discriminator value (`0` for trading, `1` for vault). Including the admin address in the salt prevents front-running attacks where an adversary could observe a pending deployment transaction and race to deploy at the same deterministic address first.
+The vault salt is derived by XORing the last byte of the user-provided salt (`salt[31] ^= 1`), producing a distinct but deterministic salt for the vault contract.
 
-Before either contract is instantiated, both addresses are precomputed using `deployer().with_current_contract(salt).deployed_address()`. This allows each contract to receive the other's address during its own construction. The vault is deployed first, receiving the precomputed trading address as its `strategy` parameter. The trading contract is deployed second, receiving the precomputed vault address. This ordering satisfies the circular dependency between the two contracts without requiring a post-deployment linking step.
+Both addresses are precomputed using Soroban's native `deployer().with_current_contract(salt).deployed_address()`. This allows each contract to receive the other's address during its own construction. The vault is deployed first, receiving the precomputed trading address as its `strategy` parameter. The trading contract is deployed second, receiving the precomputed vault address. This ordering satisfies the circular dependency between the two contracts without requiring a post-deployment linking step.
 
-After both contracts are live, the factory writes `FactoryDataKey::Pools(trading_address) = true` to persistent storage with a 100-day TTL. It then emits a `Deploy { trading, vault }` event.
+After both contracts are live, the factory records the trading address in persistent storage and emits a `Deploy { trading, vault }` event.
 
 ## Registry
 
-The factory tracks deployed pools through a simple boolean mapping. `is_pool(pool_id) -> bool` performs a permissionless point-in-time existence check. Only trading addresses are registered, not vault addresses.
+The factory tracks deployed pools through a simple boolean mapping. `is_deployed(trading) -> bool` performs a permissionless existence check. Only trading addresses are registered, not vault addresses.
 
-There is no enumeration function. Callers cannot list all deployed pools through the contract itself. There is also no deregistration function. Once a pool is registered, the entry persists until its TTL expires.
+There is no enumeration function. Callers cannot list all deployed pools through the contract itself.
 
 ## Access Control
 

@@ -19,7 +19,7 @@ The **price verifier** authenticates oracle data. It accepts Pyth Lazer price pa
 
 The **treasury** collects protocol fees. A configurable fraction of all protocol revenue (base fees, impact fees, and borrowing fees) is routed to the treasury. The treasury rate can be adjusted dynamically without redeploying the trading contract.
 
-The **governance contract** (Trading Admin) is an optional timelock proxy. When set as the owner of a trading contract, it enforces a configurable delay between queuing and executing parameter changes, giving market participants time to react.
+The **governance contract** is an optional timelock proxy. When set as the owner of a trading contract, it enforces a configurable delay between queuing and executing parameter changes, giving market participants time to react.
 
 The **factory** deploys trading and vault pairs atomically with deterministic addresses. It serves as the canonical registry for verifying that a given address is a legitimately deployed Zenex trading contract.
 

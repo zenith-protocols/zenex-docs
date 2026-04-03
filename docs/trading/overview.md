@@ -25,7 +25,7 @@ Limit orders let you specify a target price at which you want your position to o
 
 A position on Zenex follows a clear lifecycle from creation to settlement.
 
-The position opens when your market order executes or when a keeper fills your limit order. At this point, the protocol records your entry price, collateral, notional value, and the current state of all fee indices. A minimum open time of 30 seconds applies to all positions. During this window, you cannot close the position yourself, and stop-loss or take-profit orders will not trigger. This prevents manipulation strategies that exploit momentary price spikes.
+The position opens when your market order executes or when a keeper fills your limit order. At this point, the protocol records your entry price, collateral, notional value, and the current state of all fee indices. A minimum open time of 30 seconds applies to all positions. During this window, you cannot close the position yourself, and stop-loss or take-profit orders will not trigger. This ensures every position carries real market risk and prevents risk-free extraction between oracle price updates.
 
 While the position is open, you can manage it in several ways. You can add collateral to reduce your effective leverage and push your liquidation price further away. You can remove collateral to increase leverage, provided you stay within the market's margin limits. You can also set or update stop-loss and take-profit price levels. A stop-loss automatically closes your position if the price moves against you to a specified level, limiting your downside. A take-profit closes your position when the price reaches a target on the profitable side, locking in gains.
 

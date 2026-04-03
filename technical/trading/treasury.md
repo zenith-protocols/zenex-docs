@@ -11,13 +11,13 @@ The treasury is a fee accumulator with a configurable rate. It implements [OpenZ
 
 `__constructor(owner: Address, rate: i128)`
 
-Sets the OZ Ownable owner and the initial fee rate. No validation is performed on the rate value.
+Sets the OZ Ownable owner and the initial fee rate. The rate must be in `[0, SCALAR_7/2]` (0% to 50%).
 
 ## Fee Rate
 
 `get_rate() -> i128` is permissionless. It returns the current fee rate in SCALAR_7 precision, defaulting to `0` if unset.
 
-`set_rate(rate: i128)` is owner-only (`#[only_owner]`). There is no upper-bound validation. A rate of `SCALAR_7` (10,000,000) represents 100% of trading fees going to the protocol.
+`set_rate(rate: i128)` is owner-only (`#[only_owner]`). The rate is bounded to `[0, SCALAR_7/2]` (0% to 50%). Setting a rate outside this range panics with `TreasuryError::InvalidRate` (900).
 
 The trading contract calls `get_rate()` on every trade to compute the protocol fee:
 

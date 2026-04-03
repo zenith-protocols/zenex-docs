@@ -37,4 +37,4 @@ However, shares received via transfer (not deposit) carry no lock of their own. 
 
 | Error | Code | Trigger |
 |---|---|---|
-| `SharesLocked` | 421 | Withdraw, redeem, or transfer attempted while the lock has not expired |
+| `SharesLocked` | 791 | Withdraw, redeem, or transfer attempted while the lock has not expired |

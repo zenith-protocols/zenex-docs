@@ -28,4 +28,4 @@ Zenex is built on Stellar Soroban, which provides fast finality, low transaction
 
 ## Markets on Zenex
 
-Each market on Zenex represents a specific trading pair and has its own set of parameters. These include the margin requirement (which determines maximum leverage), the liquidation threshold, the price impact divisor, a per-market borrowing rate, and a per-market utilization cap. Prices are sourced from Pyth Lazer oracle feeds, providing reliable and tamper-resistant pricing data. Currently supported markets include BTC, ETH, SOL, XLM, and ADA, with more assets planned as the protocol matures.
+Each market on Zenex represents a specific trading pair and has its own set of parameters. These include the margin requirement (which determines maximum leverage), the liquidation threshold, the price impact divisor, a per-market borrowing rate, and a per-market utilization cap. Prices are sourced from Pyth Lazer oracle feeds, providing reliable and tamper-resistant pricing data.

@@ -27,10 +27,13 @@ const config: Config = {
   projectName: 'zenex-docs', // Your repo name (adjust as needed)
 
   markdown: {
+    mermaid: true,
     hooks: {
       onBrokenMarkdownLinks: 'warn',
     },
   },
+
+  themes: ['@docusaurus/theme-mermaid'],
 
   onBrokenLinks: 'warn',
   trailingSlash: false,

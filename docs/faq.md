@@ -21,10 +21,6 @@ Zenex supports a wide range of Stellar-compatible wallets, including **Freighter
 
 The maximum leverage on Zenex is **100x**. Higher leverage amplifies both gains and losses, so it is important to manage your risk carefully. See [Leverage](./trading/leverage.md) for more details.
 
-### What assets can I trade?
-
-Zenex currently supports perpetual contracts for **BTC**, **XLM**, **SOL**, **ETH**, and **ADA**. Each asset has its own market parameters. See [Supported Assets](./markets/supported-assets.md) for the full list.
-
 ### What are the trading fees?
 
 Trading fees consist of a **base fee** (0.04% for the non-dominant side, 0.06% for the dominant side) and a **price impact fee** that scales with position size. Positions also accrue a **borrowing interest** over time, and longs and shorts exchange a **funding rate** based on market imbalance. For a detailed breakdown, see [Fees](./trading/fees.md).
@@ -43,4 +39,4 @@ The collateral token is determined by each vault. All positions within a vault a
 
 ### Is Zenex audited?
 
-Zenex is committed to security and transparency. For information on audit status and reports, see the [Audits](./security/audits.md) page.
+Zenex is committed to security and transparency. For information on audit status and reports, see the [Audits](./audits.md) page.
