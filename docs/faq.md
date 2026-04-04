@@ -23,7 +23,7 @@ The maximum leverage on Zenex is **100x**. Higher leverage amplifies both gains 
 
 ### What are the trading fees?
 
-Trading fees consist of a **base fee** (0.04% for the non-dominant side, 0.06% for the dominant side) and a **price impact fee** that scales with position size. Positions also accrue a **borrowing interest** over time, and longs and shorts exchange a **funding rate** based on market imbalance. For a detailed breakdown, see [Fees](./trading/fees.md).
+Trading fees consist of a **base fee** (0.03% for the non-dominant side, 0.05% for the dominant side) and a **price impact fee** that scales with position size. Positions also accrue a **borrowing interest** over time, and longs and shorts exchange a **funding rate** based on market imbalance. For a detailed breakdown, see [Fees](./trading/fees.md).
 
 ### How does the vault work?
 
