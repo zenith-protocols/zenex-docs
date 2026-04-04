@@ -17,9 +17,9 @@ The base fee is charged when a position is opened and again when it is closed.
 
 Initially, the base fee is set to:
 
-- `fee_non_dom`: 0.04% for positions on the non-dominant side of the market
+- `fee_non_dom`: 0.03% for positions on the non-dominant side of the market
 
-- `fee_dom`: 0.06% for positions on the dominant side of the market
+- `fee_dom`: 0.05% for positions on the dominant side of the market
 
 This fee structure helps encourage balance between long and short open interest by making it slightly more expensive to trade on the crowded side of the market.
 ### **2. Price Impact Fee**
