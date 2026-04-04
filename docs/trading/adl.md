@@ -36,6 +36,7 @@ For example, if the ADL index drops from 1.0 to 0.8, all affected positions have
 
 ### What should you know?
 
+There are a few key things to keep in mind about ADL and how it works in practice:
 - **ADL is rare**: It only triggers when the vault is near insolvency. Under normal market conditions, liquidations handle risk management.
 - **No action required**: ADL is applied automatically. You do not need to do anything when it occurs.
 - **Proportional and fair**: All positions on the winning side are reduced equally, based on their notional size.
