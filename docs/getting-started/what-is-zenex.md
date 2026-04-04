@@ -20,7 +20,7 @@ Leverage is the other defining feature of perpetual futures. Instead of putting 
 
 ## Why Zenex
 
-Zenex is fully on-chain and permissionless. Anyone with a Stellar wallet can trade or provide liquidity without registration, identity verification, or approval. The protocol's smart contracts enforce every rule transparently. Fees, margin requirements, liquidation thresholds, and interest rates are all visible on-chain and governed through a timelock process that gives users advance notice of any parameter changes. There is no opaque matching engine and no ability for the exchange operator to front-run or censor trades.
+Zenex is fully on-chain and permissionless. Anyone with a Stellar wallet can trade or provide liquidity. The protocol's smart contracts enforce every rule transparently. Fees, margin requirements, liquidation thresholds, and interest rates are all visible on-chain and governed through a timelock process that gives users advance notice of any parameter changes. There is no opaque matching engine and no ability for the exchange operator to front-run or censor trades.
 
 Capital efficiency is a core design goal. The vault-based liquidity model means that depositors' capital is pooled and available across all markets simultaneously, rather than being fragmented across individual order books. Traders benefit from consistent execution at oracle prices without slippage from thin order books. The fee structure is designed to reward balanced markets: traders on the less crowded side pay lower fees, while the crowded side pays more. Borrowing interest scales with utilization using steep exponential curves, which keeps the system stable even under heavy load.
 
