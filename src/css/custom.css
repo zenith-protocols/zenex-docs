@@ -1,6 +1,7 @@
 /* ============================================================================
    ZENEX DOCUMENTATION CSS
    Custom styling for Zenex Trade documentation site
+   Theme aligned with zenex-trade (Radix Slate/Jade dark)
    ============================================================================ */
 
 /* ============================================================================
@@ -14,28 +15,28 @@
   --ease-dart: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-drift: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
-  /* === Brand Colors - Primary === */
-  --ifm-color-primary: #18B577;
-  --ifm-color-primary-dark: #16a46b;
-  --ifm-color-primary-darker: #149b65;
-  --ifm-color-primary-darkest: #118053;
-  --ifm-color-primary-light: #1ac97f;
-  --ifm-color-primary-lighter: #1dd085;
-  --ifm-color-primary-lightest: #2de093;
-  
+  /* === Brand Colors - Primary (Radix Jade) === */
+  --ifm-color-primary: #29a383;
+  --ifm-color-primary-dark: #228f73;
+  --ifm-color-primary-darker: #1d7d65;
+  --ifm-color-primary-darkest: #186856;
+  --ifm-color-primary-light: #27b08b;
+  --ifm-color-primary-lighter: #2bc294;
+  --ifm-color-primary-lightest: #1fd8a4;
+
   /* === Background Colors === */
-  --ifm-background-color: #F6F4F0;
-  --ifm-font-color-base: #191E22;
-  
+  --ifm-background-color: #111113;
+  --ifm-font-color-base: #edeef0;
+
   /* === Accent Colors === */
-  --ifm-color-success: #18B577;
-  --ifm-color-info: #2997FF;
+  --ifm-color-success: #10b981;
+  --ifm-color-info: #00a2c7;
   --ifm-color-warning: #f59e0b;
-  --ifm-color-danger: #EA3E3E;
+  --ifm-color-danger: #F23645;
 
   /* === Typography === */
-  --ifm-font-family-base: Inter, -apple-system, Roboto, Helvetica, sans-serif;
-  --ifm-heading-font-family: Montserrat, -apple-system, Roboto, Helvetica, sans-serif;
+  --ifm-font-family-base: Satoshi, -apple-system, Roboto, Helvetica, sans-serif;
+  --ifm-heading-font-family: Satoshi, -apple-system, Roboto, Helvetica, sans-serif;
   --ifm-code-font-size: 95%;
   --ifm-font-size-base: 16px;
   --ifm-line-height-base: 1.6;
@@ -47,83 +48,83 @@
 
   /* === Navbar === */
   --ifm-navbar-height: 4rem;
-  --ifm-navbar-background-color: #FFFFFF;
-  --ifm-navbar-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --ifm-navbar-background-color: #18191b;
+  --ifm-navbar-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 
   /* === Sidebar === */
-  --ifm-sidebar-background: #FFFFFF;
-  
+  --ifm-sidebar-background: #18191b;
+
   /* === Code Blocks === */
-  --ifm-code-background: #F5F5F5;
-  --docusaurus-highlighted-code-line-bg: rgba(24, 181, 119, 0.15);
+  --ifm-code-background: #212225;
+  --docusaurus-highlighted-code-line-bg: rgba(41, 163, 131, 0.15);
 }
 
 /* === Dark Mode Theme === */
 [data-theme='dark'] {
   /* Brand Colors */
-  --ifm-color-primary: #18B577;
-  --ifm-color-primary-dark: #16a46b;
-  --ifm-color-primary-darker: #149b65;
-  --ifm-color-primary-darkest: #118053;
-  --ifm-color-primary-light: #1ac97f;
-  --ifm-color-primary-lighter: #1dd085;
-  --ifm-color-primary-lightest: #2de093;
+  --ifm-color-primary: #29a383;
+  --ifm-color-primary-dark: #228f73;
+  --ifm-color-primary-darker: #1d7d65;
+  --ifm-color-primary-darkest: #186856;
+  --ifm-color-primary-light: #27b08b;
+  --ifm-color-primary-lighter: #2bc294;
+  --ifm-color-primary-lightest: #1fd8a4;
 
   /* Background Colors */
-  --ifm-background-color: #191E22;
-  --ifm-background-surface-color: #111417;
-  --ifm-font-color-base: #F6F4F0;
-  
+  --ifm-background-color: #111113;
+  --ifm-background-surface-color: #18191b;
+  --ifm-font-color-base: #edeef0;
+
   /* Secondary Colors */
-  --ifm-color-secondary: #1D242A;
-  --ifm-color-secondary-dark: #29333B;
-  --ifm-color-secondary-darker: #2F3B45;
-  
+  --ifm-color-secondary: #212225;
+  --ifm-color-secondary-dark: #272a2d;
+  --ifm-color-secondary-darker: #363a3f;
+
   /* Accent Colors */
-  --ifm-color-success: #18B577;
-  --ifm-color-info: #2997FF;
+  --ifm-color-success: #10b981;
+  --ifm-color-info: #00a2c7;
   --ifm-color-warning: #f59e0b;
-  --ifm-color-danger: #EA3E3E;
+  --ifm-color-danger: #F23645;
 
   /* Emphasis Colors */
-  --ifm-color-emphasis-300: #8491A4;
-  --ifm-color-emphasis-600: #8491A4;
-  --ifm-color-emphasis-700: #F6F4F0;
-  --ifm-color-emphasis-800: #F6F4F0;
+  --ifm-color-emphasis-300: #b0b4ba;
+  --ifm-color-emphasis-600: #b0b4ba;
+  --ifm-color-emphasis-700: #edeef0;
+  --ifm-color-emphasis-800: #edeef0;
 
   /* Navbar */
-  --ifm-navbar-background-color: #111417;
+  --ifm-navbar-background-color: #18191b;
   --ifm-navbar-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --ifm-navbar-link-color: #F6F4F0;
-  --ifm-navbar-link-hover-color: #18B577;
+  --ifm-navbar-link-color: #edeef0;
+  --ifm-navbar-link-hover-color: #1fd8a4;
 
   /* Sidebar */
-  --ifm-sidebar-background: #111417;
-  --ifm-menu-color: #F6F4F0;
-  --ifm-menu-color-active: #18B577;
-  --ifm-menu-color-background-active: rgba(24, 181, 119, 0.1);
-  --ifm-menu-color-background-hover: #1D242A;
+  --ifm-sidebar-background: #18191b;
+  --ifm-menu-color: #edeef0;
+  --ifm-menu-color-active: #1fd8a4;
+  --ifm-menu-color-background-active: rgba(41, 163, 131, 0.1);
+  --ifm-menu-color-background-hover: #212225;
 
   /* Cards & Containers */
-  --ifm-card-background-color: #111417;
-  --ifm-toc-border-color: #29333B;
-  --ifm-table-border-color: #29333B;
-  --ifm-hr-border-color: #29333B;
+  --ifm-card-background-color: #18191b;
+  --ifm-toc-border-color: #363a3f;
+  --ifm-table-border-color: #363a3f;
+  --ifm-hr-border-color: #363a3f;
 
   /* Code Blocks */
-  --ifm-code-background: #1D242A;
-  --docusaurus-highlighted-code-line-bg: rgba(24, 181, 119, 0.2);
-  
+  --ifm-code-background: #212225;
+  --docusaurus-highlighted-code-line-bg: rgba(41, 163, 131, 0.2);
+
   /* Scrollbar */
   --ifm-scrollbar-track-background-color: transparent;
-  --ifm-scrollbar-thumb-background-color: #29333B;
-  --ifm-scrollbar-thumb-hover-background-color: #3a4654;
+  --ifm-scrollbar-thumb-background-color: #363a3f;
+  --ifm-scrollbar-thumb-hover-background-color: #43484e;
 
   /* Footer */
-  --ifm-footer-background-color: #111417;
-  --ifm-footer-color: #F6F4F0;
-  --ifm-footer-link-color: #F6F4F0;
-  --ifm-footer-link-hover-color: #18B577;
+  --ifm-footer-background-color: #18191b;
+  --ifm-footer-color: #edeef0;
+  --ifm-footer-link-color: #edeef0;
+  --ifm-footer-link-hover-color: #1fd8a4;
 }
 
 /* ============================================================================
@@ -145,60 +146,60 @@ html {
 
 /* Force dark mode always */
 html[data-theme='light'] {
-  --ifm-color-primary: #18B577;
-  --ifm-color-primary-dark: #16a46b;
-  --ifm-color-primary-darker: #149b65;
-  --ifm-color-primary-darkest: #118053;
-  --ifm-color-primary-light: #1ac97f;
-  --ifm-color-primary-lighter: #1dd085;
-  --ifm-color-primary-lightest: #2de093;
+  --ifm-color-primary: #29a383;
+  --ifm-color-primary-dark: #228f73;
+  --ifm-color-primary-darker: #1d7d65;
+  --ifm-color-primary-darkest: #186856;
+  --ifm-color-primary-light: #27b08b;
+  --ifm-color-primary-lighter: #2bc294;
+  --ifm-color-primary-lightest: #1fd8a4;
 
   /* Force dark mode colors even in light mode */
-  --ifm-background-color: #191E22;
-  --ifm-background-surface-color: #111417;
-  --ifm-font-color-base: #F6F4F0;
-  
-  --ifm-color-secondary: #1D242A;
-  --ifm-color-secondary-dark: #29333B;
-  --ifm-color-secondary-darker: #2F3B45;
-  
-  --ifm-color-success: #18B577;
-  --ifm-color-info: #2997FF;
+  --ifm-background-color: #111113;
+  --ifm-background-surface-color: #18191b;
+  --ifm-font-color-base: #edeef0;
+
+  --ifm-color-secondary: #212225;
+  --ifm-color-secondary-dark: #272a2d;
+  --ifm-color-secondary-darker: #363a3f;
+
+  --ifm-color-success: #10b981;
+  --ifm-color-info: #00a2c7;
   --ifm-color-warning: #f59e0b;
-  --ifm-color-danger: #EA3E3E;
+  --ifm-color-danger: #F23645;
 
-  --ifm-color-emphasis-300: #8491A4;
-  --ifm-color-emphasis-600: #8491A4;
-  --ifm-color-emphasis-700: #F6F4F0;
-  --ifm-color-emphasis-800: #F6F4F0;
+  --ifm-color-emphasis-300: #b0b4ba;
+  --ifm-color-emphasis-600: #b0b4ba;
+  --ifm-color-emphasis-700: #edeef0;
+  --ifm-color-emphasis-800: #edeef0;
 
-  --ifm-navbar-background-color: #111417;
+  --ifm-navbar-background-color: #18191b;
   --ifm-navbar-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --ifm-navbar-link-color: #F6F4F0;
-  --ifm-navbar-link-hover-color: #18B577;
+  --ifm-navbar-link-color: #edeef0;
+  --ifm-navbar-link-hover-color: #1fd8a4;
 
-  --ifm-sidebar-background: #111417;
-  --ifm-menu-color: #F6F4F0;
-  --ifm-menu-color-active: #18B577;
-  --ifm-menu-color-background-active: rgba(24, 181, 119, 0.1);
-  --ifm-menu-color-background-hover: #1D242A;
+  --ifm-sidebar-background: #18191b;
+  --ifm-menu-color: #edeef0;
+  --ifm-menu-color-active: #1fd8a4;
+  --ifm-menu-color-background-active: rgba(41, 163, 131, 0.1);
+  --ifm-menu-color-background-hover: #212225;
 
-  --ifm-card-background-color: #111417;
-  --ifm-toc-border-color: #29333B;
-  --ifm-table-border-color: #29333B;
-  --ifm-hr-border-color: #29333B;
+  --ifm-card-background-color: #18191b;
+  --ifm-toc-border-color: #363a3f;
+  --ifm-table-border-color: #363a3f;
+  --ifm-hr-border-color: #363a3f;
 
-  --ifm-code-background: #1D242A;
-  --docusaurus-highlighted-code-line-bg: rgba(24, 181, 119, 0.2);
-  
+  --ifm-code-background: #212225;
+  --docusaurus-highlighted-code-line-bg: rgba(41, 163, 131, 0.2);
+
   --ifm-scrollbar-track-background-color: transparent;
-  --ifm-scrollbar-thumb-background-color: #29333B;
-  --ifm-scrollbar-thumb-hover-background-color: #3a4654;
+  --ifm-scrollbar-thumb-background-color: #363a3f;
+  --ifm-scrollbar-thumb-hover-background-color: #43484e;
 
-  --ifm-footer-background-color: #111417;
-  --ifm-footer-color: #F6F4F0;
-  --ifm-footer-link-color: #F6F4F0;
-  --ifm-footer-link-hover-color: #18B577;
+  --ifm-footer-background-color: #18191b;
+  --ifm-footer-color: #edeef0;
+  --ifm-footer-link-color: #edeef0;
+  --ifm-footer-link-hover-color: #1fd8a4;
 }
 
 body {
@@ -207,11 +208,11 @@ body {
 
 /* Headings */
 h1, h2, h3, h4, h5, h6,
-.markdown h1, 
-.markdown h2, 
-.markdown h3, 
-.markdown h4, 
-.markdown h5, 
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+.markdown h5,
 .markdown h6 {
   font-family: var(--ifm-heading-font-family);
   font-weight: 600;
@@ -246,13 +247,24 @@ h1, h2, h3, h4, h5, h6,
 
 /* Navbar Brand & Logo */
 .navbar__logo {
-  display: none;
+  display: flex;
+  align-items: center;
+  margin-right: 2px;
+}
+
+.navbar__logo img {
+  height: 30px;
+  width: 30px;
+  transform: translateY(2px);
 }
 
 .navbar__brand {
   cursor: pointer;
   transition: opacity 0.3s ease;
   align-self: center;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .navbar__brand:hover {
@@ -262,16 +274,17 @@ h1, h2, h3, h4, h5, h6,
 
 /* Navbar Title Styling */
 .navbar__title {
-  font-family: Montserrat, -apple-system, Roboto, Helvetica, sans-serif !important;
-  font-size: 40px !important;
+  font-family: Satoshi, -apple-system, Roboto, Helvetica, sans-serif !important;
+  font-size: 36px !important;
   font-weight: 800 !important;
-  letter-spacing: -1.6px !important;
+  letter-spacing: -1.4px !important;
   line-height: 1 !important;
   text-transform: lowercase !important;
-  background: radial-gradient(circle at center, #007356 0%, #00D9A3 100%) !important;
-  -webkit-background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
-  background-clip: text !important;
+  color: #edeef0 !important;
+  -webkit-text-fill-color: #edeef0 !important;
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
   margin: 0 !important;
   padding: 0 !important;
 }
@@ -279,10 +292,11 @@ h1, h2, h3, h4, h5, h6,
 /* Navbar Title - Dark/Light Mode */
 [data-theme='dark'] .navbar__title,
 [data-theme='light'] .navbar__title {
-  background: radial-gradient(circle at center, #007356 0%, #00D9A3 100%) !important;
-  -webkit-background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
-  background-clip: text !important;
+  color: #edeef0 !important;
+  -webkit-text-fill-color: #edeef0 !important;
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
 }
 
 /* Navbar Links */
@@ -336,16 +350,6 @@ html[data-theme] button[title*="light"],
 /* ============================================================================
    4. SIDEBAR
    ============================================================================ */
-
-/* Remove All Top Spacing 
-.theme-doc-sidebar-container,
-aside[class*="docSidebarContainer"],
-.menu__list,
-.sidebar_node_modules-\@docusaurus-theme-classic-lib-theme-DocPage-Layout-Sidebar-styles-module,
-nav.menu {
-  padding-top: 0 !important;
-  margin-top: 0 !important;
-} */
 
 /* Add a small gap at the top of sidebar */
 .menu {
@@ -485,8 +489,8 @@ code {
 
 /* Dark Mode Inline Code */
 [data-theme='dark'] code:not(.prism-code) {
-  background-color: #1D242A;
-  color: #18B577;
+  background-color: #212225;
+  color: #1fd8a4;
 }
 
 /* ============================================================================
@@ -508,7 +512,7 @@ table tbody tr {
 }
 
 [data-theme='dark'] table tbody tr:hover {
-  background-color: #1D242A;
+  background-color: #212225;
 }
 
 /* ============================================================================
@@ -685,7 +689,7 @@ blockquote {
 
 /* Force footer to always use dark mode styling */
 .footer {
-  background-color: #111417 !important;
+  background-color: #18191b !important;
 }
 
 /* Force footer text to always be light colored */
@@ -695,24 +699,24 @@ blockquote {
 .footer__link-item,
 .footer a,
 .footer__copyright {
-  color: #F6F4F0 !important;
+  color: #edeef0 !important;
 }
 
 /* Footer link hover state */
 .footer a:hover {
-  color: var(--ifm-color-primary) !important;
+  color: #1fd8a4 !important;
   text-decoration: underline;
 }
 
 /* Ensure footer sections maintain light text */
 .footer__col,
 .footer__links {
-  color: #F6F4F0 !important;
+  color: #edeef0 !important;
 }
 
 /* Override any theme-specific footer colors */
 [data-theme='light'] .footer {
-  background-color: #111417 !important;
+  background-color: #18191b !important;
 }
 
 [data-theme='light'] .footer,
@@ -721,11 +725,11 @@ blockquote {
 [data-theme='light'] .footer__link-item,
 [data-theme='light'] .footer a,
 [data-theme='light'] .footer__copyright {
-  color: #F6F4F0 !important;
+  color: #edeef0 !important;
 }
 
 [data-theme='dark'] .footer {
-  background-color: #111417 !important;
+  background-color: #18191b !important;
 }
 
 [data-theme='dark'] .footer,
@@ -734,7 +738,7 @@ blockquote {
 [data-theme='dark'] .footer__link-item,
 [data-theme='dark'] .footer a,
 [data-theme='dark'] .footer__copyright {
-  color: #F6F4F0 !important;
+  color: #edeef0 !important;
 }
 
 /* ============================================================================

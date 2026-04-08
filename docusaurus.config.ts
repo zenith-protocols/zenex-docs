@@ -93,6 +93,10 @@ const config: Config = {
         'sha384-odtC+0UGzzFL/6PNoE8rX/SPcQDXBJ+uRepguP4QkPCm2LBxH3FA3y+fKSiJ+AmM',
       crossorigin: 'anonymous',
     },
+    {
+      href: 'https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,600,700,900&display=swap',
+      type: 'text/css',
+    },
   ],
 
   themeConfig: {
@@ -107,7 +111,7 @@ const config: Config = {
       title: 'Zenex',
       logo: {
         alt: 'Zenex Logo',
-        src: 'img/logo.svg',
+        src: 'img/favicon.ico',
       },
       items: [
         {
