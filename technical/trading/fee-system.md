@@ -22,10 +22,10 @@ If the position's side has more or equal open interest, `fee_dom` applies. If it
 ### Price Impact Fee
 
 $$
-\text{impact\_fee} = \lceil \frac{\text{notional}}{\text{impact}} \rceil
+\text{impact\_fee} = \lfloor \frac{\text{notional}}{\text{impact}} \rfloor
 $$
 
-Where `impact` is the per-market divisor from `MarketConfig`. Uses ceiling division, always rounding up in favor of the protocol.
+Where `impact` is the per-market divisor from `MarketConfig`. Uses floor division.
 
 ### Funding
 
@@ -75,7 +75,7 @@ Treasury receives a cut of `protocol_fee`. Keepers receive a cut of `trading_fee
 
 | Recipient | Amount |
 |---|---|
-| Treasury | `(base_fee + impact_fee) * treasury_rate / SCALAR_7` |
+| Treasury | `protocol_fee * treasury_rate / SCALAR_7` where `protocol_fee = base_fee + impact_fee` |
 | Vault | `(base_fee + impact_fee) - treasury_fee` |
 | Keeper | `0` (no keeper involved) |
 
@@ -116,7 +116,7 @@ The keeper earns a share of trading fees (base + impact), not of borrowing or fu
 
 ## Limit Order Fee Handling
 
-When a limit order is placed, the user's collateral is transferred upfront. At fill time, fees are computed based on the position's dominance at that moment. If the position is non-dominant, the fee difference is implicitly absorbed as additional collateral. This ensures the contract always has sufficient funds at fill time without requiring additional user authorization.
+When a limit order is placed, the user's full collateral is transferred to the contract with no fee deduction. Fees are computed and deducted from collateral at fill time via `ctx.open()`, based on the position's dominance at that moment. This means limit orders have no fee cost until they are actually filled by a keeper.
 
 ## Treasury Rate
 

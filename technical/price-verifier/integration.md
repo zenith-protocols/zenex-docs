@@ -13,9 +13,7 @@ For `open_market`, `close_position`, and `modify_collateral`, the user submits r
 
 ## Keeper Batch Execution
 
-The `execute` function takes a different approach to minimize cross-contract overhead. All price feeds are verified once at the start of the batch by calling `PriceVerifierClient::verify_prices(price_data)`, which returns `Vec<PriceData>`. The results are cached in `ExecuteContext::price_map` as `Map<u32, (i128, i128)>` mapping each `feed_id` to its `(price, price_scalar)` pair. Each request in the batch then looks up its feed from this cached map rather than invoking the verifier again.
-
-This design amortizes the cross-contract verification cost across the entire batch. A single keeper transaction processing 10 fills pays for one verification call, not 10. Staleness is enforced by the price verifier using the same `max_staleness` threshold.
+The `execute` function processes a batch of requests for a single `market_id`. It calls `PriceVerifierClient::verify_price(price_data)` (singular) once at the start of the batch, which returns a single `PriceData`. This one verified price is then passed to all positions in the batch, since all positions share the same feed for the given market. Staleness is enforced by the price verifier using the same `max_staleness` threshold.
 
 ## Circuit Breaker and ADL
 
@@ -23,7 +21,7 @@ For `update_status`, prices are verified and used to compute aggregate PnL acros
 
 ## Wire Format
 
-The binary format is Pyth Lazer's native encoding. Maximum buffer size is 1024 bytes.
+The binary format is Pyth Lazer's native encoding. Maximum buffer size is 2048 bytes.
 
 ```text
 Envelope:

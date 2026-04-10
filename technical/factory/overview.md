@@ -58,7 +58,7 @@ There is no enumeration function. Callers cannot list all deployed pools through
 The factory has **no owner**. The constructor is called once at deployment, and no administrative functions exist beyond that point.
 
 - `deploy` requires the `admin` parameter to authenticate. Any address can be the admin of a new pool.
-- `is_pool` is fully permissionless. No authorization is required to query the registry.
+- `is_deployed` is fully permissionless. No authorization is required to query the registry.
 
 ## WASM Hash Immutability
 

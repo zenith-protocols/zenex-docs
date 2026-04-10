@@ -7,15 +7,7 @@ title: Margin & Leverage
 
 ## Leverage Bounds
 
-Every position must satisfy two leverage constraints.
-
-### Minimum Leverage
-
-$$
-\text{notional} \geq \text{col} \times \text{MIN\_LEVERAGE}
-$$
-
-`MIN_LEVERAGE = 2` (not a named constant in code, but enforced in validation). Positions must be at least 2x levered. This prevents using the trading contract as a simple spot swap mechanism.
+Every position must satisfy the maximum leverage constraint.
 
 ### Maximum Leverage
 

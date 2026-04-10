@@ -21,6 +21,8 @@ The sign is determined by which side is dominant. When `long_notional > short_no
 
 Funding accrues continuously via `data.accrue(e, ...)`, which is called on every market-touching operation (open, close, modify, execute). Borrowing indices are accrued in the same call before funding.
 
+**One-sided markets**: When either `l_notional == 0` or `s_notional == 0`, funding accrual is skipped entirely even if `fund_rate` is non-zero. This is because funding is peer-to-peer — there is no counterparty to receive payment. The rate is still SET via `apply_funding` (reflecting the imbalance), but no indices advance until both sides have open interest.
+
 $$
 \text{hours\_elapsed} = \frac{\text{seconds\_elapsed} \times \text{SCALAR\_18}}{\text{3600}}
 $$
@@ -53,4 +55,4 @@ Positive funding represents a cost (position paid funding during its lifetime). 
 
 ## Design Rationale
 
-Continuous accrual (rather than discrete hourly payments) prevents manipulation of the exact accrual timestamp. The dominant/minority scaling makes the mechanism self-balancing, ensuring no value is created or destroyed — funding is purely peer-to-peer with 100% flowing between longs and shorts. LP compensation comes from the separate borrowing fee system, which accrues to the vault via protocol fees. Per-market rates (via `r_funding`) allow independent funding dynamics across asset pairs.
+Continuous accrual (rather than discrete hourly payments) prevents manipulation of the exact accrual timestamp. The dominant/minority scaling makes the mechanism self-balancing, ensuring no value is created or destroyed — funding is purely peer-to-peer with 100% flowing between longs and shorts. LP compensation comes from the separate borrowing fee system, which accrues to the vault via protocol fees. Per-market variation comes naturally from each market's open interest imbalance, even though `r_funding` is a single global parameter in `TradingConfig`.

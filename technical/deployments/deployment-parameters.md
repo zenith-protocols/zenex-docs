@@ -9,7 +9,7 @@ Every Zenex deployment is configured through a set of constructor parameters tha
 
 ## Factory
 
-The factory is the entry point for deploying new trading and vault pairs. Its constructor accepts a single `ZenexInitMeta` struct.
+The factory is the entry point for deploying new trading and vault pairs. Its constructor accepts a single `FactoryInitMeta` struct.
 
 | Parameter | Type | Description |
 |---|---|---|
@@ -94,10 +94,11 @@ The governance contract is an optional timelock proxy deployed independently and
 | Parameter | Type | Description |
 |---|---|---|
 | `owner` | `Address` | Admin who can queue parameter changes |
-| `trading` | `Address` | Trading contract this governance instance controls |
 | `delay` | `u64` | Minimum seconds between queuing and executing a change |
 
-The delay parameter enforces a timelock on all configuration updates. When the owner queues a parameter change (such as updating `TradingConfig` or a `MarketConfig`), the change cannot be executed until `delay` seconds have passed. This gives traders and LPs time to react to upcoming parameter changes. The `set_status` function is exempt from the timelock, allowing immediate emergency pauses.
+The `delay` must be non-zero and at most 60 days (`60 * 24 * 3600` seconds). Values outside this range cause the constructor to panic with `InvalidDelay`.
+
+The delay parameter enforces a timelock on all configuration updates. When the owner queues a parameter change (such as updating `TradingConfig` or a `MarketConfig`), it specifies the `target` contract address at call time. The change cannot be executed until `delay` seconds have passed. This gives traders and LPs time to react to upcoming parameter changes. The `set_status` function is exempt from the timelock, allowing immediate emergency pauses.
 
 ## Circular Dependency Resolution
 

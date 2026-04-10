@@ -5,16 +5,16 @@ title: Deposit Lock
 
 # Deposit Lock
 
-Every deposit or mint operation records the recipient's timestamp in persistent storage:
+Every deposit or mint operation records a `DepositLock` for the recipient in persistent storage, containing the current timestamp and the number of locked shares:
 
 ```text
-LastDepositTime[receiver] = current_timestamp
+DepositLock[receiver] = { timestamp: current_timestamp, shares: locked_shares }
 ```
 
-The recipient cannot withdraw, redeem, or transfer shares until the lock period expires. The unlock time is computed as:
+The recipient cannot withdraw, redeem, or transfer the locked shares until the lock period expires. The unlock time is computed as:
 
 ```text
-unlock_time = last_deposit_time + lock_time
+unlock_time = deposit_lock.timestamp + lock_time
 ```
 
 where `lock_time` is the global lock duration stored in instance storage.
@@ -23,9 +23,13 @@ where `lock_time` is the global lock duration stored in instance storage.
 
 The lock is applied to the **receiver** of the shares, not the caller who initiated the deposit. If Alice deposits on behalf of Bob, Bob is the one who becomes locked. Alice's own lock state is unaffected.
 
-## New Deposits Reset the Timer
+## New Deposits Accumulate Locked Shares
 
-If a user deposits again while still locked, the timer restarts from the current block timestamp. There is no accumulation or extension relative to the previous lock. The new deposit simply overwrites `LastDepositTime` with the current timestamp, so the user must wait the full lock duration again from that point.
+If a user deposits again while the previous lock is still active, the locked share count **accumulates**: the new shares are added to the existing locked amount, and the timestamp resets to the current block time. For example, if a user deposited 100 shares and then deposits 50 more while still locked, the lock becomes `{ timestamp: now, shares: 150 }`. The user must wait the full lock duration again from the new timestamp.
+
+If the previous lock has already expired, the lock resets to only the newly deposited shares. Expired locks do not carry over.
+
+The `available_shares(user)` public query function returns the number of shares that a user can currently transfer, withdraw, or redeem. It subtracts the locked share count from the user's total balance when the lock is active, returning zero if the locked amount exceeds the balance.
 
 ## Transfer Lock Behavior
 

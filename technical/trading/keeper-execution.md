@@ -9,47 +9,51 @@ The keeper system enables permissionless execution of limit order fills, stop-lo
 
 ## Batch Processing
 
-`execute(caller, requests, price_data) -> Vec<u32>`
+`execute(caller: Address, market_id: u32, position_ids: Vec<u32>, price: Bytes)`
 
-The `execute` function processes a batch of requests in a single transaction. All price feeds are verified once at the start and cached in an `ExecuteContext`, amortizing the cost of the cross-contract call to the price verifier. The contract must not be `Frozen`.
+The `execute` function processes a batch of position IDs for a single market in one transaction. The price payload is verified once via the price verifier, and a `Context` is loaded for the specified `market_id`, which accrues borrowing and funding indices to the current timestamp. The contract must not be `Frozen`.
 
-Each request is processed independently. Errors are captured as error codes in the return vector and do not abort the batch. All token transfers are aggregated across the batch and settled at the end.
+All positions in the batch must belong to the same `market_id`. If any position fails its action (not actionable, too new, wrong market), the entire batch aborts with a hard panic. There is no partial success — either all positions are processed or none are.
 
-### ExecuteContext
+### Context
 
-The `ExecuteContext` caches the verified price map (`Map<u32, (i128, i128)>` mapping feed_id to price and price_scalar), the trading config reference, token and vault addresses, the treasury address, and the accumulated `ProcessingResult` for transfers. This avoids repeated storage reads across multiple requests in the same batch.
+The `Context` bundles the verified price (single feed), price scalar, market config and data, global trading config, vault balance, token/vault/treasury addresses, and total notional. It is loaded once at the start of the batch and auto-accrues indices on construction. After all positions are processed, mutated state is written back via `ctx.store()`.
 
-## Request Types
+## Auto-Detection
 
-```rust
-pub enum ExecuteRequest {
-    Fill(u32),        // Position ID: fill a pending limit order
-    StopLoss(u32),    // Position ID: trigger stop-loss
-    TakeProfit(u32),  // Position ID: trigger take-profit
-    Liquidate(u32),   // Position ID: liquidate an underwater position
-}
-```
+The `execute` function auto-detects the action for each position based on its state:
 
-## Non-Atomic Error Handling
+- **Not filled** (pending limit order) → attempt fill. For longs, fills when `price <= entry_price`; for shorts, fills when `price >= entry_price`. If the fill condition is not met, panics with `NotActionable`.
+- **Filled** (active position) → checks in priority order:
+  1. **Liquidation**: equity < liquidation threshold (`notional * liq_fee`). Bypasses `MIN_OPEN_TIME`.
+  2. **Stop-loss**: trigger price hit. Requires `MIN_OPEN_TIME`.
+  3. **Take-profit**: trigger price hit. Requires `MIN_OPEN_TIME`.
+  4. If none apply, panics with `NotActionable`.
 
-Individual request failures return error codes in the result vector instead of panicking:
+This simplifies keeper logic — keepers only need to submit position IDs and price data for a single market.
 
-| Error Code | Meaning |
-|---|---|
-| `0` | Success |
-| `733` | Position already filled (for Fill requests) |
-| `744` | Take-profit not triggered (price has not reached TP) |
-| `745` | Stop-loss not triggered |
-| `746` | Position not liquidatable (equity above maintenance) |
-| `747` | Limit order not fillable (price has not reached limit) |
-| `748` | Position too new (`MIN_OPEN_TIME` not elapsed) |
-| `750` | Action not allowed for position status (e.g., trying to SL a pending order) |
+## Error Handling
 
-Contract-wide errors (Frozen status, price not found) do panic and abort the entire batch.
+All errors are hard panics that abort the entire batch. There is no soft error or per-position result vector.
+
+| Error | Code | Meaning |
+|---|---|---|
+| `NotActionable` | `731` | No valid action for this position (limit not fillable, not liquidatable, no SL/TP triggered) |
+| `PositionTooNew` | `732` | `MIN_OPEN_TIME` (30s) not elapsed — SL/TP cannot fire yet |
+| `PositionNotPending` | `721` | Position is already filled but was expected to be pending |
+| `InvalidPrice` | `710` | Position's `market_id` does not match the batch's `market_id`, or price feed mismatch |
+| `ContractFrozen` | `742` | Contract is in Frozen state, all operations blocked |
+| `StalePrice` | `711` | Liquidation price predates position open time |
 
 ## Settlement Ordering
 
-The batch aggregates all transfers into a `ProcessingResult` containing a transfer map (address to amount). Settlement follows a specific order: the vault pays first if its net transfer is negative (vault owes money), with `strategy_withdraw` called to bring tokens into the trading contract. Then all outbound transfers are paid (keeper fees, user payouts, treasury fees, user refunds). Finally, if the vault's net transfer is positive (vault gains), tokens are transferred to the vault. This ordering prevents balance shortfalls within the trading contract during batch settlement.
+The batch aggregates all transfers into a map (`Address -> i128`). Settlement follows a specific order:
+
+1. **Vault pays first**: if the vault's net transfer is negative (vault owes money), `strategy_withdraw` is called to bring tokens into the trading contract.
+2. **Outbound transfers**: all positive transfers to non-vault addresses (keeper fees, user payouts, treasury fees) are paid.
+3. **Vault receives last**: if the vault's net transfer is positive (vault gains), tokens are transferred to the vault.
+
+This ordering prevents balance shortfalls within the trading contract during batch settlement.
 
 ## Keeper Fee
 
@@ -61,16 +65,8 @@ $$
 
 Where `trading_fee = base_fee + impact_fee`. The caller fee is deducted from the vault's share, not from the user. On liquidation, `caller_fee = min(trading_fee + liq_fee, col) * caller_rate / SCALAR_7`.
 
-## Price Staleness
-
-Keeper actions use a relaxed staleness threshold compared to user actions, configured in the price verifier contract. This accounts for the delay between price publication and keeper transaction submission.
-
 ## No Authentication Required
 
 The `execute` function does not require the caller to authenticate. Any address can submit keeper requests and receive the `caller_rate` percentage of fees. This is an intentional design choice that creates a competitive, permissionless keeper network where anyone can participate.
 
 The `caller` address parameter determines who receives the keeper fee. The caller does not need to be related to the position owner.
-
-## Auto-Detection
-
-The `execute` function auto-detects the action per position. For unfilled positions, it attempts a limit fill. For filled positions, it checks in priority order: liquidation (equity < threshold) > stop-loss > take-profit. This simplifies keeper logic — keepers only need to submit position IDs and price data.

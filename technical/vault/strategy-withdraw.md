@@ -32,7 +32,6 @@ The strategy address is set at construction time and cannot be changed. There is
 | Error | Code | Trigger |
 |---|---|---|
 | `InvalidAmount` | 790 | `amount <= 0` |
-| `SharesLocked` | 791 | Transfer/withdraw attempted during lock period |
 | `UnauthorizedStrategy` | 792 | Caller is not the registered strategy |
 
 ## Event

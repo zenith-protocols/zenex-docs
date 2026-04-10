@@ -50,7 +50,7 @@ flowchart TB
 
     Trading -->|"verify_prices()"| PV
     Trading -->|"total_assets() / strategy_withdraw()"| Vault
-    Trading -->|"get_fee()"| Treasury
+    Trading -->|"get_rate()"| Treasury
 
     style Trading fill:#f96,stroke:#333
     style Vault fill:#69f,stroke:#333

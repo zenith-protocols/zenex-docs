@@ -21,27 +21,27 @@ Global state that is accessed frequently and shared across all calls.
 | `PriceVerifier` | `Address` | Pyth Lazer verifier address |
 | `Treasury` | `Address` | Protocol fee recipient |
 | `Config` | `TradingConfig` | Global trading parameters |
-| `Markets` | `Vec<u32>` | List of registered feed IDs (max `MAX_ENTRIES`) |
 | `TotalNotional` | `i128` | Sum of all position notionals across all markets |
 | `PositionCounter` | `u32` | Monotonically incrementing position ID allocator |
 | `LastFundingUpdate` | `u64` | Timestamp of last `apply_funding` call |
 
-### Persistent Storage: Shared Tier (45-day TTL)
+### Persistent Storage: Market Tier (45/52-day TTL)
 
-Per-market and per-position data.
+Per-market data and the global market list.
 
 | Key | Type | Description |
 |---|---|---|
+| `Markets` | `Vec<u32>` | List of registered market IDs (max `MAX_ENTRIES`) |
 | `MarketConfig(u32)` | `MarketConfig` | Per-market parameters |
 | `MarketData(u32)` | `MarketData` | Per-market mutable state |
-| `Position(u32)` | `Position` | Individual position data |
 
-### Persistent Storage: User Tier (100-day TTL)
+### Persistent Storage: Position Tier (14/21-day TTL)
 
-Per-user data with longer TTL to survive inactive periods.
+Per-position and per-user data. Shorter TTL because perp positions are short-lived (most close within days).
 
 | Key | Type | Description |
 |---|---|---|
+| `Position(u32)` | `Position` | Individual position data |
 | `UserPositions(Address)` | `Vec<u32>` | Position IDs owned by an address |
 
 The `PositionCounter` is never decremented. Position IDs are permanent. Closing a position does not free its ID for reuse. This simplifies event indexing and prevents ID collisions.
@@ -51,10 +51,10 @@ The `PositionCounter` is never decremented. Position IDs are permanent. Closing 
 | Tier | Threshold | Bump | Rationale |
 |---|---|---|---|
 | Instance | 30 days | 31 days | Accessed on every call; minimal expiry risk |
-| Shared Persistent | 45 days | 46 days | Market/position data; moderate access frequency |
-| User Persistent | 100 days | 120 days | User position lists; must survive inactivity |
+| Market Persistent | 45 days | 52 days | Market config/data and market list; moderate access frequency |
+| Position Persistent | 14 days | 21 days | Positions and user position lists; short-lived data |
 
-All TTLs are bumped on read or write. If a user does not interact for 100+ days, their `UserPositions` entry could expire, but position records (45-day tier) would expire first, making the positions effectively orphaned.
+All TTLs are bumped on read or write. If a user does not interact for 14+ days, their `UserPositions` entry and `Position` records could expire. Positions are short-lived (most close within days), so the shorter TTL avoids paying rent for abandoned positions.
 
 ## Events
 
@@ -64,53 +64,52 @@ All events use Soroban's `#[contractevent]` derive macro. Fields marked with `#[
 
 | Event | Topics | Data |
 |---|---|---|
-| `SetConfig` | None | `config: TradingConfig` |
-| `SetMarket` | `feed_id` | None |
+| `SetConfig` | None | (no data) |
+| `SetMarket` | `market_id` | None |
 | `SetStatus` | None | `status: u32` |
 
 ### Position Events
 
 | Event | Topics | Data |
 |---|---|---|
-| `PlaceLimit` | `feed_id, user, position_id` | (no data) |
-| `OpenMarket` | `feed_id, user, position_id` | `base_fee, impact_fee` |
-| `FillLimit` | `feed_id, user, position_id` | `base_fee, impact_fee` |
-| `ClosePosition` | `feed_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
-| `TakeProfit` | `feed_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
-| `StopLoss` | `feed_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
-| `Liquidation` | `feed_id, user, position_id` | `price, base_fee, impact_fee, funding, borrowing_fee, liq_fee` |
-| `RefundPosition` | `feed_id, user, position_id` | `amount` |
-| `ModifyCollateral` | `feed_id, user, position_id` | `amount` (positive = deposit, negative = withdraw) |
-| `SetTriggers` | `feed_id, user, position_id` | `take_profit, stop_loss` |
+| `PlaceLimit` | `market_id, user, position_id` | (no data) |
+| `OpenMarket` | `market_id, user, position_id` | `base_fee, impact_fee` |
+| `FillLimit` | `market_id, user, position_id` | `base_fee, impact_fee` |
+| `ClosePosition` | `market_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
+| `TakeProfit` | `market_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
+| `StopLoss` | `market_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
+| `Liquidation` | `market_id, user, position_id` | `price, base_fee, impact_fee, funding, borrowing_fee, liq_fee` |
+| `RefundPosition` | `market_id, user, position_id` | `amount` |
+| `ModifyCollateral` | `market_id, user, position_id` | `amount` (positive = deposit, negative = withdraw) |
+| `SetTriggers` | `market_id, user, position_id` | `take_profit, stop_loss` |
 
 ### Market Events
 
 | Event | Topics | Data |
 |---|---|---|
-| `DelMarket` | `feed_id` | (no data) |
+| `DelMarket` | `market_id` | (no data) |
 
 ### System Events
 
 | Event | Topics | Data |
 |---|---|---|
 | `ApplyFunding` | None | (no data) |
-| `ADLMarket` | `feed_id` | `factor, long` |
 | `ADLTriggered` | None | `reduction_pct, deficit` |
 
 Close events include `borrowing_fee` as a separate field alongside `base_fee`, `impact_fee`, and `funding`. The emitted `pnl` is the net PnL (after all fees, clamped to `-col`).
 
 ## Error Codes
 
-All errors use `panic_with_error!(e, TradingError::Variant)`. In keeper batch execution, per-request errors are returned as `u32` codes in the result vector instead of panicking.
+All errors use `panic_with_error!(e, TradingError::Variant)`. Errors are hard panics that abort the entire transaction, including keeper batch execution via `execute` (which returns `()`).
 
 | Code | Name | Description |
 |---|---|---|
 | 1 | `Unauthorized` | Non-owner tried owner-only action |
 | 700 | `InvalidConfig` | Config parameter out of valid range |
-| 701 | `MarketNotFound` | No market registered for the given feed_id |
+| 701 | `MarketNotFound` | No market registered for the given market_id |
 | 702 | `MarketDisabled` | Market is disabled or deleted |
 | 703 | `MaxMarketsReached` | `MAX_ENTRIES` markets already registered |
-| 710 | `InvalidPrice` | Price verification failed, feed_id mismatch, or missing feed |
+| 710 | `InvalidPrice` | Price verification failed, market_id mismatch, or missing feed |
 | 711 | `StalePrice` | Price data predates position open time |
 | 720 | `PositionNotFound` | Position ID not found in storage |
 | 721 | `PositionNotPending` | Position is filled; expected pending |
@@ -121,8 +120,6 @@ All errors use `panic_with_error!(e, TradingError::Variant)`. In keeper batch ex
 | 726 | `LeverageAboveMaximum` | Exceeds `1/margin` |
 | 727 | `CollateralUnchanged` | Modify to same value |
 | 728 | `WithdrawalBreaksMargin` | Withdrawal would breach initial margin |
-| 729 | `InvalidTakeProfitPrice` | TP price on wrong side of entry |
-| 730 | `InvalidStopLossPrice` | SL price on wrong side of entry |
 | 731 | `NotActionable` | No valid action for this position in execute batch |
 | 732 | `PositionTooNew` | `MIN_OPEN_TIME` not elapsed |
 | 733 | `ActionNotAllowedForStatus` | Action not allowed for position status |

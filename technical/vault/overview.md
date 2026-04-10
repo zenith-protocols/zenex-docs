@@ -62,6 +62,6 @@ pub trait VaultInterface {
 
 | Key | Type | Description |
 |---|---|---|
-| `LastDepositTime(Address)` | `u64` | Per-user deposit timestamp |
+| `DepositLock(Address)` | `DepositLock { timestamp: u64, shares: i128 }` | Per-user deposit lock tracking the most recent deposit timestamp and the number of shares locked within that window |
 
 OpenZeppelin's token library manages share balances, allowances, and metadata in its own storage namespace.

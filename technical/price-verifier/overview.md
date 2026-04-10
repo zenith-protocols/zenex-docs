@@ -42,10 +42,13 @@ The price verifier implements OZ Ownable for access control. For standard Ownabl
 
 | Function | Auth |
 |---|---|
+| `verify_price(update_data)` | Permissionless |
 | `verify_prices(update_data)` | Permissionless |
+| `max_confidence_bps()` | Permissionless |
+| `max_staleness()` | Permissionless |
 | `update_trusted_signer(signer)` | Owner only (`#[only_owner]`) |
 | `update_max_confidence_bps(bps)` | Owner only |
-| `upgrade(wasm_hash)` | Owner only |
+| `update_max_staleness(max_staleness)` | Owner only |
 
 ## Staleness Threshold
 

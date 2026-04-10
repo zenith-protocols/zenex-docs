@@ -50,12 +50,16 @@ All admin actions require the contract owner (`#[only_owner]`).
 | Function | Description |
 |---|---|
 | `get_config` | Current `TradingConfig` |
-| `get_market` | `(MarketConfig, MarketData)` for a feed ID |
-| `get_markets` | All registered feed IDs |
+| `get_market_config` | `MarketConfig` for a market ID |
+| `get_market_data` | `MarketData` for a market ID |
+| `get_markets` | All registered market IDs |
 | `get_position` | Position by ID |
 | `get_user_positions` | All position IDs for an address |
 | `get_status` | Current contract status |
 | `get_treasury` | Treasury contract address |
+| `get_vault` | Vault contract address |
+| `get_price_verifier` | Price verifier contract address |
+| `get_token` | Collateral token address |
 
 ## Data Structures
 
@@ -83,6 +87,7 @@ Per-market parameters set by the admin via `set_market`.
 
 | Field | Type | Description |
 |---|---|---|
+| `feed_id` | `u32` | Price feed identifier (immutable after market creation) |
 | `enabled` | `bool` | Whether this market accepts new positions |
 | `max_util` | `i128` (SCALAR_7) | Per-market utilization cap |
 | `r_var_market` | `i128` (SCALAR_18) | Per-market variable borrowing rate at full market utilization |
@@ -119,7 +124,7 @@ The `entry_wt` fields enable aggregate PnL computation without iterating all pos
 |---|---|---|
 | `user` | `Address` | Position owner |
 | `filled` | `bool` | `false` = pending limit order, `true` = active position |
-| `feed` | `u32` | Pyth Lazer feed ID |
+| `market_id` | `u32` | Market identifier (maps to MarketConfig with feed_id) |
 | `long` | `bool` | Direction |
 | `sl` | `i128` | Stop-loss trigger price (0 = disabled) |
 | `tp` | `i128` | Take-profit trigger price (0 = disabled) |
