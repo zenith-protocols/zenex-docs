@@ -9,7 +9,13 @@ ADL is the protocol's last-resort mechanism to prevent vault insolvency. When th
 
 ## When ADL Triggers
 
-ADL is triggered by the permissionless `update_status` function when the contract is in `OnIce` or `AdminOnIce` status (not `Active` or `Frozen`), the utilization threshold (`UTIL_ACTIVE = 90%`) is still exceeded, and there is an actual deficit where `net_liability > vault_balance`. If the threshold is no longer exceeded, the contract returns to `Active` instead.
+ADL is triggered by the permissionless `update_status` function and can fire from `Active`, `OnIce`, or `AdminOnIce`. From `Frozen` the call panics. The exact trigger depends on current status:
+
+- **From `Active`**: if `net_pnl >= UTIL_ONICE` (95% of vault), the contract transitions to `OnIce`. If on top of that `net_pnl > vault_balance`, ADL also runs in the same call before the status flip.
+- **From `OnIce`**: if `net_pnl < UTIL_ACTIVE` (90% of vault), the contract restores `Active` and ADL does not run. If `net_pnl > vault_balance`, ADL runs and the contract stays `OnIce`. Otherwise the call reverts with `ThresholdNotMet`.
+- **From `AdminOnIce`**: ADL runs only when `net_pnl > vault_balance`. The status remains `AdminOnIce` (admin controls the unlock).
+
+In all paths, ADL only runs when the actual deficit `net_pnl > vault_balance` exists. The 95% / 90% thresholds gate the status transitions on the `Active` and `OnIce` paths.
 
 ## Two-Pass Algorithm
 
@@ -27,12 +33,12 @@ $$
 
 The `entry_wt` sum (`sum(notional_i / entry_price_i)`) represents the aggregate "quantity" of positions. Multiplying by the current price gives the current value, and subtracting the original notional gives the aggregate PnL.
 
-From these values, `total_winner_pnl` is the sum of all positive-side PnL across all markets, and `total_loser_pnl` is the absolute value of all losing-side PnL. The `net_liability = total_winner_pnl - total_loser_pnl`. If `net_liability <= vault_balance`, ADL is not needed and a `NoDeficit` error is returned.
+From these values, `total_winner_pnl` is the sum of all positive-side PnL across all markets (one or both sides per market, whichever is positive). `net_pnl` is the signed sum of every side's PnL, equivalent to `total_winner_pnl - total_loser_pnl` where `total_loser_pnl` is the absolute value of negative-side PnL. ADL is only needed when `net_pnl > vault_balance`. Otherwise the call either flips status (Active to OnIce, or OnIce to Active) without running ADL, or reverts with `ThresholdNotMet`.
 
 ### Pass 2: Apply Reduction
 
 $$
-\text{deficit} = \text{net\_liability} - \text{vault\_balance}
+\text{deficit} = \text{net\_pnl} - \text{vault\_balance}
 $$
 
 $$
@@ -82,7 +88,7 @@ The circuit breaker uses a 5% hysteresis band to prevent oscillation:
 |---|---|---|
 | Active to OnIce | 95% (`UTIL_ONICE`) | `net_pnl >= vault_balance * 0.95` |
 | OnIce to Active | 90% (`UTIL_ACTIVE`) | `net_pnl < vault_balance * 0.90` |
-| OnIce to ADL | 90% still met + deficit | `net_liability > vault_balance` |
+| Run ADL (any of Active / OnIce / AdminOnIce) | deficit | `net_pnl > vault_balance` |
 
 When `OnIce`, no new positions can be opened, reducing the rate at which the vault's exposure grows. Existing positions can still be managed (closed, collateral modified), which helps reduce utilization organically.
 

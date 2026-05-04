@@ -25,6 +25,8 @@ Equivalently: `leverage <= 1 / margin`.
 | `100_000` (1%) | 100x |
 | `50_000` (0.5%) | 200x |
 
+The live testnet deployment uses `margin = 100_000` (1%, 100x max leverage) for every market, with `liq_fee = 50_000` (0.5%). The other rows are illustrative.
+
 ## Initial Margin vs Liquidation Threshold
 
 | Property | Initial Margin | Liquidation Threshold |

@@ -40,9 +40,9 @@ The validation rule `margin > liq_fee` ensures there is always a buffer between 
 
 When a keeper submits a position via the `execute` batch, the contract checks whether `equity < liq_threshold`. Unlike a normal close, there is no PnL payout to the user.
 
-The position's remaining collateral is redistributed: `liq_fee = max(equity, 0)` is the remaining equity. The treasury receives `revenue * treasury_rate` where `revenue = min(protocol_fee + liq_fee, col)`. The keeper receives `min(trading_fee + liq_fee, col) * caller_rate`. The vault receives `col - treasury_fee - caller_fee`. There is no `MIN_OPEN_TIME` enforcement, so a position can theoretically be liquidated in the same block it was opened if parameters are at extreme values.
+The position's remaining collateral is redistributed: `liq_fee = max(equity, 0)` is the remaining equity. The treasury receives `revenue * treasury_rate / SCALAR_7` where `revenue = min(protocol_fee + liq_fee, col)`. The keeper receives `min(trading_fee + liq_fee, col) * caller_rate / SCALAR_7`. The vault receives `col - treasury_fee - caller_fee`. There is no `MIN_OPEN_TIME` enforcement, so a position can theoretically be liquidated in the same block it was opened if parameters are at extreme values.
 
-The position is removed from storage, market stats are decremented, and the contract emits `Liquidation { market_id, user, position_id, price, base_fee, impact_fee, funding, borrowing_fee, liq_fee }`.
+The position is removed from storage, market stats are decremented, and the contract emits `Liquidation { market_id, user, position_id, notional, price, base_fee, impact_fee, funding, borrowing_fee, liq_fee }`. The `notional` is the post-ADL settled notional, which may be smaller than the original position size if ADL has occurred since fill.
 
 ## Insolvency Risk
 

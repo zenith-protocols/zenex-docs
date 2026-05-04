@@ -21,7 +21,11 @@ The sign is determined by which side is dominant. When `long_notional > short_no
 
 Funding accrues continuously via `data.accrue(e, ...)`, which is called on every market-touching operation (open, close, modify, execute). Borrowing indices are accrued in the same call before funding.
 
-**One-sided markets**: When either `l_notional == 0` or `s_notional == 0`, funding accrual is skipped entirely even if `fund_rate` is non-zero. This is because funding is peer-to-peer — there is no counterparty to receive payment. The rate is still SET via `apply_funding` (reflecting the imbalance), but no indices advance until both sides have open interest.
+**Empty markets**: When `l_notional == 0` and `s_notional == 0`, `calc_funding_rate` returns `0` and accrual is a no-op. The rate is not `r_funding`.
+
+**One-sided markets**: When exactly one of `l_notional` or `s_notional` is zero, the rate equals `+r_funding` (longs only) or `-r_funding` (shorts only). Accrual is still skipped because funding is peer-to-peer and there is no counterparty to receive payment. Indices advance only once both sides have open interest.
+
+**Rate re-derivation**: The funding rate is only re-derived from open interest inside `apply_funding` (which calls `update_funding_rate` after accruing indices). Every-action `accrue` paths advance the indices using whatever `fund_rate` the market last stored — they do not recompute the rate.
 
 $$
 \text{hours\_elapsed} = \frac{\text{seconds\_elapsed} \times \text{SCALAR\_18}}{\text{3600}}

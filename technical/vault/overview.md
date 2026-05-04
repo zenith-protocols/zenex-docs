@@ -21,7 +21,7 @@ Share price **increases** when the vault receives fees from trades or collateral
 
 ## Decimals Offset
 
-The vault constructor accepts a `decimals_offset` parameter (0 through 10) that provides inflation-attack protection via the OpenZeppelin virtual shares mechanism. This adds "dead shares" to the initial supply, preventing the first depositor from manipulating the share price through donation attacks.
+The vault constructor accepts a `decimals_offset: u32` parameter that provides inflation-attack protection via the OpenZeppelin virtual shares mechanism. This adds "dead shares" to the initial supply, preventing the first depositor from manipulating the share price through donation attacks. Zenex forwards the value directly to OpenZeppelin's `Vault::set_decimals_offset` without any additional bound check; in practice 0 through 10 is the recommended range.
 
 ## Interaction with Trading
 

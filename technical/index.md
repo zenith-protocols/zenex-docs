@@ -18,7 +18,7 @@ Zenex is a leveraged perpetual futures protocol built on [Stellar Soroban](https
 | **Factory** | Deterministic deployer for trading + vault pairs |
 | **Governance** | Optional timelock proxy for governance-controlled parameter changes |
 | **Price Verifier** | Pyth Lazer oracle that parses and verifies signed price updates |
-| **Account** | Smart account with multi-signer support (Ed25519, WebAuthn) |
+| **Account** | Smart account with multi-signer support (Ed25519, WebAuthn) — separate repo (`soroban-smart-account`), not part of the perp engine |
 
 ## Data Flow
 
@@ -48,7 +48,7 @@ flowchart TB
     LP -->|"deposit / redeem"| Vault
     Admin -->|"set_config / set_market / set_status"| Trading
 
-    Trading -->|"verify_prices()"| PV
+    Trading -->|"verify_price() / verify_prices()"| PV
     Trading -->|"total_assets() / strategy_withdraw()"| Vault
     Trading -->|"get_rate()"| Treasury
 
@@ -59,6 +59,8 @@ flowchart TB
 
 The vault has no knowledge of trading internals. The trading contract calls the vault through a minimal interface (`total_assets`, `strategy_withdraw`). This one-directional dependency simplifies reentrancy analysis.
 
+Trading invokes `verify_price` (singular) on per-trade entrypoints (`open_market`, `close_position`, `modify_collateral`, `execute`) and `verify_prices` (plural) only from `update_status`, where every market price is read at once for the global PnL/ADL pass.
+
 The governance contract is an independent, optional contract. It is not deployed by the factory. When used, it acts as the owner of a trading contract, adding timelock delays to parameter changes.
 
 ## Token Flow
@@ -68,8 +70,8 @@ All collateral flows through a single SEP-41 token (e.g., USDC). The trading con
 | Flow | Direction | When |
 |---|---|---|
 | User to Trading | Collateral + fees on position open | `open_market`, `place_limit` |
-| Trading to Vault | Fees (minus protocol share) on every trade | Open, close, fill |
-| Trading to Treasury | Protocol fee on every trade | Open, close, fill |
+| Trading to Vault | Fees (minus protocol share) on every trade | Open, close, fill, liquidation |
+| Trading to Treasury | Protocol fee on every trade | Open, close, fill, liquidation |
 | Vault to Trading | Trader profit payout | `strategy_withdraw` on profitable close |
 | Trading to User | Collateral + profit on close | `close_position`, keeper TP/SL |
 | Trading to Keeper | Caller incentive fee | Keeper `execute` batch |

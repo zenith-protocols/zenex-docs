@@ -17,7 +17,9 @@ $$
 \text{base\_fee} = \text{notional} \times \frac{\text{base\_fee\_rate}}{\text{SCALAR\_7}}
 $$
 
-If the position's side has more or equal open interest, `fee_dom` applies. If it has less, `fee_non_dom` applies. Dominance is evaluated at the time of the action (open or close), not at position creation.
+If the action worsens market imbalance, `fee_dom` applies. If it rebalances, `fee_non_dom` applies. On open, this means opening on the side with greater-or-equal notional pays `fee_dom`. On close, it means closing from the non-dominant side (which removes counterweight and worsens the imbalance) pays `fee_dom`. Dominance is evaluated at the time of the action, not at position creation.
+
+The live testnet deployment uses `fee_dom = 6_000` (0.06% of notional) and `fee_non_dom = 4_000` (0.04% of notional). Both are SCALAR_7 fractions and bounded by `MAX_FEE_RATE = 100_000` (1%). Only the base fee splits dom vs non-dom; the impact fee below has a single per-market formula and is charged unconditionally.
 
 ### Price Impact Fee
 
@@ -25,7 +27,7 @@ $$
 \text{impact\_fee} = \lfloor \frac{\text{notional}}{\text{impact}} \rfloor
 $$
 
-Where `impact` is the per-market divisor from `MarketConfig`. Uses floor division.
+Where `impact` is the per-market divisor from `MarketConfig`. Uses floor division. The impact fee is charged unconditionally on every open and every close — it does not depend on dominance and has no dom / non-dom split.
 
 ### Funding
 
@@ -75,11 +77,11 @@ Treasury receives a cut of `protocol_fee`. Keepers receive a cut of `trading_fee
 
 | Recipient | Amount |
 |---|---|
-| Treasury | `protocol_fee * treasury_rate / SCALAR_7` where `protocol_fee = base_fee + impact_fee` |
-| Vault | `(base_fee + impact_fee) - treasury_fee` |
+| Treasury | `total_fee * treasury_rate / SCALAR_7` where `total_fee = base_fee + impact_fee` |
+| Vault | `total_fee - treasury_fee` |
 | Keeper | `0` (no keeper involved) |
 
-Only base and impact fees apply at open (no borrowing or funding yet).
+Only base and impact fees apply at open (no borrowing or funding yet). The treasury cut at open is computed against `total_fee = base_fee + impact_fee`. This is identical to the general `protocol_fee` definition (`base + impact + borrowing`) because `borrowing_fee = 0` at fill.
 
 ### On Position Close (User)
 
@@ -92,7 +94,19 @@ Only base and impact fees apply at open (no borrowing or funding yet).
 
 If the vault transfer is negative (user profited), the vault pays via `strategy_withdraw`.
 
-### On Keeper Execution (Fill, TP, SL)
+### On Keeper Limit Fill
+
+A keeper opens a pending limit order at the current price.
+
+| Recipient | Amount |
+|---|---|
+| Treasury | `total_fee * treasury_rate / SCALAR_7` where `total_fee = base_fee + impact_fee` |
+| Keeper | `total_fee * caller_rate / SCALAR_7` |
+| Vault | `total_fee - treasury_fee - caller_fee` |
+
+No PnL is settled at fill, so there is no user payout.
+
+### On Keeper Close (TP, SL)
 
 | Recipient | Amount |
 |---|---|
@@ -107,7 +121,7 @@ The keeper earns a share of trading fees (base + impact), not of borrowing or fu
 
 | Recipient | Amount |
 |---|---|
-| Treasury | `revenue * treasury_rate` where `revenue = min(protocol_fee + liq_fee, col)` |
+| Treasury | `revenue * treasury_rate / SCALAR_7` where `revenue = min(protocol_fee + liq_fee, col)` |
 | Keeper | `min(trading_fee + liq_fee, col) * caller_rate / SCALAR_7` |
 | Vault | `col - treasury_fee - caller_fee` |
 | User | `0` (all collateral redistributed) |

@@ -22,29 +22,32 @@ Global state that is accessed frequently and shared across all calls.
 | `Treasury` | `Address` | Protocol fee recipient |
 | `Config` | `TradingConfig` | Global trading parameters |
 | `TotalNotional` | `i128` | Sum of all position notionals across all markets |
-| `PositionCounter` | `u32` | Monotonically incrementing position ID allocator |
 | `LastFundingUpdate` | `u64` | Timestamp of last `apply_funding` call |
 
 ### Persistent Storage: Market Tier (45/52-day TTL)
 
-Per-market data and the global market list.
+Per-market data, the global market list, and per-user position-id counters. The user counter is bumped at the market tier so it survives even if all of a user's positions expire — this prevents id reuse.
 
 | Key | Type | Description |
 |---|---|---|
 | `Markets` | `Vec<u32>` | List of registered market IDs (max `MAX_ENTRIES`) |
 | `MarketConfig(u32)` | `MarketConfig` | Per-market parameters |
 | `MarketData(u32)` | `MarketData` | Per-market mutable state |
+| `UserCounter(Address)` | `u32` | Per-user monotonic position-id sequence (next id to allocate) |
 
 ### Persistent Storage: Position Tier (14/21-day TTL)
 
-Per-position and per-user data. Shorter TTL because perp positions are short-lived (most close within days).
+Per-position data. Shorter TTL because perp positions are short-lived (most close within days).
 
 | Key | Type | Description |
 |---|---|---|
-| `Position(u32)` | `Position` | Individual position data |
-| `UserPositions(Address)` | `Vec<u32>` | Position IDs owned by an address |
+| `Position(Address, u32)` | `Position` | Individual position data, keyed by `(owner, per-user id)` |
 
-The `PositionCounter` is never decremented. Position IDs are permanent. Closing a position does not free its ID for reuse. This simplifies event indexing and prevents ID collisions.
+Position IDs are allocated **per user**, not globally. Each user has their own counter (`UserCounter(Address)`), so two different users can both hold positions with id `0`. The `(user, id)` pair is the unique on-chain identifier. The `Position` struct itself does not carry a `user` field — the owner is encoded in the storage key.
+
+`UserCounter` is never decremented. Closing a position does not free its id for reuse — this simplifies event indexing and prevents id collisions across the lifetime of a user's account.
+
+There is no on-chain enumeration of a user's open positions: discovery requires off-chain indexing of position-lifecycle events. The contract exposes `get_user_counter(user) -> u32` (the next sequence number, not a list) and `get_position(user, id) -> Position`.
 
 ## TTL Strategy
 
@@ -52,9 +55,9 @@ The `PositionCounter` is never decremented. Position IDs are permanent. Closing 
 |---|---|---|---|
 | Instance | 30 days | 31 days | Accessed on every call; minimal expiry risk |
 | Market Persistent | 45 days | 52 days | Market config/data and market list; moderate access frequency |
-| Position Persistent | 14 days | 21 days | Positions and user position lists; short-lived data |
+| Position Persistent | 14 days | 21 days | Per-position records; short-lived data |
 
-All TTLs are bumped on read or write. If a user does not interact for 14+ days, their `UserPositions` entry and `Position` records could expire. Positions are short-lived (most close within days), so the shorter TTL avoids paying rent for abandoned positions.
+All TTLs are bumped on read or write. If a position is not touched for 14+ days, its `Position(user, id)` record could expire. Positions are short-lived (most close within days), so the shorter TTL avoids paying rent for abandoned positions. The `UserCounter(Address)` entry lives at the longer market tier (45/52 days), so the counter survives even when the user's positions are pruned — preventing id reuse.
 
 ## Events
 
@@ -70,18 +73,27 @@ All events use Soroban's `#[contractevent]` derive macro. Fields marked with `#[
 
 ### Position Events
 
+Each position-lifecycle event carries only the fields that **change** at the emit moment. Off-chain indexers combine each event with the position row they already hold; fields established by an earlier event (e.g. `long`, `col`, `notional` set at `PlaceLimit`) are not repeated on later events.
+
 | Event | Topics | Data |
 |---|---|---|
-| `PlaceLimit` | `market_id, user, position_id` | (no data) |
-| `OpenMarket` | `market_id, user, position_id` | `base_fee, impact_fee` |
-| `FillLimit` | `market_id, user, position_id` | `base_fee, impact_fee` |
-| `ClosePosition` | `market_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
-| `TakeProfit` | `market_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
-| `StopLoss` | `market_id, user, position_id` | `price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
-| `Liquidation` | `market_id, user, position_id` | `price, base_fee, impact_fee, funding, borrowing_fee, liq_fee` |
-| `RefundPosition` | `market_id, user, position_id` | `amount` |
-| `ModifyCollateral` | `market_id, user, position_id` | `amount` (positive = deposit, negative = withdraw) |
-| `SetTriggers` | `market_id, user, position_id` | `take_profit, stop_loss` |
+| `PlaceLimit` | `market_id, user, position_id` | `long, col, notional, entry_price, sl, tp, created_at` |
+| `OpenMarket` | `market_id, user, position_id` | `long, col, notional, entry_price, sl, tp, fund_idx, borr_idx, adl_idx, created_at, base_fee, impact_fee` |
+| `FillLimit` | `market_id, user, position_id` | `entry_price, fund_idx, borr_idx, adl_idx, created_at, base_fee, impact_fee` |
+| `ClosePosition` | `market_id, user, position_id` | `notional, price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
+| `TakeProfit` | `market_id, user, position_id` | `notional, price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
+| `StopLoss` | `market_id, user, position_id` | `notional, price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
+| `Liquidation` | `market_id, user, position_id` | `notional, price, base_fee, impact_fee, funding, borrowing_fee, liq_fee` |
+| `RefundPosition` | `market_id, user, position_id` | (no data) |
+| `ModifyCollateral` | `market_id, user, position_id` | `col` (new total collateral after modification, **not** a delta) |
+| `SetTriggers` | `market_id, user, position_id` | `sl, tp` |
+
+Notes:
+
+- On `ClosePosition`, `TakeProfit`, `StopLoss`, and `Liquidation`, the `notional` field is the **post-ADL** notional actually settled. Traders that have been auto-deleveraged will see a smaller notional on the settlement event than on the original `OpenMarket` / `FillLimit`.
+- `RefundPosition` carries no data. Indexers that need the refund amount must read it from the prior position state, or use the return value of `cancel_position` directly (the refund amount is returned by the call).
+- `ModifyCollateral` exposes `col` (post-modification total). To compute the delta, indexers look up the prior position.
+- `SetTriggers` field order is `sl, tp` (the on-chain field names).
 
 ### Market Events
 
@@ -96,7 +108,7 @@ All events use Soroban's `#[contractevent]` derive macro. Fields marked with `#[
 | `ApplyFunding` | None | (no data) |
 | `ADLTriggered` | None | `reduction_pct, deficit` |
 
-Close events include `borrowing_fee` as a separate field alongside `base_fee`, `impact_fee`, and `funding`. The emitted `pnl` is the net PnL (after all fees, clamped to `-col`).
+Close events include `borrowing_fee` as a separate field alongside `base_fee`, `impact_fee`, and `funding`. The emitted `pnl` is the net PnL (after all fees, clamped to `-col`). The `notional` data field on close/liquidation events is the post-ADL value at settlement.
 
 ## Error Codes
 

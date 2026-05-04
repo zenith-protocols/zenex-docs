@@ -53,13 +53,15 @@ All admin actions require the contract owner (`#[only_owner]`).
 | `get_market_config` | `MarketConfig` for a market ID |
 | `get_market_data` | `MarketData` for a market ID |
 | `get_markets` | All registered market IDs |
-| `get_position` | Position by ID |
-| `get_user_positions` | All position IDs for an address |
+| `get_position(user, id)` | Position for `(user, id)` pair |
+| `get_user_counter(user)` | Per-user monotonic sequence number (also equals total positions ever created for that user) |
 | `get_status` | Current contract status |
 | `get_treasury` | Treasury contract address |
 | `get_vault` | Vault contract address |
 | `get_price_verifier` | Price verifier contract address |
 | `get_token` | Collateral token address |
+
+The contract does not enumerate a user's open positions on chain. To list a user's positions, off-chain indexers must replay the position-lifecycle events (`PlaceLimit`, `OpenMarket`, close/refund events). `get_user_counter` returns the next sequence number, not a list.
 
 ## Data Structures
 
@@ -120,9 +122,10 @@ The `entry_wt` fields enable aggregate PnL computation without iterating all pos
 
 ### Position
 
+The owner is not stored on the position struct itself — it is encoded in the storage key `Position(Address, u32)`. Position IDs are allocated per-user from `UserCounter(Address)`, so two different users can both hold positions with id `0`. The `(user, id)` pair is what uniquely identifies a position.
+
 | Field | Type | Description |
 |---|---|---|
-| `user` | `Address` | Position owner |
 | `filled` | `bool` | `false` = pending limit order, `true` = active position |
 | `market_id` | `u32` | Market identifier (maps to MarketConfig with feed_id) |
 | `long` | `bool` | Direction |
@@ -160,7 +163,7 @@ Admin can set `Active`, `AdminOnIce`, or `Frozen` directly. `OnIce` can only be 
 |---|---|---|
 | `SCALAR_7` | `10,000,000` | 7-decimal fixed-point base (rates, fees, ratios) |
 | `SCALAR_18` | `10^18` | 18-decimal fixed-point base (funding, borrowing, ADL indices) |
-| `MAX_ENTRIES` | `50` | Maximum markets or positions per user |
+| `MAX_ENTRIES` | `50` | Maximum number of registered markets |
 | `UTIL_ONICE` | `9,500,000` | 95%. Triggers OnIce when net PnL >= 95% of vault |
 | `UTIL_ACTIVE` | `9,000,000` | 90%. Restores Active when PnL drops below 90% |
 | `ONE_HOUR_SECONDS` | `3600` | Funding/borrowing update minimum interval |

@@ -9,9 +9,11 @@ The keeper system enables permissionless execution of limit order fills, stop-lo
 
 ## Batch Processing
 
-`execute(caller: Address, market_id: u32, position_ids: Vec<u32>, price: Bytes)`
+`execute(caller: Address, market_id: u32, users: Vec<Address>, ids: Vec<u32>, price: Bytes)`
 
-The `execute` function processes a batch of position IDs for a single market in one transaction. The price payload is verified once via the price verifier, and a `Context` is loaded for the specified `market_id`, which accrues borrowing and funding indices to the current timestamp. The contract must not be `Frozen`.
+The `execute` function processes a batch of positions for a single market in one transaction. The price payload is verified once via `verify_price` (single feed) on the price-verifier, and a `Context` is loaded for the specified `market_id`, which accrues borrowing and funding indices to the current timestamp. The contract must not be `Frozen`.
+
+`users` and `ids` are **parallel vectors**: position `i` in the batch is `Position(users[i], ids[i])`. Both vectors must have the same length. The two-vector shape is required because position IDs are per-user — a single `id` is not unique across users, so the keeper must explicitly state the owner of each position.
 
 All positions in the batch must belong to the same `market_id`. If any position fails its action (not actionable, too new, wrong market), the entire batch aborts with a hard panic. There is no partial success — either all positions are processed or none are.
 
@@ -30,7 +32,7 @@ The `execute` function auto-detects the action for each position based on its st
   3. **Take-profit**: trigger price hit. Requires `MIN_OPEN_TIME`.
   4. If none apply, panics with `NotActionable`.
 
-This simplifies keeper logic — keepers only need to submit position IDs and price data for a single market.
+This simplifies keeper logic — keepers only need to submit the parallel `users` / `ids` vectors and price data for a single market.
 
 ## Error Handling
 

@@ -74,7 +74,7 @@ $$
 \text{vault\_transfer} = \text{col} - \text{user\_payout} - \text{treasury\_fee}
 $$
 
-A positive vault transfer means the user lost money and the collateral remainder flows to the vault. A negative vault transfer means the user profited and the vault must pay the difference via `strategy_withdraw`. The treasury fee is `protocol_fee * treasury_rate`, where `protocol_fee = base_fee + impact_fee + borrowing_fee`.
+A positive vault transfer means the user lost money and the collateral remainder flows to the vault. A negative vault transfer means the user profited and the vault must pay the difference via `strategy_withdraw`. The treasury fee is `protocol_fee * treasury_rate / SCALAR_7`, where `protocol_fee = base_fee + impact_fee + borrowing_fee`.
 
 ## ADL Adjustment
 
