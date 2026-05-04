@@ -17,7 +17,7 @@ All prices on Zenex come from Pyth Lazer oracle feeds. The protocol trusts these
 
 ## Liquidity Risk
 
-The vault has a finite pool of collateral. When traders are profitable, their gains are paid from the vault. If many traders are profitable at the same time, particularly during a strong directional move, the vault's capacity to pay all winners may be strained. Zenex includes a circuit breaker that pauses new position openings when the net unrealized profit-and-loss across all positions reaches 95% of the vault balance. If it reaches 100%, the protocol triggers auto-deleveraging, which proportionally reduces the notional size of all winning positions to bring the system back to solvency. While this mechanism prevents protocol insolvency, it means that in extreme scenarios, profitable positions may have their upside capped.
+The vault has a finite pool of collateral. When traders are profitable, their gains are paid from the vault. If many traders are profitable at the same time, particularly during a strong directional move, the vault's capacity to pay all winners may be strained. Zenex includes a circuit breaker that pauses new position openings when the net unrealized profit-and-loss across all positions reaches 95% of the vault balance. If it exceeds 100% (i.e., net trader PnL rises above the vault balance), the protocol triggers auto-deleveraging, which proportionally reduces the notional size of all winning positions to bring the system back to solvency. While this mechanism prevents protocol insolvency, it means that in extreme scenarios, profitable positions may have their upside capped.
 
 ## Counterparty Risk for Vault Depositors
 

@@ -16,7 +16,7 @@ When opening a position with leverage, the user essentially borrows funds from t
 The maximum leverage depends on the market's `margin` parameter (initial margin). Upon opening a position, the following condition must be satisfied:
 
 $$
-collateral > margin \times notionalSize
+collateral \geq margin \times notionalSize
 $$
 
 So if the margin is 0.01 (1%), the collateral has to be at least 1% of the notional size, and thus users can have up to 100x leverage. Different markets may have different margin requirements. After the position is opened, the effective leverage is governed by the liquidation threshold (`liq_fee`), fees accrued, and PnL as described [here](./liquidation.md).

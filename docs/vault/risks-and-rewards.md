@@ -13,7 +13,7 @@ The vault accrues value from three sources.
 
 **Trading fees.** A [base fee and price impact fee](../trading/fees.md) are charged on every position open and close. The vault receives the portion of these fees not allocated to the treasury or keepers.
 
-**Borrowing interest.** Traders holding leveraged positions pay continuous [borrowing interest](../trading/fees.md) that scales with vault and market utilization. This compensates liquidity providers for the risk of their capital being used as leverage. Borrowing interest is the primary source of yield for the vault.
+**Borrowing interest.** Traders holding leveraged positions pay continuous [borrowing interest](../trading/borrowing-interest.md) that scales with vault and market utilization. This compensates liquidity providers for the risk of their capital being used as leverage. Borrowing interest is the primary source of yield for the vault.
 
 **Trader losses.** When traders close positions at a loss, their collateral is absorbed by the vault. In aggregate, if traders are net unprofitable, the vault grows.
 

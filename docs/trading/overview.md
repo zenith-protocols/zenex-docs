@@ -41,9 +41,9 @@ The price impact fee scales with your position size relative to the market's imp
 
 The borrowing interest accrues continuously over the lifetime of your position and is charged only to the dominant side. It compensates the vault for the risk of backing your position. The rate increases as vault utilization and market utilization rise, using steep exponential curves that stay low when utilization is modest but climb sharply as capacity is consumed.
 
-The funding rate is a continuous cost or credit between longs and shorts. The rate is recalculated hourly based on the current open interest imbalance, but it accrues every second against open positions. It flows entirely peer-to-peer: the dominant side pays the non-dominant side, with zero protocol cut. This mechanism incentivizes traders to balance the market. Funding is settled when a position is closed.
+The funding rate is a continuous cost or credit between longs and shorts. The rate is recalculated hourly based on the current open interest imbalance, but it accrues every second against open positions. It flows entirely peer-to-peer between the dominant and non-dominant sides, with no rate-level protocol cut (per-position rounding dust is absorbed by the vault). This mechanism incentivizes traders to balance the market. Funding is settled when a position is closed.
 
-For a detailed breakdown of how each fee is calculated, see the [Fees](./fees.md) and [Funding Rate](./funding-rate.md) pages.
+For a detailed breakdown of how each fee is calculated, see the [Fees](./fees.md), [Borrowing Interest](./borrowing-interest.md), and [Funding Rate](./funding-rate.md) pages.
 
 ## Minimum Open Time
 

@@ -23,7 +23,7 @@ $$
 
 The rate is naturally bounded in `[-r_funding, +r_funding]`. A fully one-sided market produces a rate equal to `r_funding`, while a perfectly balanced market produces zero.
 
-For the paying (dominant) side, the delta per unit is applied directly. For the receiving (minority) side, the delta is scaled by the OI ratio so that total paid equals total received. This makes funding purely peer-to-peer — 100% flows between longs and shorts with no protocol cut.
+For the paying (dominant) side, the delta per unit is applied directly. For the receiving (minority) side, the delta is scaled by the OI ratio so that total paid equals total received. This makes funding purely peer-to-peer — 100% flows between longs and shorts with no rate-level protocol cut. Per-position rounding dust is absorbed by the vault.
 
 **Example:** If longs have a notional of 80 and shorts have a notional of 20:
 

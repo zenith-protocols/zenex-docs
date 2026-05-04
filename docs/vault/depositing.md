@@ -31,7 +31,7 @@ There are two ways to withdraw:
 
 ### Lock Period
 
-After depositing, your vault shares are subject to a **lock period**. During this time you cannot transfer or withdraw your shares. This mechanism protects the vault against arbitrage of the share price. Once the lock period has elapsed, you can withdraw or transfer freely at any time.
+After depositing, your vault shares are subject to a **lock period**. During this time you cannot transfer or withdraw your shares. This mechanism protects the vault against arbitrage of the share price. The duration is set per-deployment and can be queried on-chain via `lock_time()`; the current testnet deployment uses 60 seconds. Once the lock period has elapsed, you can withdraw or transfer freely at any time.
 
 ### Share Price
 
@@ -41,4 +41,4 @@ $$
 sharePrice = \frac{totalAssets}{totalShares}
 $$
 
-As the vault earns [fees](../trading/fees.md) and [borrowing interest](../trading/fees.md), or absorbs trader losses, the total assets increase and the share price rises. Conversely, when traders are profitable, the vault pays out and the share price decreases. For more on what drives share price changes, see [Risks & Rewards](./risks-and-rewards.md).
+As the vault earns [fees](../trading/fees.md) and [borrowing interest](../trading/borrowing-interest.md), or absorbs trader losses, the total assets increase and the share price rises. Conversely, when traders are profitable, the vault pays out and the share price decreases. For more on what drives share price changes, see [Risks & Rewards](./risks-and-rewards.md).

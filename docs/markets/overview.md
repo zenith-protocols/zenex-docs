@@ -19,11 +19,11 @@ Each market is linked to an **oracle** that provides real-time price data. The o
 
 ### Open Interest
 
-Markets track **open interest**, the total notional value of all open positions, separately for longs and shorts. This long/short breakdown is critical because it drives both the [funding rate](../trading/funding-rate.md) and the [borrowing interest](../trading/fees.md). When one side dominates, funding rates adjust to incentivize balance. Borrowing interest also increases with utilization, discouraging excessive concentration and reducing directional risk for the vault.
+Markets track **open interest**, the total notional value of all open positions, separately for longs and shorts. This long/short breakdown is critical because it drives both the [funding rate](../trading/funding-rate.md) and the [borrowing interest](../trading/borrowing-interest.md). When one side dominates, funding rates adjust to incentivize balance. Borrowing interest also increases with utilization, discouraging excessive concentration and reducing directional risk for the vault.
 
 ### Supported Assets
 
-Zenex currently supports a select assets but that will expand over time, also with non-zenex vaults you can see other asset classes be added. Each asset has tailored parameter settings based on its liquidity profile. See [Supported Assets](./supported-assets.md) for full details.
+Zenex currently supports a select set of assets, and that list will expand over time. Anyone can also deploy additional vaults via the factory contract, and those external deployments may list other asset classes. Each asset has tailored parameter settings based on its liquidity profile. See [Supported Assets](./supported-assets.md) for full details.
 
 ### Adding New Markets
 
