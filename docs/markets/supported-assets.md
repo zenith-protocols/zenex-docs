@@ -13,11 +13,9 @@ Each market has its own `MarketConfig` with the following per-asset settings:
 
 | Asset | Impact Scalar | Margin | Liq Fee | r_var_market |
 |-------|---------------|--------|---------|-------------|
+| **XLM** | 700,000,000 | 1% (100x) | 0.5% | Configurable |
 | **BTC** | 8,000,000,000 | 1% (100x) | 0.5% | Configurable |
-| **XLM** | 700,000,000 | 2% (50x) | 1% | Configurable |
-| **SOL** | 2,000,000,000 | 1% (100x) | 0.5% | Configurable |
 | **ETH** | 5,000,000,000 | 1% (100x) | 0.5% | Configurable |
-| **ADA** | 1,000,000,000 | 2% (50x) | 1% | Configurable |
 
 ## Global Parameters
 
