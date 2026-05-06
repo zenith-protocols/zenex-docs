@@ -18,7 +18,7 @@ Zenex is a leveraged perpetual futures protocol built on [Stellar Soroban](https
 | **Factory** | Deterministic deployer for trading + vault pairs |
 | **Governance** | Optional timelock proxy for governance-controlled parameter changes |
 | **Price Verifier** | Pyth Lazer oracle that parses and verifies signed price updates |
-| **Account** | Smart account with multi-signer support (Ed25519, WebAuthn) — separate repo (`soroban-smart-account`), not part of the perp engine |
+| **Account** | Smart account with multi-signer support (Ed25519, WebAuthn). Separate repo (`soroban-smart-account`), not part of the perp engine |
 
 ## Data Flow
 
@@ -65,20 +65,18 @@ The governance contract is an independent, optional contract. It is not deployed
 
 ## Token Flow
 
-All collateral flows through a single SEP-41 token (e.g., USDC). The trading contract acts as custodian for active position collateral.
+All collateral flows through a single SEP-41 token (e.g., USDC). The trading contract acts as custodian for active position collateral. Protocol fees (base, impact, funding, borrowing, liquidation) are not paid on top of collateral; they are debited from the position's collateral inside the trading contract and split between the vault and the treasury.
 
 | Flow | Direction | When |
 |---|---|---|
-| User to Trading | Collateral + fees on position open | `open_market`, `place_limit` |
-| Trading to Vault | Fees (minus protocol share) on every trade | Open, close, fill, liquidation |
-| Trading to Treasury | Protocol fee on every trade | Open, close, fill, liquidation |
+| User to Trading | Collateral on position open | `open_market`, `place_limit` |
+| Trading to Vault | LP share of fees (debited from collateral) | Open, close, fill, liquidation |
+| Trading to Treasury | Protocol share of fees (debited from collateral) | Open, close, fill, liquidation |
 | Vault to Trading | Trader profit payout | `strategy_withdraw` on profitable close |
-| Trading to User | Collateral + profit on close | `close_position`, keeper TP/SL |
+| Trading to User | Remaining collateral + profit (or zero if liquidated) | `close_position`, keeper TP/SL |
 | Trading to Keeper | Caller incentive fee | Keeper `execute` batch |
 
 ## Deployment Model
 
-The factory deploys trading + vault pairs atomically with deterministic addresses. Both addresses are precomputed using Soroban's native `deployed_address()` mechanism. The vault salt is derived from the user-provided salt by XORing the last byte (`salt[31] ^= 1`), giving two distinct but deterministic addresses. The vault is deployed first, receiving the precomputed trading address as its authorized strategy. The trading contract is deployed second, receiving the vault address. The factory then records the trading address in its registry.
-
-This ensures neither contract requires a post-deployment initialization step. Both are fully configured at construction time.
+The factory deploys trading and vault as an atomic pair with deterministic, precomputed addresses. Both contracts are fully configured at construction; neither requires a post-deployment initialization step. Implementation detail (salt derivation, deploy ordering, address precomputation) lives on the [Factory](./factory/overview) page.
 

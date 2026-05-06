@@ -25,7 +25,7 @@ The lock is applied to the **receiver** of the shares, not the caller who initia
 
 ## New Deposits Accumulate Locked Shares
 
-If a user deposits again while the previous lock is still active, the locked share count **accumulates**: the new shares are added to the existing locked amount, and the timestamp resets to the current block time. For example, if a user deposited 100 shares and then deposits 50 more while still locked, the lock becomes `{ timestamp: now, shares: 150 }`. The user must wait the full lock duration again from the new timestamp.
+If a user deposits again while the previous lock is still active, the new shares are added to the existing locked count and the timestamp resets to the current block time. The user must wait the full lock duration again from the new timestamp.
 
 If the previous lock has already expired, the lock resets to only the newly deposited shares. Expired locks do not carry over.
 

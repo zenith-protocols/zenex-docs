@@ -17,9 +17,16 @@ $$
 \text{base\_fee} = \text{notional} \times \frac{\text{base\_fee\_rate}}{\text{SCALAR\_7}}
 $$
 
-If the action worsens market imbalance, `fee_dom` applies. If it rebalances, `fee_non_dom` applies. On open, this means opening on the side with greater-or-equal notional pays `fee_dom`. On close, it means closing from the non-dominant side (which removes counterweight and worsens the imbalance) pays `fee_dom`. Dominance is evaluated at the time of the action, not at position creation.
+Dominance is evaluated against the **post-action** market state, not the pre-action state. The contract calls `is_dominant(side, notional)` with the position's notional added (on open) or removed (on close), then checks whether that side ends up strictly larger than the other.
 
-The live testnet deployment uses `fee_dom = 6_000` (0.06% of notional) and `fee_non_dom = 4_000` (0.04% of notional). Both are SCALAR_7 fractions and bounded by `MAX_FEE_RATE = 100_000` (1%). Only the base fee splits dom vs non-dom; the impact fee below has a single per-market formula and is charged unconditionally.
+| Action | Pays `fee_dom` when | Pays `fee_non_dom` when |
+|---|---|---|
+| Open | Your side is strictly larger after the position is added | Your side is equal or smaller after the add |
+| Close | Your side is no longer strictly larger after the position is removed | Your side is still strictly larger after the removal |
+
+This means a position opened on the current minority side can still pay `fee_dom` if it is big enough to flip dominance. A close from the dominant side that leaves the side dominant pays `fee_non_dom` (it reduced imbalance).
+
+`fee_dom` and `fee_non_dom` are SCALAR_7 fractions of notional, bounded by `MAX_FEE_RATE = 100_000` (1%).
 
 ### Price Impact Fee
 
@@ -27,7 +34,7 @@ $$
 \text{impact\_fee} = \lfloor \frac{\text{notional}}{\text{impact}} \rfloor
 $$
 
-Where `impact` is the per-market divisor from `MarketConfig`. Uses floor division. The impact fee is charged unconditionally on every open and every close — it does not depend on dominance and has no dom / non-dom split.
+Where `impact` is the per-market divisor from `MarketConfig`. Charged on every open and every close. Floor division means orders with `notional < impact` round down to zero impact fee, so most small trades effectively pay only the base fee.
 
 ### Funding
 
@@ -73,57 +80,36 @@ Treasury receives a cut of `protocol_fee`. Keepers receive a cut of `trading_fee
 
 ## Fee Distribution
 
-### On Market Order Open (User)
+Every settlement uses the same shape. Three constants are computed and the vault gets whatever is left:
 
-| Recipient | Amount |
-|---|---|
-| Treasury | `total_fee * treasury_rate / SCALAR_7` where `total_fee = base_fee + impact_fee` |
-| Vault | `total_fee - treasury_fee` |
-| Keeper | `0` (no keeper involved) |
+```
+treasury_fee = protocol_fee * treasury_rate / SCALAR_7
+caller_fee   = trading_fee  * caller_rate   / SCALAR_7   // zero if user-initiated
+user_payout  = max(equity, 0)                            // zero on opens / fills / liquidations
+vault        = col - user_payout - treasury_fee - caller_fee
+```
 
-Only base and impact fees apply at open (no borrowing or funding yet). The treasury cut at open is computed against `total_fee = base_fee + impact_fee`. This is identical to the general `protocol_fee` definition (`base + impact + borrowing`) because `borrowing_fee = 0` at fill.
+Two orthogonal axes decide which terms are non-zero on a given event:
 
-### On Position Close (User)
+- **Closes** (self close, TP, SL) settle PnL. They pay a `user_payout` and add accrued borrowing into `protocol_fee`. Opens and fills set `user_payout = 0` and have no borrowing yet, so `protocol_fee = base + impact` on those.
+- **Keeper-initiated events** (limit fill, TP / SL close) pay a `caller_fee` cut from the trading fee. User-initiated events (market open, self close) set `caller_fee = 0`.
 
-| Recipient | Amount |
-|---|---|
-| User | `max(equity, 0)` where `equity = col + pnl - total_fee` |
-| Treasury | `protocol_fee * treasury_rate / SCALAR_7` |
-| Vault | `col - user_payout - treasury_fee` |
-| Keeper | `0` (no keeper involved) |
+If `vault` is negative on a close (user profited), the vault pays via `strategy_withdraw`. The keeper's share is always cut from the trading fee (`base + impact`), never from funding or borrowing.
 
-If the vault transfer is negative (user profited), the vault pays via `strategy_withdraw`.
+### Liquidation
 
-### On Keeper Limit Fill
+Liquidation is structurally different because the liquidation fee is added to the keeper and treasury cuts:
 
-A keeper opens a pending limit order at the current price.
+```
+liq_fee      = max(equity, 0)                                // remaining equity at liq time
+revenue      = min(protocol_fee + liq_fee, col)
+treasury_fee = revenue                       * treasury_rate / SCALAR_7
+caller_fee   = min(trading_fee + liq_fee, col) * caller_rate / SCALAR_7
+vault        = col - treasury_fee - caller_fee
+user_payout  = 0
+```
 
-| Recipient | Amount |
-|---|---|
-| Treasury | `total_fee * treasury_rate / SCALAR_7` where `total_fee = base_fee + impact_fee` |
-| Keeper | `total_fee * caller_rate / SCALAR_7` |
-| Vault | `total_fee - treasury_fee - caller_fee` |
-
-No PnL is settled at fill, so there is no user payout.
-
-### On Keeper Close (TP, SL)
-
-| Recipient | Amount |
-|---|---|
-| User | `max(equity, 0)` |
-| Treasury | `protocol_fee * treasury_rate / SCALAR_7` |
-| Keeper | `trading_fee * caller_rate / SCALAR_7` |
-| Vault | `col - user_payout - treasury_fee - caller_fee` |
-
-The keeper earns a share of trading fees (base + impact), not of borrowing or funding.
-
-### On Liquidation (Keeper)
-
-| Recipient | Amount |
-|---|---|
-| Treasury | `revenue * treasury_rate / SCALAR_7` where `revenue = min(protocol_fee + liq_fee, col)` |
-| Keeper | `min(trading_fee + liq_fee, col) * caller_rate / SCALAR_7` |
-| Vault | `col - treasury_fee - caller_fee` |
+No PnL is settled for the user; all collateral is redistributed.
 | User | `0` (all collateral redistributed) |
 
 `liq_fee = max(equity, 0)` is the remaining equity at liquidation time. Treasury receives a share of the total revenue (protocol fees + liquidation fee). No PnL settlement occurs for the user.

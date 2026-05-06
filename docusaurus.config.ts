@@ -82,6 +82,19 @@ const config: Config = {
         rehypePlugins: [rehypeKatex],
       },
     ],
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'integrations',
+        path: 'integrations',
+        routeBasePath: 'integrations',
+        sidebarPath: './sidebarsIntegrations.ts',
+        editUrl:
+          'https://github.com/zenith-protocols/zenex-docs/tree/main/',
+        remarkPlugins: [remarkMath],
+        rehypePlugins: [rehypeKatex],
+      },
+    ],
   ],
 
   // Add KaTeX stylesheet
@@ -126,6 +139,13 @@ const config: Config = {
           docsPluginId: 'technical',
           position: 'left',
           label: 'Technical',
+        },
+        {
+          type: 'docSidebar',
+          sidebarId: 'integrationsSidebar',
+          docsPluginId: 'integrations',
+          position: 'left',
+          label: 'Integrations',
         },
         {
           href: 'https://github.com/zenith-protocols',

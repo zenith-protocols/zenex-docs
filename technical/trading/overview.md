@@ -122,7 +122,7 @@ The `entry_wt` fields enable aggregate PnL computation without iterating all pos
 
 ### Position
 
-The owner is not stored on the position struct itself — it is encoded in the storage key `Position(Address, u32)`. Position IDs are allocated per-user from `UserCounter(Address)`, so two different users can both hold positions with id `0`. The `(user, id)` pair is what uniquely identifies a position.
+The owner is not stored on the position struct itself; it is encoded in the storage key `Position(Address, u32)`. Position IDs come from `UserCounter(Address)`, so two different users can both hold positions with id `0`. The `(user, id)` pair is what uniquely identifies a position.
 
 | Field | Type | Description |
 |---|---|---|

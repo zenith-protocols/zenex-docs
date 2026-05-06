@@ -328,10 +328,8 @@ h1, h2, h3, h4, h5, h6,
   margin-top: 12px;
 }
 
-/* Hide the light/dark mode toggle */
+/* Hide the light/dark mode toggle (but keep the mobile hamburger) */
 button[class*="colorModeToggle"],
-button[class*="toggle"],
-.navbar__toggle,
 html[data-theme] button[title*="dark"],
 html[data-theme] button[title*="light"],
 .react-toggle {
@@ -816,6 +814,38 @@ blockquote {
   .navbar__title {
     font-size: 24px !important;
     letter-spacing: -1px !important;
+  }
+}
+
+/* Code blocks - tablet */
+@media (max-width: 768px) {
+  /* Inline code: tighten padding and shrink slightly */
+  code:not(.prism-code) {
+    font-size: 0.85em;
+    padding: 0.05rem 0.3rem;
+  }
+
+  /* Fenced code blocks */
+  .prism-code,
+  pre code {
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+
+  div[class*="codeBlockContainer"] pre {
+    padding: 0.75rem !important;
+  }
+}
+
+/* Code blocks - mobile */
+@media (max-width: 480px) {
+  code:not(.prism-code) {
+    font-size: 0.82em;
+  }
+
+  .prism-code,
+  pre code {
+    font-size: 0.72rem;
   }
 }
 

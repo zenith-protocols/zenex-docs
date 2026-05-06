@@ -13,9 +13,9 @@ The keeper system enables permissionless execution of limit order fills, stop-lo
 
 The `execute` function processes a batch of positions for a single market in one transaction. The price payload is verified once via `verify_price` (single feed) on the price-verifier, and a `Context` is loaded for the specified `market_id`, which accrues borrowing and funding indices to the current timestamp. The contract must not be `Frozen`.
 
-`users` and `ids` are **parallel vectors**: position `i` in the batch is `Position(users[i], ids[i])`. Both vectors must have the same length. The two-vector shape is required because position IDs are per-user — a single `id` is not unique across users, so the keeper must explicitly state the owner of each position.
+`users` and `ids` are **parallel vectors**: position `i` in the batch is `Position(users[i], ids[i])`. Both vectors must have the same length. The two-vector shape is required because a single `id` is not unique across users, so the keeper must explicitly state the owner of each position.
 
-All positions in the batch must belong to the same `market_id`. If any position fails its action (not actionable, too new, wrong market), the entire batch aborts with a hard panic. There is no partial success — either all positions are processed or none are.
+All positions in the batch must belong to the same `market_id`. If any position fails its action (not actionable, too new, wrong market), the entire batch aborts with a hard panic. There is no partial success: either all positions are processed or none are.
 
 ### Context
 
@@ -32,7 +32,7 @@ The `execute` function auto-detects the action for each position based on its st
   3. **Take-profit**: trigger price hit. Requires `MIN_OPEN_TIME`.
   4. If none apply, panics with `NotActionable`.
 
-This simplifies keeper logic — keepers only need to submit the parallel `users` / `ids` vectors and price data for a single market.
+This simplifies keeper logic: keepers only need to submit the parallel `users` / `ids` vectors and price data for a single market.
 
 ## Error Handling
 
@@ -41,7 +41,7 @@ All errors are hard panics that abort the entire batch. There is no soft error o
 | Error | Code | Meaning |
 |---|---|---|
 | `NotActionable` | `731` | No valid action for this position (limit not fillable, not liquidatable, no SL/TP triggered) |
-| `PositionTooNew` | `732` | `MIN_OPEN_TIME` (30s) not elapsed — SL/TP cannot fire yet |
+| `PositionTooNew` | `732` | `MIN_OPEN_TIME` (30s) not elapsed; SL/TP cannot fire yet |
 | `PositionNotPending` | `721` | Position is already filled but was expected to be pending |
 | `InvalidPrice` | `710` | Position's `market_id` does not match the batch's `market_id`, or price feed mismatch |
 | `ContractFrozen` | `742` | Contract is in Frozen state, all operations blocked |

@@ -34,7 +34,7 @@ There is a structural gap between initial margin and liquidation threshold:
 | Initial margin | Configurable per market (`margin`) | `MarketConfig` |
 | Liquidation threshold | Configurable per market (`liq_fee`) | `MarketConfig` |
 
-The validation rule `margin > liq_fee` ensures there is always a buffer between the opening margin requirement and the liquidation threshold. For example, with `margin = 1%` (100x leverage) and `liq_fee = 0.5%`, there is a 0.5% buffer.
+The validation rule `margin > liq_fee` enforces a buffer between the opening margin requirement and the liquidation threshold.
 
 ## Liquidation Execution
 

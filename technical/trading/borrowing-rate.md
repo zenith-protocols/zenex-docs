@@ -25,7 +25,7 @@ $$
 u_{\text{vault}} = \frac{\text{total\_notional}}{\text{vault\_balance} \times \text{max\_util} / \text{SCALAR\_7}}
 $$
 
-Here, `total_notional` is the sum of all open position notional values across all markets, `vault_balance` is the current total assets in the strategy vault, and `max_util` is the global utilization cap from `TradingConfig`. The denominator represents the effective lending capacity: the vault balance scaled by the maximum allowed utilization ratio. If `max_util` is set to `7_000_000` (70%), then only 70% of the vault's balance is considered available for lending.
+`total_notional` is the sum of all open position notional across all markets. `vault_balance` is total assets in the strategy vault. `max_util` is the global utilization cap from `TradingConfig` (SCALAR_7). The denominator is the effective lending capacity: vault balance times the cap.
 
 The result is clamped to the range $[0, \text{SCALAR\_7}]$. A value of `0` means no utilization. A value of `SCALAR_7` (representing 100%) means the protocol has reached or exceeded its configured capacity. The clamping prevents the utilization ratio from exceeding 1.0 in the fixed-point representation, which would produce unexpected behavior in the exponential term.
 

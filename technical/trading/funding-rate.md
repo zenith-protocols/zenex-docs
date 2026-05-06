@@ -5,47 +5,40 @@ title: Funding Rate
 
 # Funding Rate
 
-The funding rate mechanism incentivizes balanced open interest between longs and shorts. The dominant side (more open interest) pays the minority side continuously.
+Funding incentivizes balanced open interest between longs and shorts. The dominant side (more open interest) continuously pays the minority side, peer-to-peer with no protocol cut.
 
-## Rate Formula
+A market runs two funding rates side-by-side. The **pay rate** is what the dominant side pays per hour. It is recomputed once per hour by `apply_funding` and stored on the market as `fund_rate`, where it stays fixed until the next hourly update. The **receive rate** is what the minority side earns per hour. It equals the pay rate scaled by `dominant_notional / minority_notional` against the current notional balances, so it is recomputed on every accrue and tracks imbalance changes between the hourly pay-rate updates. By construction, the total paid by the dominant side equals the total received by the minority side at every accrue.
+
+## Pay Rate
+
+`apply_funding` recomputes the pay rate from the current open-interest imbalance:
 
 $$
-\text{funding\_rate} = \text{r\_funding} \times \frac{|\text{long\_notional} - \text{short\_notional}|}{\text{long\_notional} + \text{short\_notional}}
+\text{pay\_rate} = \text{r\_funding} \times \frac{|\text{long\_notional} - \text{short\_notional}|}{\text{long\_notional} + \text{short\_notional}}
 $$
 
-The sign is determined by which side is dominant. When `long_notional > short_notional`, the rate is positive (longs pay shorts). When `short_notional > long_notional`, the rate is negative (shorts pay longs). Equal open interest produces a rate of zero.
+Sign follows dominance: positive when longs dominate (longs pay), negative when shorts dominate (shorts pay), zero when balanced. The magnitude is bounded in `[0, r_funding]`. `r_funding` is a global SCALAR_18 parameter in `TradingConfig` shared across all markets; per-market variation comes from each market's own imbalance.
 
-`r_funding` is a global parameter in `TradingConfig` (SCALAR_18) that applies to all markets. The rate is naturally bounded in `[-r_funding, +r_funding]`. A fully one-sided market produces a rate equal to `r_funding`, while a perfectly balanced market produces zero.
+`apply_funding` is permissionless, runs across every market in one call, and enforces a 1-hour minimum interval (`ONE_HOUR_SECONDS`). Every-action `accrue` paths advance indices using whatever `fund_rate` the market last stored; they do not recompute the rate.
 
-## Accrual
+## Index Accrual
 
-Funding accrues continuously via `data.accrue(e, ...)`, which is called on every market-touching operation (open, close, modify, execute). Borrowing indices are accrued in the same call before funding.
-
-**Empty markets**: When `l_notional == 0` and `s_notional == 0`, `calc_funding_rate` returns `0` and accrual is a no-op. The rate is not `r_funding`.
-
-**One-sided markets**: When exactly one of `l_notional` or `s_notional` is zero, the rate equals `+r_funding` (longs only) or `-r_funding` (shorts only). Accrual is still skipped because funding is peer-to-peer and there is no counterparty to receive payment. Indices advance only once both sides have open interest.
-
-**Rate re-derivation**: The funding rate is only re-derived from open interest inside `apply_funding` (which calls `update_funding_rate` after accruing indices). Every-action `accrue` paths advance the indices using whatever `fund_rate` the market last stored — they do not recompute the rate.
+Both funding indices advance on every market-touching operation (`data.accrue` is called from open, close, modify, execute). The time component is shared:
 
 $$
 \text{hours\_elapsed} = \frac{\text{seconds\_elapsed} \times \text{SCALAR\_18}}{\text{3600}}
 $$
 
 $$
-\text{pay\_delta} = \frac{|\text{funding\_rate}| \times \text{hours\_elapsed}}{\text{SCALAR\_18}}
+\text{pay\_delta} = \frac{|\text{pay\_rate}| \times \text{hours\_elapsed}}{\text{SCALAR\_18}}
 $$
 
-For the paying side, `pay_delta` is added to that side's funding index (`l_fund_idx` or `s_fund_idx`). For the receiving side, the delta is scaled by `dominant_notional / minority_notional` and subtracted from the index. This scaling factor ensures that total paid equals total received. If longs have 2x the notional of shorts, each short receives 2x the per-unit funding rate. The system is purely peer-to-peer with no protocol cut.
+The dominant side's index advances by `pay_delta`. The minority side's index advances by `pay_delta * dominant_notional / minority_notional`, evaluated at the moment of accrual. If longs have 2× the notional of shorts, each short receives 2× the per-unit rate.
 
-## Rate Update Cadence
+### Edge Cases
 
-### Lazy Accrual (Every Action)
-
-Every operation that touches market data calls `data.accrue(e)`, which computes funding accrued since `last_update`, updates both funding indices, and sets `last_update = now`. This means funding is always up to date when any position action occurs.
-
-### Explicit Update (Hourly)
-
-`apply_funding()` is a permissionless function that enforces a minimum 1-hour interval (`ONE_HOUR_SECONDS`). For every registered market, it accrues both borrowing and funding indices, then recomputes the funding rate from current open interest balances. It emits `ApplyFunding` after updating all markets. This ensures rates are recalculated at least hourly, even if no positions are opened or closed.
+- **Empty market** (`l_notional == 0 && s_notional == 0`): rate is zero, accrual is a no-op.
+- **One-sided market** (exactly one side is zero): pay rate equals `±r_funding`, but accrual is skipped because there is no counterparty. Indices only advance once both sides hold open interest.
 
 ## Per-Position Settlement
 
@@ -55,8 +48,8 @@ $$
 \text{funding} = \text{notional} \times \frac{\text{current\_index} - \text{entry\_index}}{\text{SCALAR\_18}}
 $$
 
-Positive funding represents a cost (position paid funding during its lifetime). Negative funding represents a credit (position received funding).
+Positive means the position paid funding during its lifetime; negative means it received funding.
 
 ## Design Rationale
 
-Continuous accrual (rather than discrete hourly payments) prevents manipulation of the exact accrual timestamp. The dominant/minority scaling makes the mechanism self-balancing, ensuring no value is created or destroyed — funding is purely peer-to-peer with 100% flowing between longs and shorts. LP compensation comes from the separate borrowing fee system, which accrues to the vault via protocol fees. Per-market variation comes naturally from each market's open interest imbalance, even though `r_funding` is a single global parameter in `TradingConfig`.
+Continuous accrual prevents manipulation of the exact payment timestamp. Splitting pay and receive rates keeps the mechanism self-balancing without recomputing the pay rate on every action. LP compensation comes from the separate borrowing fee, which accrues to the vault via protocol fees.

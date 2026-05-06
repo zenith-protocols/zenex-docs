@@ -26,7 +26,7 @@ Global state that is accessed frequently and shared across all calls.
 
 ### Persistent Storage: Market Tier (45/52-day TTL)
 
-Per-market data, the global market list, and per-user position-id counters. The user counter is bumped at the market tier so it survives even if all of a user's positions expire — this prevents id reuse.
+Per-market data, the global market list, and per-user position-id counters. The user counter is bumped at the market tier so it survives even if all of a user's positions expire, which prevents id reuse.
 
 | Key | Type | Description |
 |---|---|---|
@@ -43,9 +43,9 @@ Per-position data. Shorter TTL because perp positions are short-lived (most clos
 |---|---|---|
 | `Position(Address, u32)` | `Position` | Individual position data, keyed by `(owner, per-user id)` |
 
-Position IDs are allocated **per user**, not globally. Each user has their own counter (`UserCounter(Address)`), so two different users can both hold positions with id `0`. The `(user, id)` pair is the unique on-chain identifier. The `Position` struct itself does not carry a `user` field — the owner is encoded in the storage key.
+Each user has their own counter (`UserCounter(Address)`), so two different users can both hold positions with id `0`. The `(user, id)` pair is the unique on-chain identifier. The `Position` struct itself does not carry a `user` field; the owner is encoded in the storage key.
 
-`UserCounter` is never decremented. Closing a position does not free its id for reuse — this simplifies event indexing and prevents id collisions across the lifetime of a user's account.
+`UserCounter` is never decremented. Closing a position does not free its id for reuse; this simplifies event indexing and prevents id collisions across the lifetime of a user's account.
 
 There is no on-chain enumeration of a user's open positions: discovery requires off-chain indexing of position-lifecycle events. The contract exposes `get_user_counter(user) -> u32` (the next sequence number, not a list) and `get_position(user, id) -> Position`.
 
@@ -57,7 +57,7 @@ There is no on-chain enumeration of a user's open positions: discovery requires 
 | Market Persistent | 45 days | 52 days | Market config/data and market list; moderate access frequency |
 | Position Persistent | 14 days | 21 days | Per-position records; short-lived data |
 
-All TTLs are bumped on read or write. If a position is not touched for 14+ days, its `Position(user, id)` record could expire. Positions are short-lived (most close within days), so the shorter TTL avoids paying rent for abandoned positions. The `UserCounter(Address)` entry lives at the longer market tier (45/52 days), so the counter survives even when the user's positions are pruned — preventing id reuse.
+All TTLs are bumped on read or write. If a position is not touched for 14+ days, its `Position(user, id)` record could expire. Positions are short-lived (most close within days), so the shorter TTL avoids paying rent for abandoned positions. The `UserCounter(Address)` entry lives at the longer market tier (45/52 days), so the counter survives even when the user's positions are pruned, preventing id reuse.
 
 ## Events
 
