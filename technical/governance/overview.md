@@ -94,9 +94,8 @@ get_queued(nonce: u32) -> QueuedCall
 | `apply_delay` | Permissionless (after current delay) |
 | `get_delay` | Permissionless (read-only) |
 | `get_queued` | Permissionless (read-only) |
-| `upgrade` | Owner only |
 
-The contract implements OZ `Ownable` and `Upgradeable` (owner-only upgrade).
+The contract implements OZ `Ownable` only. The `Upgradeable` impl was deliberately removed: an upgradeable governance contract could swap out its own bytecode (and the timelock with it) under the owner key, which defeats the point of the delay. The contract is now permanently pinned to its deployed WASM.
 
 ## Two-Step Delay Change
 

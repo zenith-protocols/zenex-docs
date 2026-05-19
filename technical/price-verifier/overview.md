@@ -54,4 +54,6 @@ The price verifier implements OZ Ownable for access control. For standard Ownabl
 
 The price verifier enforces a single configurable `max_staleness` parameter on all price data. Any price older than `max_staleness` seconds is rejected. The threshold is set at deployment and can be updated by the owner via `update_max_staleness`.
 
+Both the constructor and `update_max_staleness` enforce a hard upper bound of `MAX_STALENESS_SECONDS = 30`. Any attempt to configure a larger value reverts with `InvalidStaleness`. The cap is aligned with the trading contract's `MIN_OPEN_TIME` (30s): a stale price older than that window could in principle be paired with an immediate close, so the verifier refuses to vend prices the trading layer would treat as suspect.
+
 Prices in the future (publish_time > now) are also rejected. This prevents replay of pre-signed future prices.

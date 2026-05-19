@@ -1,5 +1,5 @@
 ---
-sidebar_position: 11
+sidebar_position: 12
 title: Storage & Events
 ---
 
@@ -123,9 +123,9 @@ All errors use `panic_with_error!(e, TradingError::Variant)`. Errors are hard pa
 | 703 | `MaxMarketsReached` | `MAX_ENTRIES` markets already registered |
 | 710 | `InvalidPrice` | Price verification failed, market_id mismatch, or missing feed |
 | 711 | `StalePrice` | Price data predates position open time |
+| 712 | `PriceSlippage` | Fill price outside the user-supplied `price_bound` |
 | 720 | `PositionNotFound` | Position ID not found in storage |
 | 721 | `PositionNotPending` | Position is filled; expected pending |
-| 722 | `MaxPositionsReached` | User has `MAX_ENTRIES` positions |
 | 723 | `NegativeValueNotAllowed` | A parameter is zero or negative |
 | 724 | `NotionalBelowMinimum` | Below `min_notional` |
 | 725 | `NotionalAboveMaximum` | Above `max_notional` |
@@ -135,9 +135,11 @@ All errors use `panic_with_error!(e, TradingError::Variant)`. Errors are hard pa
 | 731 | `NotActionable` | No valid action for this position in execute batch |
 | 732 | `PositionTooNew` | `MIN_OPEN_TIME` not elapsed |
 | 733 | `ActionNotAllowedForStatus` | Action not allowed for position status |
+| 734 | `InvalidInput` | Malformed input (e.g. `execute` users/ids vec length mismatch) |
 | 740 | `InvalidStatus` | Invalid or disallowed contract status value |
 | 741 | `ContractOnIce` | New positions blocked (OnIce, AdminOnIce, or Frozen) |
 | 742 | `ContractFrozen` | All position management blocked (Frozen) |
 | 750 | `ThresholdNotMet` | Net PnL below ADL threshold |
 | 751 | `UtilizationExceeded` | Position would exceed notional/vault cap |
 | 752 | `FundingTooEarly` | `apply_funding` called < 1 hour since last call |
+| 760 | `Expired` | Current ledger is past the user-supplied `expiration_ledger` |

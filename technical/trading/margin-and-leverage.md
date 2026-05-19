@@ -1,5 +1,5 @@
 ---
-sidebar_position: 10
+sidebar_position: 11
 title: Margin & Leverage
 ---
 
@@ -15,17 +15,7 @@ $$
 \text{notional} \times \text{margin} \leq \text{col} \times \text{SCALAR\_7}
 $$
 
-Equivalently: `leverage <= 1 / margin`.
-
-| `margin` | Max Leverage |
-|---|---|
-| `1_000_000` (10%) | 10x |
-| `500_000` (5%) | 20x |
-| `200_000` (2%) | 50x |
-| `100_000` (1%) | 100x |
-| `50_000` (0.5%) | 200x |
-
-The live testnet deployment uses `margin = 100_000` (1%, 100x max leverage) for every market, with `liq_fee = 50_000` (0.5%). The other rows are illustrative.
+Equivalently: `leverage <= 1 / margin`. With `margin` expressed as a SCALAR_7 fraction, the maximum allowed position size is `col / margin`. A `margin` of `100_000` (1%) caps leverage at 100x; halving `margin` doubles the cap.
 
 ## Initial Margin vs Liquidation Threshold
 

@@ -36,6 +36,7 @@ deploy(
     vault_symbol,
     vault_decimals_offset,
     vault_lock_time,
+    vault_min_deposit,
 ) -> Address
 ```
 

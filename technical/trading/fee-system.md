@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 5
 title: Fee System
 ---
 
@@ -54,13 +54,7 @@ $$
 \text{borrowing\_fee} = \text{notional} \times \frac{\text{current\_borr\_idx} - \text{entry\_borr\_idx}}{\text{SCALAR\_18}}
 $$
 
-Borrowing fees are always non-negative and accrue only to the dominant side of the market. The borrowing rate is an additive dual-utilization curve:
-
-$$
-\text{rate} = \text{r\_base} + \text{r\_var} \times \text{util\_vault}^5 + \text{r\_var\_market} \times \text{util\_market}^3
-$$
-
-Where `r_base` and `r_var` are global parameters (TradingConfig), and `r_var_market` is per-market (MarketConfig). The vault term uses a quintic curve (gentle at low utilization, aggressive near capacity) and the market term uses a cubic curve (reacts faster to per-market congestion).
+Borrowing fees are always non-negative and accrue only to the dominant side of the market. They flow to the vault (LPs) and the treasury (protocol revenue), split by the treasury rate. See [Borrowing Rate](./borrowing-rate.md) for how the rate is computed and how indices accrue.
 
 ### Total Fee
 

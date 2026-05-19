@@ -33,7 +33,7 @@ stellar contract deploy \
   --fee_rate 10000
 ```
 
-`fee_rate` is in `SCALAR_7` units, capped at `1_000_000` (`10%`). The published WASM hash and the trading contract address are in [Contract Addresses](/technical/deployments/contract-addresses).
+`fee_rate` is in `SCALAR_7` units, capped at `1_000_000` (`10%`). The published WASM hash and the trading contract address are in [Contract Addresses](/deployments/contract-addresses).
 
 For richer behavior (tiered rates, referral splits, custom routing), fork [`zenex-wrapper`](https://github.com/zenith-protocols/zenex-wrapper), build your own WASM, and deploy that instead.
 

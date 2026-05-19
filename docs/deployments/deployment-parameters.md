@@ -60,8 +60,9 @@ The vault is also deployed through the factory, receiving its parameters from th
 | `decimals_offset` | `u32` | Offset added to token decimals for share token precision |
 | `strategy` | `Address` | Authorized trading contract (precomputed by factory) |
 | `lock_time` | `u64` | Minimum seconds between deposit and withdrawal |
+| `min_deposit` | `i128` | Minimum asset amount per deposit/mint (token decimals); `0` disables the floor |
 
-The `strategy` parameter is the only address authorized to call `strategy_withdraw` on the vault. This is set to the precomputed trading contract address, which the factory calculates before either contract exists. The `lock_time` prevents depositors from front-running profitable trades by depositing just before a large trader loss and withdrawing immediately after.
+The `strategy` parameter is the only address authorized to call `strategy_withdraw` on the vault. This is set to the precomputed trading contract address, which the factory calculates before either contract exists. The `lock_time` prevents depositors from front-running profitable trades by depositing just before a large trader loss and withdrawing immediately after. The `min_deposit` floor is enforced on every `deposit` and `mint` and is immutable after construction; a negative value is rejected with `InvalidAmount`.
 
 ## Price Verifier
 
@@ -72,9 +73,9 @@ The price verifier is deployed independently (not through the factory) and share
 | `owner` | `Address` | Admin address for configuration updates |
 | `trusted_signer` | `BytesN<32>` | Ed25519 public key of the Pyth Lazer signer |
 | `max_confidence_bps` | `u32` | Maximum allowed confidence interval in basis points |
-| `max_staleness` | `u64` | Maximum age of a price update in seconds |
+| `max_staleness` | `u64` | Maximum age of a price update in seconds (hard cap: 30s) |
 
-The `trusted_signer` is the public key used to verify Ed25519 signatures on Pyth Lazer price payloads. The `max_confidence_bps` parameter rejects prices whose confidence interval exceeds the threshold, preventing the protocol from accepting highly uncertain oracle data. The `max_staleness` parameter rejects prices that are too old, ensuring the protocol operates on recent market data.
+The `trusted_signer` is the public key used to verify Ed25519 signatures on Pyth Lazer price payloads. The `max_confidence_bps` parameter rejects prices whose confidence interval exceeds the threshold, preventing the protocol from accepting highly uncertain oracle data. The `max_staleness` parameter rejects prices that are too old, ensuring the protocol operates on recent market data. The constructor and `update_max_staleness` both reject any value above `MAX_STALENESS_SECONDS = 30` with `InvalidStaleness`; the cap is aligned with the trading contract's `MIN_OPEN_TIME`.
 
 ## Treasury
 

@@ -11,6 +11,12 @@ The price verifier is consumed exclusively by the trading contract. Every action
 
 For `open_market`, `close_position`, and `modify_collateral`, the user submits raw price data (`Bytes`) as a parameter alongside the request. The trading contract calls `PriceVerifierClient::verify_price(price_data)`, which returns the parsed and authenticated `PriceData`. The contract then verifies that `feed_id` matches the position's market. Staleness is enforced by the price verifier using its configured `max_staleness` threshold. If the price is too old or the feed does not match, the transaction is rejected.
 
+### Auth Scope Excludes the Price Blob
+
+User auth on the three price-dependent entry points is bound via `require_auth_for_args` to a payload that **excludes** the price `Bytes` argument. The user signs over `(user, market_id, collateral, notional, ..., price_bound, expiration_ledger)` but not the price itself. This is the one logic change that lets a backend submitting the transaction inject the freshest oracle payload at inclusion time without invalidating the user's signature. The signed payload would otherwise pin the user to whatever price was current at signing time, which becomes stale during transit.
+
+The user is protected against price manipulation by the `price_bound` slippage guard and `expiration_ledger` deadline, both of which **are** part of the signed payload. See [Position Lifecycle: Slippage and Expiration](../trading/position-lifecycle.md#slippage-and-expiration) for the direction-aware bound semantics. The price verifier still enforces signature, confidence, staleness, and feed-ID matching, so the backend's only freedom is to pick which valid signed price to attach.
+
 ## Keeper Batch Execution
 
 The `execute` function processes a batch of requests for a single `market_id`. It calls `PriceVerifierClient::verify_price(price_data)` (singular) once at the start of the batch, which returns a single `PriceData`. This one verified price is then passed to all positions in the batch, since all positions share the same feed for the given market. Staleness is enforced by the price verifier using the same `max_staleness` threshold.

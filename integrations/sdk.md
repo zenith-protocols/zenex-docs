@@ -39,11 +39,11 @@ Use the wrapper for the three fee-charging methods. Send everything else straigh
 
 | Method | Target | Purpose |
 |---|---|---|
-| `openMarket(args)` | wrapper | Open a market order. `args.price` is a signed Pyth Lazer payload. |
+| `openMarket(args)` | wrapper | Open a market order. `args` includes `priceBound` and `expirationLedger`; `args.price` is a signed Pyth Lazer payload. |
 | `placeLimit(args)` | wrapper | Place a limit order. No price arg; a keeper fills it. |
-| `closePosition(user, id, price)` | wrapper | Close a filled position. |
+| `closePosition(user, id, priceBound, expirationLedger, price)` | wrapper | Close a filled position. `priceBound` is direction-aware; pass `0` to opt out. |
 | `cancelPosition(user, id)` | trading | Cancel an unfilled limit, or clean up a filled position whose market was deleted. |
-| `modifyCollateral(args)` | trading | Add or remove collateral on a filled position. |
+| `modifyCollateral(args)` | trading | Add or remove collateral on a filled position. `args` includes `expirationLedger` (no price bound; only the margin check can reject). |
 | `setTriggers(args)` | trading | Update take-profit / stop-loss on a filled position. |
 | `applyFunding()` | trading | Permissionless funding tick. Any account can call it. |
 | `updateStatus(price)` | trading | Permissionless circuit-breaker poke. |

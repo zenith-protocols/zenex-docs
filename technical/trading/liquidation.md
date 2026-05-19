@@ -1,5 +1,5 @@
 ---
-sidebar_position: 7
+sidebar_position: 8
 title: Liquidation
 ---
 
@@ -44,12 +44,16 @@ The position's remaining collateral is redistributed: `liq_fee = max(equity, 0)`
 
 The position is removed from storage, market stats are decremented, and the contract emits `Liquidation { market_id, user, position_id, notional, price, base_fee, impact_fee, funding, borrowing_fee, liq_fee }`. The `notional` is the post-ADL settled notional, which may be smaller than the original position size if ADL has occurred since fill.
 
-## Insolvency Risk
+## Underwater Liquidations
 
-If a position's loss exceeds its collateral (deeply underwater), the vault absorbs the deficit implicitly. The vault only receives the position's remaining collateral, which may be less than the actual loss. This systemic risk is mitigated by the maintenance margin buffer (positions are liquidated before losses exceed collateral in most cases), the circuit breaker (transitions to `OnIce` at 95% utilization, preventing new positions from increasing risk), and auto-deleveraging (proportionally reduces winning positions to cover deficits when the vault cannot absorb them).
+Zenex is a synthetic perp protocol: the vault holds only the collateral token (USDC), never the underlying asset that positions reference. There is no traditional insolvency risk because the vault has no debt obligations beyond paying PnL from its USDC balance, and a trader's downside is always capped at their posted collateral.
+
+What can still happen is a per-position drawdown for the vault. If a fast price move makes a position's loss outrun its collateral before a keeper triggers liquidation, the vault collects only the remaining collateral, which may be less than the position's negative PnL would otherwise warrant. The difference is absorbed by the vault as a USDC drawdown. The maintenance-margin buffer (`margin > liq_fee`) and `MAX_LEVERAGE` cap make this rare in normal conditions, but volatile assets and gaps can produce it.
+
+In aggregate, the protocol prevents the vault from running out of USDC through two further mechanisms: the [circuit breaker](./auto-deleveraging.md#circuit-breaker-hysteresis) transitions the contract to `OnIce` at 95% utilization to block new positions from compounding the imbalance, and [auto-deleveraging](./auto-deleveraging.md) proportionally reduces winning positions when realized payouts would exceed available vault balance.
 
 ## Liquidation Incentives
 
-Keepers earn `caller_rate` (a percentage of trading fees plus liquidation fee) for each successful liquidation. This incentivizes timely liquidation to minimize insolvency risk. The fee is capped at the position's collateral to prevent the keeper fee from exceeding available funds.
+Keepers earn `caller_rate` (a percentage of trading fees plus liquidation fee) for each successful liquidation. This incentivizes timely liquidation, which keeps per-position drawdowns small. The fee is capped at the position's collateral to prevent the keeper fee from exceeding available funds.
 
 Since the `execute` function is fully permissionless (no authentication required), anyone can run a keeper bot and earn liquidation fees.

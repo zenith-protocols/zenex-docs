@@ -33,9 +33,9 @@ The `available_shares(user)` public query function returns the number of shares 
 
 ## Transfer Lock Behavior
 
-Both `transfer` and `transfer_from` require the **sender** to pass the lock check. This prevents a locked user from circumventing the withdrawal restriction by moving shares to a second address and withdrawing from there.
+Only newly minted shares are locked. The lock tracks the receiver of a `deposit` or `mint` and is not a property of the shares themselves, so shares received via `transfer` or `transfer_from` arrive unlocked at the recipient.
 
-However, shares received via transfer (not deposit) carry no lock of their own. A user who receives shares through a transfer and has never personally deposited into the vault is never locked. The lock is tied exclusively to the act of depositing, not to the shares themselves.
+Both `transfer` and `transfer_from` still require the **sender** to pass the lock check on their own balance. This prevents a locked user from sidestepping the restriction by moving shares to a second address and withdrawing from there.
 
 ## Error Codes
 

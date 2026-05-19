@@ -5,23 +5,17 @@ title: Vault Overview
 
 # Vault Overview
 
-The vault is an [ERC-4626](https://eips.ethereum.org/EIPS/eip-4626) tokenized vault built on [OpenZeppelin Stellar Contracts](https://github.com/OpenZeppelin/stellar-contracts) (`stellar-tokens::vault`). It holds a single collateral token (e.g., USDC) and issues share tokens to liquidity providers. The vault acts as the counterparty to all trading positions: it absorbs losses from traders and pays out profits.
+The vault is an ERC-4626 style tokenized vault built on [OpenZeppelin Stellar Contracts](https://github.com/OpenZeppelin/stellar-contracts) (`stellar-tokens::vault`). It is modeled on the ERC-4626 interface but ported to Soroban, not a direct implementation of the Ethereum standard. It holds a single collateral token (e.g., USDC) and issues share tokens to liquidity providers. The vault acts as the counterparty to all trading positions: it absorbs losses from traders and pays out profits.
 
-For standard ERC-4626 behavior (deposit, withdraw, mint, redeem, share price math), refer to the [OpenZeppelin Stellar Tokens documentation](https://github.com/OpenZeppelin/stellar-contracts/tree/main/contracts/token). This page documents only Zenex-specific extensions and design decisions.
+For standard vault behavior (deposit, withdraw, mint, redeem, share-price math, decimals offset, inflation-attack protection), refer to the [OpenZeppelin Fungible Token Vault documentation](https://docs.openzeppelin.com/stellar-contracts/tokens/vault/vault). This page documents only Zenex-specific extensions and design decisions.
 
-## Share Price
+## Deposit Lock
 
-Share price reflects the vault's total asset value relative to outstanding shares:
+Every deposit or mint adds a per-user lock that prevents the receiver from withdrawing, redeeming, or transferring their newly-minted shares until `lock_time` has elapsed. The lock duration is set globally at vault construction. See [Deposit Lock](./deposit-lock.md) for the full lock semantics, transfer-side behavior, and unlock-time computation.
 
-$$
-\text{share\_price} = \frac{\text{total\_assets}}{\text{total\_supply}}
-$$
+## Minimum Deposit
 
-Share price **increases** when the vault receives fees from trades or collateral from losing positions. Share price **decreases** when the trading contract withdraws funds to pay profitable traders.
-
-## Decimals Offset
-
-The vault constructor accepts a `decimals_offset: u32` parameter that provides inflation-attack protection via the OpenZeppelin virtual shares mechanism. This adds "dead shares" to the initial supply, preventing the first depositor from manipulating the share price through donation attacks. Zenex forwards the value directly to OpenZeppelin's `Vault::set_decimals_offset` without any additional bound check; in practice 0 through 10 is the recommended range.
+A `min_deposit: i128` floor (in asset token decimals) is enforced on every `deposit` and `mint`, rejecting calls below it with `BelowMinDeposit`. It exists to prevent a hostage-taking attack on the deposit lock. Because `deposit` takes a separate `receiver` argument and each new deposit resets the receiver's lock timestamp, an attacker without a floor could repeatedly dust-deposit one token unit into a victim's address, perpetually extending the victim's lock and trapping their shares. Requiring each deposit to cross a meaningful floor makes the attack uneconomic. The floor is set at construction and is **not** mutable post-deployment. Setting it to `0` disables the check.
 
 ## Interaction with Trading
 
@@ -35,19 +29,9 @@ The vault constructor accepts a `decimals_offset: u32` parameter that provides i
 
 The trading contract never holds vault shares. It interacts purely through `strategy_withdraw` and direct token transfers.
 
-### Vault Interface
+### Strategy Withdraw
 
-The trading contract uses a minimal vault client:
-
-```rust
-pub trait VaultInterface {
-    fn query_asset(e: Env) -> Address;
-    fn total_assets(e: Env) -> i128;
-    fn strategy_withdraw(e: Env, strategy: Address, amount: i128);
-}
-```
-
-`total_assets()` is called by the circuit breaker and ADL system to determine vault capacity. `query_asset()` returns the underlying collateral token address. `strategy_withdraw()` is the sole mechanism for the trading contract to pull funds from the vault.
+The only function added on top of the standard vault interface is `strategy_withdraw`, the privileged path the trading contract uses to pull collateral for profitable trader payouts. It bypasses share accounting (no shares are burned) and is gated to a single registered strategy address. See [Strategy Withdraw](./strategy-withdraw.md) for the authorization model and error codes.
 
 ## Storage Layout
 
@@ -57,6 +41,7 @@ pub trait VaultInterface {
 |---|---|---|
 | `LockTime` | `u64` | Global lock duration in seconds |
 | `Strategy` | `Address` | Authorized trading contract |
+| `MinDeposit` | `i128` | Minimum asset amount per deposit/mint (token decimals); `0` disables the floor |
 
 ### Persistent Storage
 
