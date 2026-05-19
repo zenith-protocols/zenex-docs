@@ -71,15 +71,15 @@ The position is removed from storage and market stats are decremented. Emits `Cl
 
 `cancel_position(user, id) -> i128`
 
-The contract must not be `Frozen`. For pending (unfilled) positions, the position owner must authorize the call. For filled positions on a deleted market, the call is permissionless so anyone can clean up stranded positions. Calling on a filled position whose market still exists reverts with `PositionNotPending` (721). The position's collateral is refunded to the user, and the position is removed from storage. The function returns the refund amount.
+The call works in any contract status, including `Frozen`: a freeze must not hold collateral on pending or stranded positions hostage. No settlement runs and no LP-affecting math is touched. For pending (unfilled) positions, the position owner must authorize the call. For filled positions on a deleted market, the call is permissionless so anyone can clean up stranded positions. Calling on a filled position whose market still exists reverts with `PositionNotPending` (721). The position's collateral is refunded to the user, and the position is removed from storage. The function returns the refund amount.
 
 Emits `RefundPosition { market_id, user, position_id }` (no data fields). The refund amount is not on the event. Consumers can read it from the function return value or recover it from the prior position state.
 
 ## Modifying Collateral
 
-`modify_collateral(user, id, new_collateral, expiration_ledger, price)`
+`modify_collateral(user, id, new_collateral, price)`
 
-`new_collateral` is the absolute target collateral value, not a delta. The caller passes the position owner address as `user`, and the contract requires authorization from that address (via `require_auth_for_args` excluding the price payload). `expiration_ledger` is checked against the current ledger sequence. The call reverts with `Expired` (760) if it has elapsed. There is no `price_bound` parameter here because the margin check is one-sided (only withdrawals can fail) and the user already specifies the target collateral explicitly.
+`new_collateral` is the absolute target collateral value, not a delta. The caller passes the position owner address as `user`, and the contract requires authorization from that address (via `require_auth_for_args` excluding the price payload). There is no `expiration_ledger` parameter: the call has no app-level deadline because the user signs an absolute target collateral, so a replay would set the position to that same value and is bounded by the Soroban auth entry's `signatureExpirationLedger`. There is no `price_bound` parameter either: the margin check is one-sided (only withdrawals can fail) and the user already specifies the target collateral explicitly.
 
 If the new collateral is greater than the current collateral, the contract transfers the difference from the user. No further validation runs: adding collateral can only reduce leverage, so the existing margin and leverage limits are guaranteed to still hold.
 

@@ -22,7 +22,7 @@ The backend's freedom to swap prices has limits. Without further protection, the
 
 | Bound | Applies to | Effect |
 |---|---|---|
-| `expiration_ledger` | `open_market`, `close_position`, `modify_collateral` | Reverts with `Expired` (760) once the current ledger exceeds the user's deadline |
+| `expiration_ledger` | `open_market`, `close_position` | Reverts with `Expired` (760) once the current ledger exceeds the user's deadline |
 | `price_bound` | `open_market`, `close_position` | Reverts with `PriceSlippage` (712) when the fill price falls outside the user's direction-aware bound |
 
 `price_bound` is always oriented to protect the user against an unfavorable move:
@@ -36,6 +36,6 @@ The backend's freedom to swap prices has limits. Without further protection, the
 
 When the user is paying for size (open long, close short) the bound is a ceiling. When the user is receiving (open short, close long) the bound is a floor.
 
-`modify_collateral` carries `expiration_ledger` but not `price_bound`. The only price-dependent check on that call is the margin requirement on a withdrawal, which fails one-sidedly, so a slippage bound is not needed.
+`modify_collateral` carries neither `expiration_ledger` nor `price_bound`. The only price-dependent check on that call is the margin requirement on a withdrawal, which fails one-sidedly, so a slippage bound is not needed. And because the user signs an absolute target collateral, a replay would re-set the position to the same value rather than land at a worse moment in the market. Replay across many ledgers is still bounded by the Soroban auth entry's `signatureExpirationLedger`.
 
 Both bounds accept `0` to disable the check. The opt-out exists for internal callers (smart-account batches, deploy-time scaffolding) that have their own intent-binding mechanisms.
