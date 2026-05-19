@@ -19,7 +19,7 @@ User auth on the three price-dependent entry points is bound via `require_auth_f
 - `close_position`: `(user, id, price_bound, expiration_ledger)`
 - `modify_collateral`: `(user, id, new_collateral)`
 
-The price itself is never part of the signed payload. This is the one logic change that lets a backend submitting the transaction inject the freshest oracle payload at inclusion time without invalidating the user's signature. The signed payload would otherwise pin the user to whatever price was current at signing time, which becomes stale during transit.
+The price itself is never part of the signed payload. Excluding it from the auth scope is what lets a backend submitting the transaction inject the freshest oracle payload at inclusion time without invalidating the user's signature. If the price were inside the signed payload, the user would be pinned to whatever price was current at signing time, which becomes stale during transit.
 
 For `open_market` and `close_position` the user is protected against price manipulation by the `price_bound` slippage guard and `expiration_ledger` deadline, both of which **are** part of the signed payload. See [Pricing: User-Signed Bounds](../trading/pricing.md#user-signed-bounds) for the direction-aware bound semantics. `modify_collateral` carries neither bound: the user signs an absolute target collateral, so a replay re-sets the position to the same value rather than landing at a worse fill, and the Soroban auth entry's `signatureExpirationLedger` still bounds long-range replay. The price verifier still enforces signature, confidence, staleness, and feed-ID matching, so the backend's only freedom is to pick which valid signed price to attach.
 
