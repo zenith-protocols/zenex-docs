@@ -18,7 +18,7 @@ All user actions require authentication from the position owner. The one excepti
 | `place_limit` | Active | Place a limit order (pending fill) |
 | `open_market` | Active | Open a position at market price |
 | `close_position` | Not Frozen | Close a filled position |
-| `cancel_position` | Not Frozen | Cancel a pending limit order, or refund a filled position on a deleted market |
+| `cancel_position` | Any | Cancel a pending limit order, or refund a filled position on a deleted market |
 | `modify_collateral` | Not Frozen | Add or remove collateral |
 | `set_triggers` | Not Frozen | Set stop-loss and take-profit prices |
 

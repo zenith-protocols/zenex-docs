@@ -138,7 +138,7 @@ All errors use `panic_with_error!(e, TradingError::Variant)`. Errors are hard pa
 | 734 | `InvalidInput` | Malformed input (e.g. `execute` users/ids vec length mismatch) |
 | 740 | `InvalidStatus` | Invalid or disallowed contract status value |
 | 741 | `ContractOnIce` | New positions blocked (OnIce, AdminOnIce, or Frozen) |
-| 742 | `ContractFrozen` | All position management blocked (Frozen) |
+| 742 | `ContractFrozen` | Position management blocked (Frozen). `cancel_position` is exempt; collateral refunds are not held hostage by a freeze. |
 | 750 | `ThresholdNotMet` | Net PnL below ADL threshold |
 | 751 | `UtilizationExceeded` | Position would exceed notional/vault cap |
 | 752 | `FundingTooEarly` | `apply_funding` called < 1 hour since last call |

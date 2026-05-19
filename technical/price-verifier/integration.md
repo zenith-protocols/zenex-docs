@@ -13,9 +13,15 @@ For `open_market`, `close_position`, and `modify_collateral`, the user submits r
 
 ### Auth Scope Excludes the Price Blob
 
-User auth on the three price-dependent entry points is bound via `require_auth_for_args` to a payload that **excludes** the price `Bytes` argument. The user signs over `(user, market_id, collateral, notional, ..., price_bound, expiration_ledger)` but not the price itself. This is the one logic change that lets a backend submitting the transaction inject the freshest oracle payload at inclusion time without invalidating the user's signature. The signed payload would otherwise pin the user to whatever price was current at signing time, which becomes stale during transit.
+User auth on the three price-dependent entry points is bound via `require_auth_for_args` to a payload that **excludes** the price `Bytes` argument. The signed payloads are:
 
-The user is protected against price manipulation by the `price_bound` slippage guard and `expiration_ledger` deadline, both of which **are** part of the signed payload. See [Position Lifecycle: Slippage and Expiration](../trading/position-lifecycle.md#slippage-and-expiration) for the direction-aware bound semantics. The price verifier still enforces signature, confidence, staleness, and feed-ID matching, so the backend's only freedom is to pick which valid signed price to attach.
+- `open_market`: `(user, market_id, collateral, notional_size, is_long, take_profit, stop_loss, price_bound, expiration_ledger)`
+- `close_position`: `(user, id, price_bound, expiration_ledger)`
+- `modify_collateral`: `(user, id, new_collateral)`
+
+The price itself is never part of the signed payload. Excluding it from the auth scope is what lets a backend submitting the transaction inject the freshest oracle payload at inclusion time without invalidating the user's signature. If the price were inside the signed payload, the user would be pinned to whatever price was current at signing time, which becomes stale during transit.
+
+For `open_market` and `close_position` the user is protected against backend timing griefing (delaying submission within the auth window to pick a worse valid price) by the `price_bound` slippage guard and `expiration_ledger` deadline, both of which **are** part of the signed payload. See [Pricing: User-Signed Bounds](../trading/pricing.md#user-signed-bounds) for the direction-aware bound semantics. `modify_collateral` carries neither bound: the user signs an absolute target collateral rather than a price-dependent fill, so a delayed submission cannot degrade the outcome, and the only price-dependent check (withdrawal margin) fails one-sidedly. The price verifier still enforces signature, confidence, staleness, and feed-ID matching, so the backend's only freedom is to pick which valid signed price to attach. Replay across submissions is not a concern: Soroban auth entries are nonce-protected and single-use.
 
 ## Keeper Batch Execution
 
