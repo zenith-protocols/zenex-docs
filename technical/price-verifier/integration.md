@@ -13,7 +13,13 @@ For `open_market`, `close_position`, and `modify_collateral`, the user submits r
 
 ### Auth Scope Excludes the Price Blob
 
-User auth on the three price-dependent entry points is bound via `require_auth_for_args` to a payload that **excludes** the price `Bytes` argument. For `open_market` and `close_position` the user signs over `(user, market_id, collateral, notional, ..., price_bound, expiration_ledger)`; for `modify_collateral` the user signs over `(user, id, new_collateral)`. The price itself is never part of the signed payload. This is the one logic change that lets a backend submitting the transaction inject the freshest oracle payload at inclusion time without invalidating the user's signature. The signed payload would otherwise pin the user to whatever price was current at signing time, which becomes stale during transit.
+User auth on the three price-dependent entry points is bound via `require_auth_for_args` to a payload that **excludes** the price `Bytes` argument. The signed payloads are:
+
+- `open_market`: `(user, market_id, collateral, notional_size, is_long, take_profit, stop_loss, price_bound, expiration_ledger)`
+- `close_position`: `(user, id, price_bound, expiration_ledger)`
+- `modify_collateral`: `(user, id, new_collateral)`
+
+The price itself is never part of the signed payload. This is the one logic change that lets a backend submitting the transaction inject the freshest oracle payload at inclusion time without invalidating the user's signature. The signed payload would otherwise pin the user to whatever price was current at signing time, which becomes stale during transit.
 
 For `open_market` and `close_position` the user is protected against price manipulation by the `price_bound` slippage guard and `expiration_ledger` deadline, both of which **are** part of the signed payload. See [Pricing: User-Signed Bounds](../trading/pricing.md#user-signed-bounds) for the direction-aware bound semantics. `modify_collateral` carries neither bound: the user signs an absolute target collateral, so a replay re-sets the position to the same value rather than landing at a worse fill, and the Soroban auth entry's `signatureExpirationLedger` still bounds long-range replay. The price verifier still enforces signature, confidence, staleness, and feed-ID matching, so the backend's only freedom is to pick which valid signed price to attach.
 
