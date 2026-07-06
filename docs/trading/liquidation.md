@@ -5,36 +5,29 @@ title: Liquidation
 
 # Liquidation
 
-Liquidation protects the protocol from bad debt when a position no longer has enough equity to cover its risk. If your equity falls below a safety threshold, the engine will close your position to restore solvency. It is important to note that all collateral is lost in liquidation, therefore it is vital to regularly check your PnL in order to keep your position healthy in the case of market volatility (increasing collateral if necessary).
+Liquidation protects the protocol from bad debt when a position no longer has enough equity to cover its risk. If your equity falls below the maintenance margin, a keeper can close the position to restore solvency. Depending on how far equity has fallen, you may keep the remainder or forfeit it, so it is vital to monitor your PnL and top up collateral during volatility to keep a position healthy.
 
-### **Liquidation threshold**
+Liquidations are permissionless. Anyone can run a keeper, submit a verified oracle price, and close an eligible position. The keeper that does so receives a cut of the close's trade fee as its reward.
 
-Within Zenex, the health of a position is evaluated through the liquidation threshold (`liq_fee`), a per-market configurable parameter. A position becomes eligible for liquidation when:
+## When a Position Is Liquidatable
 
-$$
-Equity < liquidationThreshold
-$$
-
-Where:
+A position's health is measured by its equity against the maintenance margin. Equity is your collateral plus unrealized PnL, net of accrued fees. The maintenance margin is a share of your notional, set per market by governance, and it always sits below the initial margin. A position becomes eligible for liquidation when:
 
 $$
-Equity = Collateral + PnL - Fees
+equity < maintenanceMargin \times notionalSize
 $$
 
-$$
-liquidationThreshold = notionalSize \times liq\_fee
-$$
+The gap between the initial margin (checked when you open) and the maintenance margin (checked here) is the buffer that absorbs adverse price moves and accruing costs before a position is liquidatable. A healthy position is never liquidatable.
 
-The `liq_fee` is set per market and must always be less than the initial margin (`margin`). The gap between them is the safety buffer that absorbs PnL and fee accrual.
+## Two Tiers: Soft and Hard
 
-### Liquidation price
+When a position is liquidated, the outcome depends on how much equity is left, compared against a liquidation margin equal to the liquidation fee rate (`liq_fee`, set per market by governance) applied to the notional.
 
-The liquidation price is calculated slightly differently for shorts and longs, as is shown below:
+- **Soft liquidation**: equity still covers the liquidation margin. No liquidation fee is charged, and the remaining equity after fees is returned to you. You are closed out, but you keep what is left.
+- **Hard liquidation**: equity has fallen below the liquidation margin. The liquidation fee is charged, and the remainder is forfeited to the vault. Nothing is returned to you.
 
-$$
-liquidationPriceLong < openPrice + openPrice \times \frac{liquidationThreshold + fees - collateral}{notionalSize}
-$$
+The two tiers mean a position caught early, while it still holds meaningful equity, is treated far more gently than one that has deteriorated close to insolvency.
 
-$$
-liquidationPriceShort > openPrice - openPrice \times \frac{liquidationThreshold + fees - collateral}{notionalSize}
-$$
+## Bad Debt
+
+If a position's losses run past everything backing it, the shortfall is bad debt. Zenex absorbs bad debt into the vault rather than leaving it unsettled, so the market stays solvent and other traders are unaffected. This is the ultimate reason liquidations exist and why the maintenance-margin buffer is enforced: it keeps most positions from ever reaching the point where bad debt occurs.

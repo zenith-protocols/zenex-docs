@@ -5,18 +5,24 @@ title: Leverage
 
 # Leverage
 
-By using leverage, users can amplify their position with borrowed funds. This increases potential profit, but also potential losses and liquidation risk. Users are therefore advised to use leverage responsibly, and monitor highly leveraged positions carefully.
+By using leverage, users can amplify their position with capital from the vault. This increases potential profit, but also potential losses and liquidation risk. Users are therefore advised to use leverage responsibly, and monitor highly leveraged positions carefully.
 
 **How leverage works**
 
-When opening a position with leverage, the user essentially borrows funds from the protocol to amplify his own exposure. For example: A user can open a position with a notional size of \$100, but only deposit a collateral of \$10. The user then effectively 'borrows' \$90 from the vault. If the price increases with 10% and the user closes the position, the payout is \$10 plus the collateral, and the \$90 is returned to the vault. In this case the user has doubled the \$10 collateral, after only a 10% change in the price. However, a 10% price shift the other way would have led to the user losing all the collateral.
+When opening a position with leverage, the user effectively draws on the vault to amplify their own exposure. For example: a user opens a position with a notional size of \$100, but posts only \$10 of collateral. The remaining \$90 of exposure is backed by the vault. If the price rises 10% and the user closes the position, they receive their \$10 collateral plus \$10 of profit, and the vault is made whole. In this case the user has doubled the \$10 collateral after only a 10% move in the price. A 10% move the other way would instead wipe out the collateral.
 
-**Leverage limits**
+**Initial margin and maximum leverage**
 
-The maximum leverage depends on the market's `margin` parameter (initial margin). Upon opening a position, the following condition must be satisfied:
+The maximum leverage depends on the market's initial margin parameter, which is set per market by governance. When opening or increasing a position, the following condition must hold:
 
 $$
-collateral \geq margin \times notionalSize
+collateral \geq initialMargin \times notionalSize
 $$
 
-So if the margin is 0.01 (1%), the collateral has to be at least 1% of the notional size, and thus users can have up to 100x leverage. Different markets may have different margin requirements. After the position is opened, the effective leverage is governed by the liquidation threshold (`liq_fee`), fees accrued, and PnL as described [here](./liquidation.md).
+So if the initial margin is 0.01 (1%), the collateral has to be at least 1% of the notional size, and users can take up to 100x leverage. Different markets set different initial margins, so the leverage ceiling varies by market.
+
+**Initial versus maintenance margin**
+
+Two margin levels govern a position. The initial margin is the floor checked when you open or increase: your collateral, measured before any unrealized profit or loss, must cover it. The maintenance margin is a lower floor checked against your live equity (collateral plus unrealized PnL). It is the hard line for liquidation, and it is always set below the initial margin. The gap between the two is the buffer that absorbs adverse price moves and accruing costs before a position becomes liquidatable. How the maintenance margin drives liquidation is described [here](./liquidation.md).
+
+Higher leverage means a smaller buffer and greater sensitivity: the same price move consumes a larger share of a thinly collateralized position's equity, so a highly leveraged position reaches its maintenance margin after a smaller adverse move. After a position is open, its effective leverage drifts with accrued fees and PnL, which is why it pays to monitor and top up collateral when needed.

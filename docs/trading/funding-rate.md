@@ -5,32 +5,30 @@ title: Funding Rate
 
 # Funding Rate
 
-The funding rate is a peer-to-peer fee where one side pays the other based on the current market imbalance. It is comparable to the hourly funding rate in traditional perpetual exchanges. The funding rate ensures that the dominant side (more open interest) compensates the minority side, encouraging balanced markets.
+The funding rate is a transfer between longs and shorts based on the market's imbalance. It is comparable to the funding rate on traditional perpetual exchanges, and it exists to push the market toward balance: the crowded side pays, the underrepresented side earns. A positive rate means longs pay shorts, a negative rate means shorts pay longs.
 
-The protocol uses a single global base funding rate (`r_funding`) that applies to all markets. From there, rates are adjusted dynamically based on each market's long/short imbalance.
+## Velocity Funding
 
-## Long/Short Correction
+Zenex uses a velocity funding model. Rather than setting the rate directly from the current imbalance, the protocol adjusts the rate over time based on how one-sided the book is. The saved rate has momentum: while one side dominates, the rate keeps accelerating toward that side, and when the book is close to balanced the rate decays back toward zero.
 
-If the notional value of all long positions significantly exceeds that of the shorts (or vice versa), the interest rate adjusts to incentivize a more balanced market. For example; the more longs dominate, the more negative the hourly rate for shorts becomes, and the more positive the hourly rate for longs becomes. This way users are encouraged to open shorts instead of longs. When the market is extremely one-sided this opens up an arbitrage opportunity for users: they could secure a net profit by entering the subsidized (negative-carry) leg and hedging the opposite risk at a lower cost. Overall this dynamic helps align long and short exposure, reducing risk for the vault.
-
-The funding rate is recalculated hourly via the permissionless `apply_funding()` function, but accrues continuously between updates. The rate paid by the dominant side is fixed for the hour, while the receiving side's effective rate adjusts continuously as the OI ratio changes.
-
-The base funding rate is calculated as:
+The imbalance that drives this is measured in tokens:
 
 $$
-fundingRate = r\_funding \times \frac{|notionalLongs - notionalShorts|}{notionalLongs + notionalShorts}
+skew = \frac{|long - short|}{long + short}
 $$
 
-The rate is naturally bounded in `[-r_funding, +r_funding]`. A fully one-sided market produces a rate equal to `r_funding`, while a perfectly balanced market produces zero.
+- When the skew is large (or the rate is fresh or has just flipped sign), the rate accelerates toward the dominant side. The wider the skew, the faster it accelerates.
+- When the skew is small, the rate decays flatly back toward zero.
+- Between those bands the rate holds steady.
 
-For the paying (dominant) side, the delta per unit is applied directly. For the receiving (minority) side, the delta is scaled by the OI ratio so that total paid equals total received. This makes funding purely peer-to-peer — 100% flows between longs and shorts with no rate-level protocol cut. Per-position rounding dust is absorbed by the vault.
+Both the acceleration and decay speeds, and the skew thresholds that separate the bands, are set per market by governance. The saved rate is hard-capped in both directions, and an empty market resets it to zero.
 
-**Example:** If longs have a notional of 80 and shorts have a notional of 20:
+Because the rate carries momentum, a persistently one-sided market builds a strong funding rate that makes the crowded side increasingly expensive to hold and the other side increasingly attractive. This is what nudges traders back toward balance and reduces the vault's directional risk.
 
-$$
-fundingRate = r\_funding \times \frac{|80 - 20|}{80 + 20} = r\_funding \times 0.6
-$$
+## Funding Is Claimed, Not Auto-Credited
 
-Longs pay this rate per unit per hour. Shorts receive `fundingRate × (80 / 20) = fundingRate × 4` per unit per hour. The total paid by longs equals the total received by shorts.
+Funding does not flow directly onto your position's PnL. It runs through an internal funding pool.
 
-If shorts increase to 40, the receiving rate adjusts to `fundingRate × (80 / 40) = fundingRate × 2` per unit. The paying rate remains fixed until the next hourly update.
+When a position settles at a fill, the funding it owes is banked into the pool, and the funding it has earned is added to that user's claimable balance. Earning funding therefore does not top up your collateral automatically. To collect it you call `claim_funding`, which pays out your claimable balance from the pool. If the pool cannot cover the full amount at that moment, it pays what it can and the remainder stays claimable for later.
+
+This separation keeps funding fully accounted for: the paying side's contributions accumulate in the pool, and the receiving side draws from it on demand. When there is no opposing side to receive it, paid funding simply accrues as surplus in the pool rather than being redistributed.

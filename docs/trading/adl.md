@@ -5,39 +5,36 @@ title: Auto-Deleveraging (ADL)
 
 # Auto-Deleveraging (ADL)
 
-Auto-Deleveraging is a safety mechanism that protects the vault when winning positions threaten to exceed the vault's ability to pay. Rather than allowing the protocol to become insolvent, ADL proportionally reduces the notional size of profitable positions across the affected side of the market.
+Auto-deleveraging is a safety mechanism that protects the vault when the winning side of a market builds up more unrealized profit than the vault can comfortably back. Rather than letting the protocol drift toward insolvency, ADL closes some of the winning positions at the oracle price, taking their profit off the table before it becomes a problem the vault cannot pay.
 
-### When does ADL trigger?
+ADL is decided per side. Each side (long and short) is evaluated on its own pending PnL, and only a side that is actually winning can ever be flagged.
 
-ADL activates when the net unrealized PnL of all winning positions exceeds the vault's balance. Specifically:
+## When ADL Triggers
 
-1. **Circuit breaker (OnIce)**: When net PnL reaches 95% of the vault balance, the contract enters `OnIce` status. No new positions can be opened, but existing positions can still be managed and closed.
-2. **ADL execution**: When net PnL exceeds 100% of the vault balance, ADL is triggered via the permissionless `update_status` function.
-3. **Recovery**: When net PnL drops below 90% of the vault balance, the contract returns to `Active` status.
+The protocol tracks each side's pending PnL against a share of the vault, and a keeper can refresh this evaluation at any time by submitting a verified price. A side's ADL flag is managed with hysteresis, using two thresholds that are set per market by governance:
 
-The 5% gap between the OnIce threshold (95%) and the recovery threshold (90%) prevents rapid oscillation between states.
+- The flag **sets** when the side's pending PnL rises above the upper threshold (a share of half the vault balance).
+- Once set, it **holds** while pending PnL stays above a lower clear target.
+- It **clears** when pending PnL falls back to or below that clear target.
 
-### How does ADL affect your position?
+The gap between the two thresholds prevents the flag from rapidly toggling on and off as PnL hovers near the line. A side that is not winning is never flagged.
 
-When ADL occurs, all positions on the winning side of the market have their effective notional size reduced proportionally. This means:
+## What a Flagged Side Means
 
-- Your position's profit potential is reduced
-- Your risk exposure is also reduced
-- Your collateral remains unchanged
-- The reduction applies equally to all positions on the affected side
+While a side is flagged, two things happen:
 
-The reduction is tracked through an ADL index. Your position's effective notional is computed as:
+1. **New opens on that side are halted.** Orders that would grow a position on the flagged side are rejected until the flag clears. Closing, reducing, and trading the other side all continue normally.
+2. **Winning positions on that side become eligible for deleveraging.** A keeper can close part or all of a winning position through the regular decrease path, bringing the side's pending PnL back down toward the clear target.
 
-$$
-effectiveNotional = notional \times \frac{currentADLIndex}{entryADLIndex}
-$$
+## How Deleveraging Works
 
-For example, if the ADL index drops from 1.0 to 0.8, all affected positions have their effective notional reduced by 20%.
+A keeper runs ADL permissionlessly by naming a position on the flagged side and an amount to close, along with a verified oracle price. The close settles at that oracle price through the ordinary decrease path, with no collateral withdrawn: it simply realizes a slice of the position's profit and shrinks its size.
 
-### What should you know?
+The mechanism has guardrails. A close must actually reduce the side's pending PnL, and it may not overshoot below the clear target that the deleveraging is aiming for. A partial deleverage respects the decrease lock on freshly added size and always leaves at least a minimum-size remainder rather than dust. Deleveraging stops once the side has been brought back to its clear target.
 
-There are a few key things to keep in mind about ADL and how it works in practice:
-- **ADL is rare**: It only triggers when the vault is near insolvency. Under normal market conditions, liquidations handle risk management.
-- **No action required**: ADL is applied automatically. You do not need to do anything when it occurs.
-- **Proportional and fair**: All positions on the winning side are reduced equally, based on their notional size.
-- **Multiple events compound**: If ADL occurs more than once, the reductions multiply. An 80% index followed by another 80% results in a 64% effective notional.
+## What You Should Know
+
+- **ADL is a backstop, not a routine event.** It only engages when a winning side has grown large relative to the vault. Under normal conditions, ordinary liquidations handle risk.
+- **It only touches winning positions.** If your side is not in profit, ADL never applies to you.
+- **No action is required from you.** Deleveraging is performed by keepers. If your winning position is reduced, you keep the realized profit on the closed portion; only your remaining exposure shrinks.
+- **It caps profit extraction during an overhang.** ADL works alongside the realized-profit haircut described in [PnL](./pnl.md): the haircut scales down gains while a side is overweight, and ADL bounds how large that overhang can grow.

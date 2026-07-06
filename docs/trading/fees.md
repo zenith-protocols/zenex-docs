@@ -5,39 +5,47 @@ title: Fees
 
 # Fees
 
-Zenex charges two one-time fees when opening and closing a position: the base fee and the price impact fee. Together, these fees compensate liquidity providers, discourage excessive imbalance, and keep markets healthy. Only the **base fee** is direction-aware: positions on the dominant side of the market pay a higher base fee, while positions on the non-dominant side pay a lower one. The **price impact fee** is charged on every open and every close regardless of direction.
+Every fill on Zenex settles four itemized costs out of your collateral: the trade fee, the impact fee, borrowing interest, and funding. Two of them (borrowing and funding) accrue continuously over the life of a position and are covered on their own pages. The trade fee and impact fee are charged at each fill. Together these costs compensate the vault, reward the keepers that run the protocol, fund the treasury, and keep long and short exposure balanced.
 
-In addition to these one-time fees, positions are subject to continuous costs that accrue over time: [borrowing interest](./borrowing-interest.md) and the [funding rate](./funding-rate.md). These are covered on their own pages. A portion of trading and borrowing fees is also routed to the protocol treasury, and a share of trading fees on each action is paid to the keeper that executes it — see [Treasury Cut & Keeper Share](#3-treasury-cut--keeper-share) below.
+Because every cost is subtracted from your posted collateral at the moment of the fill, a later change to fee rates can never break an order you already signed. Order creation checks that your collateral covers the fees before the order can rest.
 
-All parameters described below are initial values and may be updated through governance over time.
+All rates described below are set per market by governance and may change over time. Current values for each supported market can be found [here](../markets/supported-assets.md).
 
-### **1. Base Fee**
+## 1. Trade Fee (skew-split)
 
-The base fee is charged when a position is opened and again when it is closed.
+The trade fee is charged on every fill and is split by how your trade affects the market's balance. The market compares the total long size and total short size (measured in tokens). The leg of your trade that pushes those two further apart is the worsening leg, and the leg that brings them closer is the improving leg.
 
-Initially, the base fee is set to:
+- The worsening leg pays the dominant-side rate (`fee_dom`).
+- The improving leg pays the lower non-dominant rate (`fee_non_dom`).
 
-- `fee_non_dom`: 0.04% for positions on the non-dominant side of the market
+A trade that lands entirely on the crowded side pays the higher rate on its whole notional, while a trade that helps balance the book pays the lower rate. This makes it slightly cheaper to take the underrepresented side and encourages balance between long and short open interest. Which side is dominant is decided by the token imbalance, not by notional.
 
-- `fee_dom`: 0.06% for positions on the dominant side of the market
+## 2. Impact Fee
 
-This fee structure helps encourage balance between long and short open interest by making it slightly more expensive to trade on the crowded side of the market.
+The impact fee reflects the cost that a large trade would impose on pricing in a traditional order book. It is charged only on the worsening leg, the part of a trade that pushes the book further out of balance. Trades that balance the book do not pay it.
 
-### **2. Price Impact Fee**
-
-The price impact fee is designed to reflect the cost that large trades would impose on market pricing in a traditional order book environment.
-
-It is charged on **every open and every close**, scaling linearly with notional via `notional / impact`. Unlike the base fee, this fee does not depend on whether your side is dominant or non-dominant — it is applied unconditionally. The fee scales with position size, which discourages oversized positions. This is especially important for protecting vault depositors from the additional risk created by imbalanced markets.
-
-The price impact fee is calculated as:
+The fee scales with the worsening notional:
 
 $$
-PriceImpactFee = \frac{NotionalSize}{impact}
+impactFee = \frac{worseningNotional}{impactDivisor}
 $$
 
-Because liquidity conditions differ per pair, the `impact` divisor is set separately for each market in the `MarketConfig`. Current values for each supported pair can be found [here](../markets/supported-assets.md).
+The impact divisor is set per market by governance, since liquidity conditions differ from one market to the next. Larger imbalancing trades pay proportionally more, which discourages oversized one-sided positions and protects vault depositors from the risk they create.
 
-### **3. Treasury Cut & Keeper Share**
+## 3. Borrowing and Funding
 
-Out of the trading fees collected on each action, the protocol takes a **treasury cut** (`treasury_rate`, currently 20% of protocol revenue) and pays a **keeper share** (`caller_rate`, currently 10%) to the keeper that executed the action. The remainder is retained by the vault as yield for liquidity providers. On liquidations, the keeper additionally receives a share of any residual equity above the liquidation threshold. See [Borrowing Interest](./borrowing-interest.md) and [Funding Rate](./funding-rate.md) for the continuous-cost components.
+In addition to the per-fill fees above, an open position carries two continuous costs.
 
+Borrowing interest is charged on open interest and is paid by both sides, since long and short exposure alike reserve vault capacity. Its rate follows a kink model tied to vault utilization. See [Borrowing Interest](./borrowing-interest.md).
+
+Funding is a transfer between longs and shorts driven by the market's imbalance. It is a net cost to the crowded side and a credit to the other side, and unlike the other costs it is not deducted automatically as profit: earned funding accrues to a claimable balance you withdraw separately. See [Funding Rate](./funding-rate.md).
+
+## 4. Keeper Reward and Treasury Cut
+
+The fees you pay are shared among the parties that keep the market running.
+
+The keeper that submits the price and executes your fill receives a cut of the trade fee (base plus impact), set by the `keeper_rate` parameter. This is what pays permissionless keepers to fill orders, run liquidations, and perform auto-deleveraging.
+
+The treasury takes its own cut of the trade fee and of the borrowing fee (and of any forfeited remainder on a hard liquidation). The treasury rate is read from the treasury contract and bounded by the protocol.
+
+Whatever remains after the keeper and treasury cuts is retained by the vault as yield for liquidity providers, and the vault is also what funds realized profit and absorbs any bad debt.

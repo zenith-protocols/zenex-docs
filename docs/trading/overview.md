@@ -9,42 +9,68 @@ Trading on Zenex means opening leveraged positions on asset prices. You never bu
 
 ## Position Basics
 
-Every position on Zenex has a direction, a size, and collateral backing it. When you go long, you profit if the asset price rises. When you go short, you profit if the price falls. The collateral you deposit is your margin, and the notional value is the total size of your exposure. Leverage is the ratio between your notional and your collateral. For example, depositing 500 in collateral for a 5,000 notional position gives you 10x leverage.
+Every position on Zenex has a direction, a size, and collateral backing it. When you go long, you profit if the asset price rises. When you go short, you profit if the price falls. The collateral you post is your margin, and the notional value is the total size of your exposure. Leverage is the ratio between your notional and your collateral. For example, posting 500 in collateral for a 5,000 notional position gives you 10x leverage.
 
-Higher leverage means greater sensitivity to price movements. A 1% price move translates to a 10% change in equity at 10x leverage, a 20% change at 20x, and so on. The maximum leverage available depends on the market's margin parameter. A market with a 1% margin requirement allows up to 100x leverage, while a 5% margin requirement caps leverage at 20x.
+Higher leverage means greater sensitivity to price movements. A 1% price move translates to a 10% change in equity at 10x leverage, a 20% change at 20x, and so on. The maximum leverage available depends on the market's initial margin parameter, which is set per market by governance. A market with a 1% initial margin allows up to 100x leverage, while a 5% initial margin caps leverage at 20x.
+
+## One Market Per Contract
+
+Each Zenex market is its own isolated trading contract paired with its own strategy vault. There is no shared market registry and no market identifier to pass around: the contract you interact with already is the market. A logic change ships as a fresh contract and vault pair, since the trading contract itself is immutable and has no upgrade path.
+
+Within a single market your exposure is netted per side. You hold at most one long position and at most one short position, and every fill folds into the matching side rather than creating a new position each time. There are no per-position identifiers or counters to track. A side is open while it carries size and closed once its size returns to zero.
+
+## Orders and Keeper Fills
+
+Zenex splits trading into two steps: you create an order, and a keeper fills it.
+
+When you create an order you sign it with your own key, but you never name a price. Orders are price-free. You describe what you want (a direction, a size, some collateral, an optional trigger, a slippage bound, and an expiration) and the order rests on-chain until it can be filled. A permissionless keeper then fills the order against a verified oracle price. Keepers are open bots that anyone can run: the keeper is only the party that submits the price and collects the keeper reward, it is never able to change the terms you signed.
+
+Because you consented up front through a collateral allowance, the keeper cannot pull more than your order permits. Collateral moves at the moment of the fill, not when you create the order. For an order that grows your position, the collateral is drawn from your token allowance when the keeper fills it. For an order that shrinks your position, fees and proceeds are settled out of the position at the fill.
 
 ## Order Types
 
-Zenex supports two order types: market orders and limit orders.
+All orders are one of two kinds under the hood: an increase (grow the position and add collateral) or a decrease (shrink size or withdraw collateral). The familiar trading actions map onto these as follows.
 
-Market orders execute immediately at the current oracle price when you submit the transaction. You specify your collateral, leverage, and direction, and the position opens in the same transaction. This is the simplest way to enter a position and is suitable when you want to trade at the current price without waiting.
+A market order is an increase with no trigger. It fills at the next verified price the keeper submits, as long as that price sits within the slippage bound you set. This is the simplest way to enter, and it can even be created and filled in the same ledger as a single atomic step.
 
-Limit orders let you specify a target price at which you want your position to open. Your collateral is committed when you place the order, but the position is not filled until the oracle price reaches your target. For long positions, the limit triggers when the price drops to your specified level. For short positions, it triggers when the price rises to your level. Limit orders are filled by keepers, permissionless bots that monitor prices and execute orders when conditions are met. If the oracle price never reaches your target, the order remains pending until you cancel it.
+A limit order is an increase that carries a trigger price. It stays resting until the market reaches your trigger, at which point a keeper may fill it. For a long the trigger fires as the price falls to your level, for a short as it rises to your level. The trigger and the slippage bound are both judged against the price your fill actually touches.
+
+Take-profit and stop-loss are ordinary decrease orders that carry a trigger. They are not a separate object attached to a position, they are just resting close orders. A take-profit fires on the profitable side of your entry, a stop-loss on the losing side. You can size them to close the whole position or only part of it, and a keeper fills them when the trigger is crossed.
+
+## Slippage and Expiration
+
+Two safeguards travel with every order.
+
+The price bound is a one-sided slippage limit. A buy leg caps the price it will accept and rejects a fill above it, a sell leg floors the price and rejects a fill below it. If the verified price is worse than your bound, the fill is rejected rather than executed at a bad price. Leaving the bound unset means the fill is unbounded.
+
+The expiration is a ledger sequence, not a wall-clock time. Your order is fillable while the current ledger is at or below the expiration you set. An expiration already in the past is rejected at creation, and an expiration beyond the network's storage horizon is rejected as well, since the order could not outlive its own on-chain lifetime.
 
 ## Position Lifecycle
 
-A position on Zenex follows a clear lifecycle from creation to settlement.
+A position follows a clear lifecycle from the first fill to the close.
 
-The position opens when your market order executes or when a keeper fills your limit order. At this point, the protocol records your entry price, collateral, notional value, and the current state of all fee indices. A minimum open time of 30 seconds applies to all positions. During this window, you cannot close the position yourself, and stop-loss or take-profit orders will not trigger. This ensures every position carries real market risk and prevents risk-free extraction between oracle price updates.
+The side opens when a keeper fills your first increase. At that point the protocol records your implied entry price (notional divided by the base tokens bought), your posted collateral, and a snapshot of the funding and borrowing indices so that continuous costs can be measured from that moment. Every later increase on the same side blends into the same position and re-blends the implied entry.
 
-While the position is open, you can manage it in several ways. You can add collateral to reduce your effective leverage and push your liquidation price further away. You can remove collateral to increase leverage, provided you stay within the market's margin limits. You can also set or update stop-loss and take-profit price levels. A stop-loss automatically closes your position if the price moves against you to a specified level, limiting your downside. A take-profit closes your position when the price reaches a target on the profitable side, locking in gains.
+While the side is open you manage it by creating more orders. An increase with fresh collateral lowers your effective leverage and pushes your liquidation price away. A collateral-only decrease raises leverage, as long as you stay inside the margin limits. A resting take-profit or stop-loss lets a keeper close for you when a trigger is crossed.
 
-The position closes when one of several events occurs. You can close it manually at any time after the minimum open time has elapsed. A keeper can close it by executing your stop-loss or take-profit trigger. Or, if your equity drops below the liquidation threshold, a keeper will liquidate the position to protect the protocol from bad debt. In a liquidation, all remaining collateral is forfeited.
+The side closes when a decrease reduces it to zero, either through a full-close order you create or through a triggered take-profit or stop-loss a keeper fills. It can also be closed for you by a liquidation if your equity falls below the maintenance margin, or by auto-deleveraging if your winning side grows too large for the vault to safely back. A partial decrease realizes profit or loss on the portion closed and leaves the rest of the position intact.
+
+## The Decrease Lock
+
+Freshly added notional is locked against decreases for a short window set per market by governance. When you increase a position, the newly added size cannot be closed or withdrawn until its lock elapses, and a further increase folds into the live lock and resets its deadline. A partial decrease can only touch the unlocked fraction, and a full close is blocked while any locked notional remains.
+
+This lock, together with the oracle anti-replay rule (a triggered order can only fill against a price published at or after the order was created), ensures every position carries real market risk. It prevents a trader from opening and immediately closing across a single oracle update to extract a risk-free difference. Liquidations are exempt: if your equity falls below the maintenance margin, keepers can close the position regardless of the lock.
 
 ## Fee Overview
 
-Zenex charges four types of fees, each serving a distinct purpose in keeping the protocol healthy and fair.
+Zenex charges four itemized costs, and all of them settle out of your collateral at the fill.
 
-The base fee is charged when you open a position and again when you close it. Positions on the dominant side of the market (the side with more open interest) pay a higher base fee than positions on the non-dominant side. This encourages balanced markets.
+The trade fee is charged on every fill. It is split by how your trade affects the market's balance: the leg that pushes the long and short sizes further apart pays the dominant-side rate, while the leg that brings them closer pays the lower non-dominant rate. This encourages balanced markets.
 
-The price impact fee scales with your position size relative to the market's impact parameter. Larger positions pay proportionally more, reflecting the cost that large orders would impose on a traditional order book.
+The impact fee is charged only on the worsening leg, the part of a trade that pushes the book further out of balance. Balancing trades do not pay it. It scales with the worsening notional and reflects the cost a large order would impose on a traditional order book.
 
-The borrowing interest accrues continuously over the lifetime of your position and is charged only to the dominant side. It compensates the vault for the risk of backing your position. The rate increases as vault utilization and market utilization rise, using steep exponential curves that stay low when utilization is modest but climb sharply as capacity is consumed.
+Borrowing interest accrues continuously and is paid by both sides, since open interest on either side reserves vault capacity. The rate follows a kink model that stays low while vault utilization is modest and climbs steeply as capacity fills.
 
-The funding rate is a continuous cost or credit between longs and shorts. The rate is recalculated hourly based on the current open interest imbalance, but it accrues every second against open positions. It flows entirely peer-to-peer between the dominant and non-dominant sides, with no rate-level protocol cut (per-position rounding dust is absorbed by the vault). This mechanism incentivizes traders to balance the market. Funding is settled when a position is closed.
+Funding is a continuous transfer between longs and shorts driven by the market's imbalance. Its sign follows the crowded side (a positive rate means longs pay shorts). Earned funding is not credited to your position automatically. It accrues to a claimable balance that you withdraw with a separate claim.
 
-For a detailed breakdown of how each fee is calculated, see the [Fees](./fees.md), [Borrowing Interest](./borrowing-interest.md), and [Funding Rate](./funding-rate.md) pages.
-
-## Minimum Open Time
-
-All positions must remain open for at least 30 seconds before they can be closed by the user or by a stop-loss or take-profit trigger. This ensures every position carries real market risk. Without this restriction, a trader could open and close a position within the same block to capture the difference between oracle price updates without any actual exposure to price movements. Liquidations are exempt from this restriction. If your equity falls below the liquidation threshold, keepers can liquidate your position regardless of how long it has been open.
+For a detailed breakdown of how each cost works, see the [Fees](./fees.md), [Borrowing Interest](./borrowing-interest.md), and [Funding Rate](./funding-rate.md) pages.
