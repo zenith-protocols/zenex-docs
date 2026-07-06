@@ -5,27 +5,28 @@ title: Strategy Withdraw
 
 # Strategy Withdraw
 
-The vault exposes a privileged withdrawal function exclusively for the trading contract:
+The vault exposes a single privileged withdrawal path for its trading contract:
 
 ```rust
 fn strategy_withdraw(e: Env, strategy: Address, amount: i128);
 ```
 
-This is the only mechanism by which the trading contract can pull funds from the vault when paying profitable traders. Unlike standard ERC-4626 withdrawals, `strategy_withdraw` bypasses share accounting entirely. It transfers the raw collateral token amount directly to the caller without burning any vault shares.
+This is the only way the trading contract pulls tokens from the vault to pay winning traders. Unlike an ERC-4626 `withdraw`, `strategy_withdraw` bypasses share accounting entirely: it transfers the raw collateral amount to the caller without burning any shares. Because it lowers `total_assets` without changing the share supply, it lowers the share price, which is how trader profits are borne by LPs.
 
 ## Two-Layer Authorization
 
-Every call to `strategy_withdraw` must pass two independent authorization checks.
+Every call passes two independent checks:
 
-**Soroban auth** is the first layer. The function calls `strategy.require_auth()`, which requires the calling contract to provide a valid Soroban authorization entry. This proves the caller is who they claim to be.
+- **Soroban auth.** The function calls `strategy.require_auth()`, so the caller must supply a valid authorization entry proving it is who it claims to be.
+- **Registered-strategy check.** It compares the provided `strategy` against the address registered at construction. A contract that authenticates but is not the registered strategy is rejected with `UnauthorizedStrategy` (792).
 
-**Contract check** is the second layer. The function reads the registered strategy address from storage and compares it against the provided `strategy` argument: `storage::get_strategy(env) == strategy`. Even if a contract authenticates successfully, the call is rejected unless that contract is the specific trading contract registered at deployment time.
+Both must pass. An authenticated non-strategy is rejected, and a claim to be the strategy without authentication is rejected.
 
-Both checks must pass. A contract that is authenticated but not the registered strategy is rejected. A call that claims to be the registered strategy but lacks authentication is also rejected.
+## The Trading Contract Is the Immutable Strategy
 
-## Immutable Strategy Address
+The strategy address is set at construction and cannot be changed. There is no setter, no admin override, no migration path. The same immutability applies to the vault's ERC-4626 mutations: `deposit`, `mint`, `withdraw`, and `redeem` all require the registered strategy to authorize the call (via the `operator` argument threaded from the trading contract), so the trading contract is the vault's single writer for both share accounting and privileged withdrawals.
 
-The strategy address is set at construction time and cannot be changed. There is no setter function, no admin override, and no migration path. If the trading contract needs to be replaced, a new vault must be deployed alongside it. This immutability eliminates an entire class of privilege-escalation attacks where an admin or governance process redirects vault withdrawals to a malicious contract.
+If the trading contract must be replaced, a new vault is deployed alongside it as a fresh pair through the factory. This eliminates the class of attacks where an admin or governance process redirects vault withdrawals to a different contract.
 
 ## Error Codes
 

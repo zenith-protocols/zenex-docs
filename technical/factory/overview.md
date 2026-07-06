@@ -5,7 +5,7 @@ title: Factory Overview
 
 # Factory Contract
 
-The factory deploys trading and vault pairs atomically with deterministic addresses. It stores WASM hashes and the global treasury address at construction time. Once deployed, these values cannot be changed.
+The factory deploys a trading contract and its strategy vault as an atomic pair, with deterministic addresses. It stores the two WASM hashes and the protocol treasury address at construction. Once deployed, these values cannot be changed.
 
 ## Constructor
 
@@ -13,7 +13,7 @@ The factory deploys trading and vault pairs atomically with deterministic addres
 __constructor(init_meta: FactoryInitMeta)
 ```
 
-`FactoryInitMeta` contains three fields:
+`FactoryInitMeta` has three fields:
 
 | Field | Type | Description |
 |---|---|---|
@@ -21,7 +21,7 @@ __constructor(init_meta: FactoryInitMeta)
 | `vault_hash` | `BytesN<32>` | WASM hash for vault contracts |
 | `treasury` | `Address` | Protocol-wide treasury address |
 
-These values are **immutable**. There are no setter functions. If a security fix is needed for the trading or vault WASM, a new factory must be deployed entirely.
+These values are **immutable**. There are no setters. Applying a security fix or a logic change to the trading or vault WASM means deploying a new factory with updated hashes; pairs from the old factory keep running the original code.
 
 ## Deployment Flow
 
@@ -31,36 +31,37 @@ deploy(
     salt,
     token,
     price_verifier,
+    feed_id,
+    exponent,
     config,
     vault_name,
     vault_symbol,
     vault_decimals_offset,
-    vault_lock_time,
-    vault_min_deposit,
 ) -> Address
 ```
 
-The `deploy` function begins by requiring authentication from the `admin` parameter. Any address can serve as the admin of a new pool, but it must explicitly authorize the call.
+`deploy` first requires `admin` to authorize the call. Any address can be the admin of a new pair, but it must explicitly authorize both deployments and becomes the owner of the new trading contract.
 
-The vault salt is derived by XORing the last byte of the user-provided salt (`salt[31] ^= 1`), producing a distinct but deterministic salt for the vault contract.
+Because one contract is one market, the market is fully described by the deploy arguments: `token` is the settlement collateral, `(feed_id, exponent)` are the immutable oracle anchors, and `config` is the complete trading configuration. There is no post-deployment market-registration step.
 
-Both addresses are precomputed using Soroban's native `deployer().with_current_contract(salt).deployed_address()`. This allows each contract to receive the other's address during its own construction. The vault is deployed first, receiving the precomputed trading address as its `strategy` parameter. The trading contract is deployed second, receiving the precomputed vault address. This ordering satisfies the circular dependency between the two contracts without requiring a post-deployment linking step.
+The vault salt is derived from the trading salt by flipping the last byte (`salt[31] ^= 1`), producing a distinct but deterministic vault salt. Both addresses are precomputed from the **admin** (not the factory) via `deployer().with_address(admin, salt).deployed_address()`, so each contract can receive the other's address during its own construction, and a salt alone cannot be front-run: the host requires `admin` to authorize each deployment.
 
-After both contracts are live, the factory records the trading address in persistent storage and emits a `Deploy { trading, vault }` event.
+The ordering resolves the circular dependency between the two contracts without a post-deployment linking step:
+
+1. The **vault** is deployed first, receiving the precomputed trading address as its immutable `strategy`. Its constructor does not call trading.
+2. The **trading** contract is deployed second, receiving the live vault address plus the treasury from `FactoryInitMeta`, and the `(feed_id, exponent, config)` market parameters.
+
+The vault is thus registered as the trading contract's collateral vault, and the trading contract as the vault's immutable strategy. After both are live, the factory records the trading address in persistent storage and emits `Deploy { trading, vault }`.
 
 ## Registry
 
-The factory tracks deployed pools through a simple boolean mapping. `is_deployed(trading) -> bool` performs a permissionless existence check. Only trading addresses are registered, not vault addresses.
-
-There is no enumeration function. Callers cannot list all deployed pools through the contract itself.
+`is_deployed(trading) -> bool` is a permissionless existence check. Only trading addresses are registered, not vault addresses. There is no enumeration function; callers cannot list all pairs through the contract itself.
 
 ## Access Control
 
-The factory has **no owner**. The constructor is called once at deployment, and no administrative functions exist beyond that point.
+The factory has **no owner**. The constructor runs once, and no administrative functions exist after that.
 
-- `deploy` requires the `admin` parameter to authenticate. Any address can be the admin of a new pool.
-- `is_deployed` is fully permissionless. No authorization is required to query the registry.
+- `deploy` requires the `admin` parameter to authenticate. Any address can be the admin of a new pair.
+- `is_deployed` is fully permissionless.
 
-## WASM Hash Immutability
-
-Because the WASM hashes stored at construction time have no setters, every pool deployed by a given factory instance runs the same trading and vault code. Applying security fixes or upgrading contract logic requires deploying an entirely new factory with updated hashes. Pools deployed by the old factory continue to run the original code.
+Because the WASM hashes have no setters, every pair a given factory deploys runs the same trading and vault code.

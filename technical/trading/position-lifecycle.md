@@ -5,117 +5,78 @@ title: Position Lifecycle
 
 # Position Lifecycle
 
-## Opening: Market Order
+A position in Zenex is **netted**: each `(user, is_long)` pair has at most one position, stored under that key. There are no position ids and no per-user counters. An Increase order grows the position on its side, a Decrease shrinks it, and a fully closed position is a zeroed row. All state changes happen when a keeper fills an order at a verified price, never at order creation.
 
-`open_market(user, market_id, collateral, notional_size, is_long, take_profit, stop_loss, price_bound, expiration_ledger, price)`
+## The Position Row
 
-`expiration_ledger` is checked against the current ledger sequence first and the call reverts with `Expired` (760) if it has elapsed. The user must then authorize the call, the submitted price is verified, and the contract status must be `Active`. The fill price is checked against `price_bound` (see [Pricing: User-Signed Bounds](./pricing.md#user-signed-bounds)) before any state changes. Pending funding and borrowing are then accrued to bring market indices up to current timestamp.
+`Position` carries:
 
-A new position ID is allocated from the user's `UserCounter(Address)`, and the position is stored under `Position(user, id)` with `filled = true`. Collateral and leverage are validated against the configured bounds. The position's `fund_idx`, `borr_idx`, and `adl_idx` are snapshotted from the current market state, and the fee is computed based on whether the position is on the dominant or non-dominant side of the market at the time of opening.
-
-Market stats (`l_notional` or `s_notional` and the corresponding `entry_wt` sum) are incremented, and global `total_notional` is updated. The user pays `collateral` via token transfer. Open fees (base + impact) are deducted from collateral. The treasury fee is sent to the treasury and the vault fee flows to the vault.
-
-Emits `OpenMarket { market_id, user, position_id }` with data `long, col, notional, entry_price, sl, tp, fund_idx, borr_idx, adl_idx, created_at, base_fee, impact_fee`.
-
-## Opening: Limit Order
-
-`place_limit(user, market_id, collateral, notional_size, is_long, entry_price, take_profit, stop_loss)`
-
-Limit orders follow a similar authorization and validation path but skip the price check, since the user specifies their desired entry price. The position is created with `filled = false` and `entry_price` set to the user's limit price.
-
-No fees are deducted at placement. The user's full collateral is transferred to the contract and stored on the position. Fees (base + impact) are computed and deducted from collateral at fill time, based on whether the position is on the dominant or non-dominant side of the market at that moment.
-
-The position is not reflected in market stats until it is filled. Emits `PlaceLimit { market_id, user, position_id }` with data `long, col, notional, entry_price, sl, tp, created_at`. Indices are not snapshotted yet. They are filled in by the later `FillLimit` event.
-
-## Filling a Limit Order (Keeper)
-
-Limit orders are filled by keepers as part of an `execute` batch. A position fills when the current price has reached the user's limit:
-
-| Direction | Fill condition |
+| Field | Meaning |
 |---|---|
-| Long | `current_price <= entry_price` |
-| Short | `current_price >= entry_price` |
+| `collateral` | Posted margin (token-dec) |
+| `notional` | Size in quote terms (token-dec) |
+| `tokens` | Size in base terms (base-dec); implied entry price = `notional / tokens` |
+| `funding_idx`, `borrowing_idx` | Accrual index snapshots at the last change |
+| `locked_notional`, `unlocks_at` | Notional locked against decreases, and its deadline |
+| `updated_at` | Timestamp of the last fill (anti-replay anchor) |
 
-Because the trigger fires only after the oracle has crossed the user's threshold in their favor, fills are always at least as favorable as `entry_price`. Long fills land at or below the limit, short fills at or above. This is why `place_limit` carries no slippage parameter. The trigger condition is itself the user's floor or ceiling.
+Zero `notional` means no open position. The zeroed row is the canonical closed state, returned by `get_position` when nothing is open on that side. PnL is **not stored**: it is implied from `tokens`, `notional`, and the current price (see [PnL Calculation](./pnl-calculation.md)).
 
-On fill, `position.entry_price` is overwritten with the actual current price, `filled` is set to `true`, `created_at` is updated to fill time, and `fund_idx`, `borr_idx`, and `adl_idx` are snapshotted from the current market state. Market stats are updated to reflect the newly active position.
+## Orders
 
-Open fees (base + impact) are computed based on whether the position is on the dominant or non-dominant side of the market at fill time and deducted from collateral. The fee is split between the treasury (protocol fee), the keeper (caller fee), and the vault (remainder).
+A trader creates an order with `create_order(user, is_long, kind, notional, collateral, trigger_price, trigger_above, price_bound, expiration)`. The order is price-free and authorized by the trader's own signature.
 
-Emits `FillLimit { market_id, user, position_id }` with data `entry_price, fund_idx, borr_idx, adl_idx, created_at, base_fee, impact_fee`. Fields established at placement time (`long`, `col`, `notional`, `sl`, `tp`) are not repeated.
+- `kind` is `Increase` or `Decrease`. `notional` and `collateral` are non-negative magnitudes; `kind` sets their direction.
+- `trigger_price` is the eligibility trigger (`0` means market, fillable immediately). `trigger_above` selects the cross direction.
+- `price_bound` is a one-sided slippage limit (`0` means unbounded).
+- `expiration` is a **ledger sequence**. The order is fillable while `ledger_seq <= expiration`.
 
-## Closing a Position (User)
+Three order shapes are valid, all checked at creation: size plus collateral, size only, or collateral only. A no-op with both zero is rejected with `InvalidOrder` (732). Any moved value below its dust floor (`min_order_notional`, `min_order_collateral`) is rejected. Negative inputs raise `NegativeValueNotAllowed` (710). An expiration already behind the current ledger raises `OrderExpired` (731); one beyond the network's storage horizon (`now + max_ttl`) raises `InvalidOrder` (732), since the entry could not outlive its own TTL.
 
-`close_position(user, id, price_bound, expiration_ledger, price) -> i128`
+Submitting an order creates the target position row (zeroed if none yet) and tops up its TTL on the trader's own transaction, so the keeper's later fill always finds a live row. A Decrease may be submitted before any position exists on that side; it simply becomes fillable once one does.
 
-`expiration_ledger` is checked against the current ledger sequence first and the call reverts with `Expired` (760) if it has elapsed. The caller passes the position owner address as `user`, and the contract requires authorization from that address (via `require_auth_for_args` excluding the price payload). The contract must not be `Frozen`. The price is verified and the position must be filled, and `MIN_OPEN_TIME` (30 seconds) must have elapsed since `created_at`, otherwise the call reverts with `PositionTooNew` (732). The fill price is checked against `price_bound` (see [Pricing: User-Signed Bounds](./pricing.md#user-signed-bounds)) before any state changes.
+`cancel_order(user, id)` removes a resting order. `OrderNotFound` (730) if there is nothing to cancel.
 
-Pending funding and borrowing are accrued. If the market's `adl_idx` has advanced since fill (because ADL ran while this position was open), the position's notional is scaled down by the ratio of current to snapshotted `adl_idx`, and the position's `adl_idx` is updated to match.
+## Increase Fill
 
-PnL and fees are computed (see [PnL Calculation](./pnl-calculation.md) and [Fee System](./fee-system.md)). Settlement uses the following values:
+A keeper fills an Increase through `execute_order`. Size is bought at the **entry** price (`ask` for a long, `bid` for a short). The implied entry blends across successive increases.
 
-```
-total_fee      = base_fee + impact_fee + funding + borrowing_fee
-protocol_fee   = base_fee + impact_fee + borrowing_fee
-equity         = col + pnl - total_fee
-user_payout    = max(equity, 0)
-treasury_fee   = protocol_fee * treasury_rate / SCALAR_7
-vault_transfer = col - user_payout - treasury_fee
-```
+Collateral is drawn from the trader's token allowance at fill. The margin added is the posted collateral minus the settled fees (trade, impact, borrowing, and funding if the position owed any). Newly added notional is locked against decreases for `notional_lock` seconds; a further increase folds into the live lock and resets its deadline.
 
-If `vault_transfer` is negative (the user profited), the vault pays via `strategy_withdraw`. If positive (the user lost), the collateral remainder flows to the vault.
+An Increase fill enforces several guards, any of which aborts the fill:
 
-The position is removed from storage and market stats are decremented. Emits `ClosePosition { market_id, user, position_id }` with data `notional, price, pnl, base_fee, impact_fee, funding, borrowing_fee`, where `notional` is the post-ADL notional actually settled (may be smaller than what was originally placed if the winning side was deleveraged).
+- Initial-margin floor: collateral must cover `init_margin * notional`, else `InsufficientMargin` (713).
+- Maintenance floor on equity.
+- Per-side open interest at or below `max_open_interest`, else `OpenInterestExceeded` (715).
+- Reserve utilization at or below `max_util_open * vault_balance`, else `UtilizationExceeded` (714).
+- Resulting notional within `[min_position_notional, max_position_notional]`.
+- The target side must not be ADL-flagged and the status must accept opens, else `IncreaseHalted` (705).
 
-## Cancelling a Position
+## Decrease Fill (Partial)
 
-`cancel_position(user, id) -> i128`
+A partial Decrease shrinks the position and/or withdraws collateral. Realized PnL is settled pro-rata at the **exit** price (`bid` for a long, `ask` for a short). The implied entry price is preserved on the remainder.
 
-The call works in any contract status, including `Frozen`: a freeze must not hold collateral on pending or stranded positions hostage. No settlement runs and no LP-affecting math is touched. For pending (unfilled) positions, the position owner must authorize the call. For filled positions on a deleted market, the call is permissionless so anyone can clean up stranded positions. Calling on a filled position whose market still exists reverts with `PositionNotPending` (721). The position's collateral is refunded to the user, and the position is removed from storage. The function returns the refund amount.
+A realized profit is subject to the [realized-profit haircut](./fee-system.md#realized-profit-haircut). Settled fees come out of the trader's proceeds first (the withdrawal, then the realized profit), then the surviving margin. A partial close never runs past the margin, so it produces no bad debt. It must leave a valid position (`min_position_notional`, initial and maintenance margin), and it can only touch the **unlocked** fraction of notional, else `NotionalLocked` (721).
 
-Emits `RefundPosition { market_id, user, position_id }` (no data fields). The refund amount is not on the event. Consumers can read it from the function return value or recover it from the prior position state.
+## Decrease Fill (Full Close)
 
-## Modifying Collateral
+A Decrease whose `notional` is at or above the position size clamps to a **full close** at fill. `i128::MAX` is the conventional full-close signal (the SDK exports it as `FULL_CLOSE`). `max_position_notional` caps an Increase only; a Decrease is never capped, since it cannot grow the position.
 
-`modify_collateral(user, id, new_collateral, price)`
+A full close unwinds size, collateral, and the lock together. The payout is the post-fee equity floored at zero. Any shortfall past the freed margin becomes `bad_debt`, absorbed by the vault. A full close is blocked while any locked notional remains (`NotionalLocked` 721).
 
-`new_collateral` is the absolute target collateral value, not a delta. The caller passes the position owner address as `user`, and the contract requires authorization from that address (via `require_auth_for_args` excluding the price payload). There is no `expiration_ledger` parameter: the user signs an absolute target collateral, so a backend delaying submission within the Soroban auth window cannot degrade the outcome. The position lands at the target value regardless of when the transaction is included, and the Soroban auth entry's own `signatureExpirationLedger` already bounds the submission window. There is no `price_bound` parameter either: the margin check is one-sided (only withdrawals can fail) and the user already specifies the target collateral explicitly.
+## Take-Profit and Stop-Loss
 
-If the new collateral is greater than the current collateral, the contract transfers the difference from the user. No further validation runs: adding collateral can only reduce leverage, so the existing margin and leverage limits are guaranteed to still hold.
+TP and SL are not a separate object on the position. They are ordinary **Decrease orders that carry a trigger**. A Decrease with `trigger_price` set becomes eligible only once the execution-side price crosses the trigger: `trigger_above = true` fires when the exit-side price is at or above the trigger, `false` when at or below. The SDK's `placeTakeProfit` and `placeStopLoss` helpers set `trigger_above` for you (a take-profit fires as profit grows, a stop-loss on the losing side).
 
-If the new collateral is less than the current collateral, the contract checks the margin requirement:
+## Collateral-Only Changes
 
-```
-equity = new_col + pnl - total_fee
-equity >= notional * margin
-```
+Adding or removing margin without changing size is just an order with `notional = 0`. An Increase adds collateral (pulled from the allowance); a Decrease withdraws it (subject to the maintenance and initial-margin floors on the remainder). The SDK exposes these as `addCollateral` and `withdrawCollateral`.
 
-If this check fails, the transaction is rejected with `WithdrawalBreaksMargin`. `total_fee` includes accrued funding and borrowing at the current indices.
+## Liquidation and ADL
 
-Only filled positions can have their collateral modified. Calling `modify_collateral` on a pending limit order reverts with `ActionNotAllowedForStatus` (733). Setting `new_collateral` equal to the current collateral reverts with `CollateralUnchanged` (727).
+A position can also be closed by a keeper without the owner's order:
 
-Emits `ModifyCollateral { market_id, user, position_id }` with data `col`, the **new** collateral total after modification, not a delta. Indexers must look up the prior position to compute the delta.
+- **Liquidation** force-closes the whole position once equity falls below maintenance margin. See [Liquidation](./liquidation.md).
+- **Auto-deleveraging** partially closes a winning position on an ADL-flagged side. See [Auto-Deleveraging](./auto-deleveraging.md).
 
-## Stop-Loss and Take-Profit Triggers
-
-`set_triggers(user, id, take_profit, stop_loss)`
-
-The caller passes the position owner address as `user`, and the contract requires authorization from that address. Sets or updates trigger prices on a position. Either value can be set to `0` to disable.
-
-Triggers fire when the mark price crosses the threshold:
-
-| Trigger | Long | Short |
-|---|---|---|
-| Take-profit | `price >= tp` | `price <= tp` |
-| Stop-loss | `price <= sl` | `price >= sl` |
-
-Triggers are processed by keepers via the `execute` batch function. The same close logic applies, with the `caller_fee` paid to the keeper from trading fees. `MIN_OPEN_TIME` is enforced: a fire that lands before 30 seconds have elapsed since `created_at` reverts with `PositionTooNew` (732).
-
-Emits `SetTriggers { market_id, user, position_id }` with data `sl, tp` in that order. The on-chain field names are `sl` and `tp`, abbreviations of stop-loss / take-profit.
-
-## Liquidation
-
-Processed by keepers via the `execute` batch. See [Liquidation](./liquidation.md) for full details.
-
-The key difference from a normal close is that liquidation does not settle PnL. All remaining collateral is redistributed to the vault and keeper. There is no `MIN_OPEN_TIME` enforcement.
-
+Both run through the same settlement machinery as a Decrease fill and leave a zeroed (liquidation) or reduced (ADL) row, each paired with a `position_update` event.

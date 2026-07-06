@@ -5,44 +5,23 @@ title: Trading Integration
 
 # Trading Integration
 
-The price verifier is consumed exclusively by the trading contract. Every action that depends on a current market price, whether initiated by a user, a keeper, or the circuit breaker, routes through the same `PriceVerifierClient::verify_prices` cross-contract call.
+The price verifier is consumed exclusively by the trading contract. Only **keeper** paths carry a price: a trader's order is price-free, so the verifier is never touched on `create_order`, `cancel_order`, or `create_vault_order`.
 
-## User Actions
+## Keeper Paths
 
-For `open_market`, `close_position`, and `modify_collateral`, the user submits raw price data (`Bytes`) as a parameter alongside the request. The trading contract calls `PriceVerifierClient::verify_price(price_data)`, which returns the parsed and authenticated `PriceData`. The contract then verifies that `feed_id` matches the position's market. Staleness is enforced by the price verifier using its configured `max_staleness` threshold. If the price is too old or the feed does not match, the transaction is rejected.
+Every price-bearing keeper entry point (`execute_order`, `execute_liquidation`, `execute_vault_order`, `update_adl_state`, `execute_adl`, and `accrue`) passes the keeper's serialized update to `verify_price(update_data, feed_id, exponent)`, using the trading contract's own immutable `(feed_id, exponent)` anchors. The verifier returns a single verified `PriceData` for that feed. Because one trading contract serves one market, exactly one feed is ever requested, and a keeper cannot substitute another market's feed: a mismatch raises `FeedNotFound` (790) or `WrongExponent` (791).
 
-### Auth Scope Excludes the Price Blob
+The verifier's own checks (Lazer signature delegation, confidence, bid/ask validity, staleness) are described on the [overview](./overview). The trading contract adds its own anti-replay rule on top: the verified `publish_time` must be at or after the order's `created_at`, else `StalePrice` (740). See [Pricing](../trading/pricing.md).
 
-User auth on the three price-dependent entry points is bound via `require_auth_for_args` to a payload that **excludes** the price `Bytes` argument. The signed payloads are:
+## Terminal Price Bypass
 
-- `open_market`: `(user, market_id, collateral, notional_size, is_long, take_profit, stop_loss, price_bound, expiration_ledger)`
-- `close_position`: `(user, id, price_bound, expiration_ledger)`
-- `modify_collateral`: `(user, id, new_collateral)`
-
-The price itself is never part of the signed payload. Excluding it from the auth scope is what lets a backend submitting the transaction inject the freshest oracle payload at inclusion time without invalidating the user's signature. If the price were inside the signed payload, the user would be pinned to whatever price was current at signing time, which becomes stale during transit.
-
-For `open_market` and `close_position` the user is protected against backend timing griefing (delaying submission within the auth window to pick a worse valid price) by the `price_bound` slippage guard and `expiration_ledger` deadline, both of which **are** part of the signed payload. See [Pricing: User-Signed Bounds](../trading/pricing.md#user-signed-bounds) for the direction-aware bound semantics. `modify_collateral` carries neither bound: the user signs an absolute target collateral rather than a price-dependent fill, so a delayed submission cannot degrade the outcome, and the only price-dependent check (withdrawal margin) fails one-sidedly. The price verifier still enforces signature, confidence, staleness, and feed-ID matching, so the backend's only freedom is to pick which valid signed price to attach. Replay across submissions is not a concern: Soroban auth entries are nonce-protected and single-use.
-
-## Keeper Batch Execution
-
-The `execute` function processes a batch of requests for a single `market_id`. It calls `PriceVerifierClient::verify_price(price_data)` (singular) once at the start of the batch, which returns a single `PriceData`. This one verified price is then passed to all positions in the batch, since all positions share the same feed for the given market. Staleness is enforced by the price verifier using the same `max_staleness` threshold.
-
-## Circuit Breaker and ADL
-
-For `update_status`, prices are verified and used to compute aggregate PnL across all markets. Accurate prices are critical here because the aggregate PnL determines whether the contract enters the `OnIce` state or triggers auto-deleveraging.
+Once a delisted market has a stored terminal price, the trading contract prices flat and does not call the verifier at all: submitted price bytes are ignored. Verification only runs while the market is still marking against its live feed.
 
 ## Wire Format
 
-The binary format is Pyth Lazer's native encoding. Maximum buffer size is 2048 bytes.
+The signed envelope (magic bytes, signature, signer key) is verified by the separate Lazer contract, which returns the inner payload bytes. The price verifier parses that payload:
 
 ```text
-Envelope:
-  [0..4]    magic: 0x821A01B9 (LE)
-  [4..68]   signature: Ed25519 (64 bytes)
-  [68..100] pubkey: Ed25519 (32 bytes)
-  [100..102] payload_len: u16 (LE)
-  [102..]   payload
-
 Payload:
   [0..4]    magic: 0x93C7D375 (LE)
   [4..12]   timestamp: u64 microseconds (LE)
@@ -55,10 +34,14 @@ Feed:
   [4]       num_properties: u8
   properties...
 
-Property:
-  type 0: price (i64 LE, 8 bytes)
-  type 4: exponent (i16 LE, 2 bytes, cast to i32)
-  type 5: confidence (i64 LE, 8 bytes)
+Property (id byte, then value):
+  0  price          (u64 LE, reinterpreted i64; 0 = absent)
+  1  best_bid_price (u64 LE, reinterpreted i64; 0 = absent)
+  2  best_ask_price (u64 LE, reinterpreted i64; 0 = absent)
+  3  publisher_count (u16 LE)
+  4  exponent       (u16 LE, reinterpreted i16)
+  5  confidence     (u64 LE, reinterpreted i64; 0 = absent)
+  6..12  funding rate / timestamp / interval, market session, EMA fields, feed timestamp
 ```
 
-All multi-byte integers are little-endian. The envelope is parsed first, its signature verified, and then the payload is decoded to extract individual feed prices. The property types are fixed identifiers defined by the Pyth Lazer protocol.
+All multi-byte integers are little-endian. The property ids are fixed identifiers from the Pyth Lazer protocol. For a Zenex feed, properties `0` (price), `1` (best bid), `2` (best ask), `4` (exponent), and `5` (confidence) must all be present and valid; a feed missing best bid or best ask is rejected with `InvalidPrice` (781), since the bid/ask spread is a distinct signal and is not synthesized from confidence. An unknown property id raises `InvalidProperty` (788).

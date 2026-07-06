@@ -5,93 +5,43 @@ title: Auto-Deleveraging
 
 # Auto-Deleveraging (ADL)
 
-ADL is the protocol's last-resort mechanism to prevent vault insolvency. When the vault cannot cover the net liability of winning positions, ADL proportionally reduces all winning-side positions across all markets.
+Auto-deleveraging bounds how much a winning side can extract from the vault. When one side's unrealized profit grows large relative to the vault, that side is flagged: its opens are halted and its winners become eligible for a forced partial close. ADL is evaluated **per side**, long and short independently.
 
-## When ADL Triggers
+## The Per-Side Flags
 
-ADL is triggered by the permissionless `update_status` function and can fire from `Active`, `OnIce`, or `AdminOnIce`. From `Frozen` the call panics. The exact trigger depends on current status:
+A keeper calls `update_adl_state(price)` to recompute both sides' pending PnL at a verified price and set or clear the per-side ADL flags, published as an `adl_update` event. Each side's flag uses hysteresis against that side's pending PnL, measured as a fraction of **half the vault balance** (longs and shorts each get half):
 
-- **From `Active`**: if `net_pnl >= UTIL_ONICE` (95% of vault), the contract transitions to `OnIce`. If on top of that `net_pnl > vault_balance`, ADL also runs in the same call before the status flip.
-- **From `OnIce`**: if `net_pnl < UTIL_ACTIVE` (90% of vault), the contract restores `Active` and ADL does not run. If `net_pnl > vault_balance`, ADL runs and the contract stays `OnIce`. Otherwise the call reverts with `ThresholdNotMet`.
-- **From `AdminOnIce`**: ADL runs only when `net_pnl > vault_balance`. The status remains `AdminOnIce` (admin controls the unlock).
+- The flag **sets** while the side's pending PnL exceeds `adl_max_pnl` of half the vault.
+- It **holds** while the PnL sits between `adl_clear_target` and `adl_max_pnl` (the hysteresis band that prevents flapping).
+- It **clears** at or below `adl_clear_target`.
 
-In all paths, ADL only runs when the actual deficit `net_pnl > vault_balance` exists. The 95% / 90% thresholds gate the status transitions on the `Active` and `OnIce` paths.
+A side that is not winning is never flagged. Config validation orders the thresholds `MIN_ADL_CLEAR <= adl_clear_target <= adl_max_pnl <= max_pnl_trader < 1` (all `SCALAR_18`), so ADL arms at or below the same overhang that triggers the realized-profit haircut.
 
-## Two-Pass Algorithm
+## What a Flagged Side Does
 
-### Pass 1: Aggregate PnL Computation
+A set flag has two effects:
 
-For each market, aggregate PnL is computed without iterating individual positions, using the `entry_wt` fields:
+1. **Opens halted.** A size-growing Increase on the flagged side aborts with `IncreaseHalted` (705). Existing positions can still be decreased or closed.
+2. **Eligible for `execute_adl`.** Keepers can force a partial close of a winning position on that side.
 
-$$
-\text{long\_pnl} = \text{price} \times \frac{\text{l\_entry\_wt}}{\text{price\_scalar}} - \text{l\_notional}
-$$
+## Executing ADL
 
-$$
-\text{short\_pnl} = \text{s\_notional} - \text{price} \times \frac{\text{s\_entry\_wt}}{\text{price\_scalar}}
-$$
+`execute_adl(keeper, user, is_long, amount, price)` deleverages one winning position on a flagged side, reducing the side's pending PnL back toward `adl_clear_target` of half the vault. It closes `amount` (or the whole position if `amount` is `i128::MAX` or oversized) through the regular decrease path, with **no collateral withdrawal**. It honors the decrease lock and keeps at least a minimum-size remainder on a partial close.
 
-The `entry_wt` sum (`sum(notional_i / entry_price_i)`) represents the aggregate "quantity" of positions. Multiplying by the current price gives the current value, and subtracting the original notional gives the aggregate PnL.
+A forced reduction waives the initial-margin floor on the remainder (only the maintenance line applies), so a deleveraged position is never left stuck in a state its owner could not restore. The keeper is paid the `keeper_rate` cut of the trade fee, and the call emits a `decrease_fill` with id `0` plus a `position_update`.
 
-From these values, `total_winner_pnl` is the sum of all positive-side PnL across all markets (one or both sides per market, whichever is positive). `net_pnl` is the signed sum of every side's PnL, equivalent to `total_winner_pnl - total_loser_pnl` where `total_loser_pnl` is the absolute value of negative-side PnL. ADL is only needed when `net_pnl > vault_balance`. Otherwise the call either flips status (Active to OnIce, or OnIce to Active) without running ADL, or reverts with `ThresholdNotMet`.
+Guards:
 
-### Pass 2: Apply Reduction
+| Condition | Error |
+|---|---|
+| Side not flagged, or its pending PnL already at or below the clear target | `AdlNotTriggered` (770) |
+| The close would overshoot below the re-measured clear allowance | `AdlOvershoot` (771) |
+| The position is not a winner (the close would not reduce the side's pending PnL) | `AdlNotEligible` (772) |
+| The verified price predates the position's last entry change | `StalePrice` (740) |
+| A sized partial close below the `min_order_notional` dust floor | `InvalidOrder` (732) |
 
-$$
-\text{deficit} = \text{net\_pnl} - \text{vault\_balance}
-$$
+## Interaction with the Profit Haircut
 
-$$
-\text{reduction\_pct} = \min\left(\frac{\text{deficit}}{\text{total\_winner\_pnl}},\ 1.0\right)
-$$
+ADL and the [realized-profit haircut](./fee-system.md#realized-profit-haircut) work together. The haircut scales down closing profits while a side's PnL overhangs the vault, which a trader can partially escape by slicing a close across many fills (each fill re-reads a relieved ratio). ADL is the hard bound on that game: the same overhang that arms the haircut also flags the side for forced deleveraging, capping the total a winning side can extract before the vault is topped up or the imbalance unwinds.
 
-$$
-\text{factor} = 1.0 - \text{reduction\_pct}
-$$
-
-For the winning side in each market:
-
-```text
-l_notional (or s_notional) *= factor
-l_entry_wt (or s_entry_wt) *= factor
-l_adl_idx (or s_adl_idx) *= factor
-```
-
-Emits `ADLTriggered { reduction_pct, deficit }`.
-
-## Lazy Position Application
-
-ADL modifies market-level aggregates only. Individual position records in storage are not touched. Each position detects its ADL reduction at close time:
-
-$$
-\text{effective\_notional} = \text{notional} \times \frac{\text{current\_adl\_idx}}{\text{entry\_adl\_idx}}
-$$
-
-The ADL index starts at `SCALAR_18` (`10^18`) for every new market. When ADL occurs, the winning side's index is multiplied by `factor` (which is less than 1.0). A position opened before ADL has `adl_idx = SCALAR_18`. After ADL with `factor = 0.9`, `current_adl_idx = 0.9 * SCALAR_18`, so on close the effective notional is `notional * 0.9`. A position opened after ADL snapshots the already-reduced index, so its effective notional is unaffected by past ADL events.
-
-## Compounding
-
-Multiple ADL events compound correctly because the index is a running product:
-
-```text
-After ADL 1 (factor 0.9): adl_index = SCALAR_18 * 0.9
-After ADL 2 (factor 0.8): adl_index = SCALAR_18 * 0.9 * 0.8 = SCALAR_18 * 0.72
-```
-
-A position opened before both events has `effective_notional = notional * 0.72`. A position opened between the events has `effective_notional = notional * 0.8`. A position opened after both has `effective_notional = notional * 1.0`.
-
-## Circuit Breaker Hysteresis
-
-The circuit breaker uses a 5% hysteresis band to prevent oscillation:
-
-| Transition | Threshold | Condition |
-|---|---|---|
-| Active to OnIce | 95% (`UTIL_ONICE`) | `net_pnl >= vault_balance * 0.95` |
-| OnIce to Active | 90% (`UTIL_ACTIVE`) | `net_pnl < vault_balance * 0.90` |
-| Run ADL (any of Active / OnIce / AdminOnIce) | deficit | `net_pnl > vault_balance` |
-
-When `OnIce`, no new positions can be opened, reducing the rate at which the vault's exposure grows. Existing positions can still be managed (closed, collateral modified), which helps reduce utilization organically.
-
-## Design Rationale
-
-ADL uses market-level aggregates, making it O(markets) rather than O(positions). This is critical for gas efficiency on Soroban. Individual positions are not modified in storage, avoiding the cost of touching every position record. All winning-side positions are reduced equally by percentage, ensuring fairness. The reduction percentage is capped at 1.0 to prevent negative notional values.
+The `adl_sweep` router helper lets a keeper deleverage a list of targets back to back, stopping once a side reports `AdlNotTriggered` (it has reached its clear target).

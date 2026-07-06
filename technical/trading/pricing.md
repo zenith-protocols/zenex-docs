@@ -5,37 +5,44 @@ title: Pricing
 
 # Pricing
 
-Every price-bearing call carries a signed Pyth Lazer payload that the [price verifier](../price-verifier/overview) validates and decodes into a `PriceData` value. The trading contract uses that value for entry, exit, mark, and liquidation.
+Prices enter the contract only on **keeper** paths. A trader's order is price-free; the keeper attaches a serialized Pyth Lazer price update when it fills. Every price-bearing call verifies its bytes against the market's immutable `(feed_id, exponent)` anchors through the [price verifier](../price-verifier/overview), which returns a `PriceData` carrying `price`, `exponent`, `bid`, `ask`, and `publish_time`.
 
-## Price Attached at Submission
+## Verification on the Keeper Path
 
-Calls that require user authorization (`open_market`, `close_position`, `modify_collateral`) sign over every argument *except* the price blob (`require_auth_for_args` covers the rest). A backend submitting the transaction can attach a different, fresher Pyth payload between signing and inclusion. Two reasons this matters:
+The functions that carry a price are `execute_order`, `execute_liquidation`, `execute_vault_order`, `update_adl_state`, `execute_adl`, and `accrue`. Each passes the submitted `Bytes` to the verifier, which:
 
-- **Slow signing flow.** The cryptography itself is fast, but the user interaction wrapped around it (password entry, button presses on a hardware wallet, biometric confirmation for a passkey) takes seconds. The market keeps moving during that time, so locking the price at signing time would force stale fills or repeated re-signing.
-- **Submission timing.** A backend co-located with a fast RPC node lands transactions sooner than a user's browser ever could. Letting that backend refresh the price means the latency advantage shows up as a fresher fill for the user.
+- delegates signature checking to the Pyth Lazer verification contract,
+- confirms the update contains the contract's `feed_id` with the matching `exponent`,
+- rejects a malformed feed (missing price, non-positive price, bid, or ask, a crossed `bid > ask`, or a confidence interval wider than the configured tolerance),
+- rejects a stale or future-dated update.
 
-The verifier still checks signature, confidence, staleness, and feed-ID match on whatever payload the backend attaches, so the backend can only pick among valid signed prices, not invent one.
+Because the anchors are immutable and per-contract, a keeper cannot substitute another market's feed. The keeper's only freedom is to pick which valid, recent signed price to attach. Both accrual indices advance to now on every price-bearing load.
 
-## User-Signed Bounds
+## Entry and Exit Use Bid/Ask
 
-The backend's freedom to swap prices has limits. Without further protection, the user's signature on its own no longer pins the trade to a moment in time or to a price range. A backend holding the signed transaction could delay submission until the market has moved against the user, or attach the worst valid price within the staleness window. Soroban auth entries are nonce-protected and single-use, so replay is not possible, but the submission window granted by the auth entry's own `signatureExpirationLedger` still leaves room for this kind of timing griefing. Two bounds the user signs over close that gap:
+Execution is direction- and action-aware, using the two sides of the verified quote:
 
-| Bound | Applies to | Effect |
+| Action | Side | Price used |
 |---|---|---|
-| `expiration_ledger` | `open_market`, `close_position` | Reverts with `Expired` (760) once the current ledger exceeds the user's deadline |
-| `price_bound` | `open_market`, `close_position` | Reverts with `PriceSlippage` (712) when the fill price falls outside the user's direction-aware bound |
+| Increase | Long | `ask` (entry) |
+| Increase | Short | `bid` (entry) |
+| Decrease / close | Long | `bid` (exit) |
+| Decrease / close | Short | `ask` (exit) |
 
-`price_bound` is always oriented to protect the user against an unfavorable move:
+A trader always enters on the worse side of the spread and exits on the worse side, which is the on-chain spread cost. `price_scalar = 10^-exponent` converts a raw quote to the token's decimals.
 
-| Call | Direction | Bound type | Reverts when |
-|---|---|---|---|
-| `open_market` | Long | Ceiling (upper) | `fill_price > price_bound` |
-| `open_market` | Short | Floor (lower) | `fill_price < price_bound` |
-| `close_position` | Long | Floor (lower) | `fill_price < price_bound` |
-| `close_position` | Short | Ceiling (upper) | `fill_price > price_bound` |
+## Order-Level Protection
 
-When the user is paying for size (open long, close short) the bound is a ceiling. When the user is receiving (open short, close long) the bound is a floor.
+Since a trader signs a price-free order, protection against an unfavorable fill lives in the order itself, not in a signed price:
 
-`modify_collateral` carries neither `expiration_ledger` nor `price_bound`. The only price-dependent check is the margin requirement on a withdrawal, which fails one-sidedly, so a slippage bound is not needed. The user also signs an absolute target collateral rather than a price-dependent fill, so a backend delaying submission within the Soroban auth window cannot degrade the outcome: the position lands at the target value regardless of when the transaction is included. The Soroban auth entry's own `signatureExpirationLedger` is the only deadline that applies.
+| Field | Effect |
+|---|---|
+| `price_bound` | One-sided slippage limit judged on the execution-side price. A buy leg caps the price (rejects above), a sell leg floors it (rejects below). `0` disables. Violation raises `PriceBoundExceeded` (741). |
+| `trigger_price` + `trigger_above` | Eligibility trigger, also judged on the execution-side price. `0` disables (a market order). Not crossed raises `TriggerNotMet` (742). |
+| `expiration` | Last **ledger sequence** the order is fillable at. Past it, a fill raises `OrderExpired` (731). |
 
-Both bounds accept `0` to disable the check. The opt-out exists for internal callers (smart-account batches, deploy-time scaffolding) that have their own intent-binding mechanisms.
+The anti-replay rule ties the price to the order in time: the verified `publish_time` must be at or after the order's `created_at`, else `StalePrice` (740). A market order filling in its own creation ledger is the one exception, an atomic create-and-fill that accepts any verifier-accepted price; a trigger order gets no same-ledger exemption.
+
+## Terminal (Flat) Price
+
+A wound-down market can be pinned to a flat settlement price. Once `set_terminal_price` stores a value on a delisted market (allowed after the grace window expires), the market prices flat: `bid = ask = price = terminal`, and submitted price bytes are ignored and never verified. The switch to flat pricing is governed by the **presence of a stored terminal price**, not by the status value itself. Accrual keeps running (borrowing keeps charging) until a terminal price is stored, after which everything prices flat at it. See the [status lifecycle](./storage-and-events.md#status-lifecycle).

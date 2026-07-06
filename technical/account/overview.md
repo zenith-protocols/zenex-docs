@@ -53,16 +53,16 @@ Both verifiers are **stateless and reusable**. They take a message hash, a publi
 
 ### `session-policy`
 
-A policy contract that solves the DeFi composability problem where `open_position` triggers a sub-auth for `token.transfer`. Without a policy, allowing the session passkey to authorize the token contract would let it drain funds to any address. With this policy attached:
+A policy contract that solves the DeFi composability problem where a trading action triggers a sub-auth on the token contract. A trader opens a position by calling `create_order` on the trading contract and setting a collateral allowance the keeper later draws (`token.approve`). Without a policy, allowing the session passkey to authorize the token contract would let it drain funds to any address. With this policy attached:
 
-- Calls are restricted to a whitelist of target contracts (e.g. just the trading contract and its wrapper).
-- Token transfers are locked to a single allowed destination (the trading contract).
+- Calls are restricted to a whitelist of target contracts (for example the trading contract and the trading router).
+- Token approvals and transfers are locked to a single allowed destination (the trading contract).
 
 Typical setup:
 
 ```text
-Rule 0 (Default, "owner")    — owner keypair, no policies, full access
-Rule 1 (Default, "session")  — passkey + SessionPolicy, restricted
+Rule 0 (Default, "owner")    : owner keypair, no policies, full access
+Rule 1 (Default, "session")  : passkey + SessionPolicy, restricted
 ```
 
 The owner bypasses the policy. The passkey is locked into the session scope. This is what makes "log in with a passkey and trade for a week without re-authenticating" safe.
@@ -76,9 +76,9 @@ Two entry points:
 | Function | What the user pins | When to use |
 |---|---|---|
 | `forward` | All fields including `target_args` | **Default.** Safe with any target. The backend cannot substitute args. |
-| `forward_unsafe` | Every field **except** `target_args` | Only when the target itself authenticates the args (e.g. trading's `open_market`, which uses its own `require_auth_for_args`). Lets the backend inject a fresher price blob without invalidating the user's signature. |
+| `forward_unsafe` | Every field **except** `target_args` | Only when the target itself authenticates every argument it cares about, so leaving `target_args` unpinned is safe. |
 
-`forward_unsafe` is the integration point for [trading's price-blob auth exclusion](../price-verifier/integration.md#auth-scope-excludes-the-price-blob). The user signs over the trade including `price_bound` and `expiration_ledger`, the backend attaches the freshest signed Pyth payload at submission time, and trading's own auth check enforces user intent on everything except the price.
+For v2 trading the safe `forward` path is what a gasless order uses. A trader's `create_order` and `create_vault_order` are **price-free** and fully authenticated by the user's own `require_auth` over every argument, so there is no price blob to exclude and no reason to leave any field unpinned. The keeper attaches the Pyth price later, on its own separate transaction, so gasless submission of the trader's intent never needs to defer an argument to the backend.
 
 ## Relationship to the Perp Engine
 

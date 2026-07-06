@@ -5,113 +5,55 @@ title: Fee System
 
 # Fee System
 
-Fees are charged on every position open and close. They flow to three recipients: the vault (liquidity providers), the treasury (protocol), and keepers (execution incentive).
+Four itemized costs settle on every fill and close: the **trade fee** (base), **impact**, **funding**, and **borrowing**. They are computed gross, deducted from the position's collateral or the trader's proceeds, and split between the vault, the treasury, and the keeper. All rates are `SCALAR_18` fractions set per market by governance.
 
-## Fee Components
+## Trade Fee (Skew-Split)
 
-### Base Fee
+The trade fee is split by the fill's effect on market **skew**, the imbalance between long and short base tokens. The token-size change of the fill is decomposed into a worsening part (moving the book further from balance) and an improving part (moving it toward balance), then mapped pro-rata onto the fill's notional:
 
-The base fee depends on which side of the market the position is on:
+- The **worsening** leg pays `fee_dom`, the dominant-side rate.
+- The **improving** leg pays `fee_non_dom`, the non-dominant rate.
 
-$$
-\text{base\_fee} = \text{notional} \times \frac{\text{base\_fee\_rate}}{\text{SCALAR\_7}}
-$$
+"Dominant" is decided by **token imbalance**, not notional. All rounding moves toward the higher fee. Config validation enforces `fee_dom >= fee_non_dom` and caps both at `MAX_FEE_RATE` (`SCALAR_18 / 100`, 1%).
 
-Dominance is evaluated against the **post-action** market state, not the pre-action state. The contract calls `is_dominant(side, notional)` with the position's notional added (on open) or removed (on close), then checks whether that side ends up strictly larger than the other.
-
-| Action | Pays `fee_dom` when | Pays `fee_non_dom` when |
-|---|---|---|
-| Open | Your side is strictly larger after the position is added | Your side is equal or smaller after the add |
-| Close | Your side is no longer strictly larger after the position is removed | Your side is still strictly larger after the removal |
-
-This means a position opened on the current minority side can still pay `fee_dom` if it is big enough to flip dominance. A close from the dominant side that leaves the side dominant pays `fee_non_dom` (it reduced imbalance).
-
-`fee_dom` and `fee_non_dom` are SCALAR_7 fractions of notional, bounded by `MAX_FEE_RATE = 100_000` (1%).
-
-### Price Impact Fee
+## Impact Fee
 
 $$
-\text{impact\_fee} = \lfloor \frac{\text{notional}}{\text{impact}} \rfloor
+\text{impact} = \frac{\text{worsening\_notional}}{\text{impact\_divisor}}
 $$
 
-Where `impact` is the per-market divisor from `MarketConfig`. Charged on every open and every close. Floor division means orders with `notional < impact` round down to zero impact fee, so most small trades effectively pay only the base fee.
+The impact fee is charged on the **worsening leg only**. A trade that pushes the book further out of balance pays it; a balancing trade does not. `impact_divisor` is a `SCALAR_18` config value floored at `MIN_IMPACT` (`10 * SCALAR_18`).
 
-### Funding
+The trade fee and the impact fee together are the "trade fee" that the keeper and treasury cuts apply to.
 
-Accumulated funding cost or credit since the position was filled:
+## Borrowing Fee
 
-$$
-\text{funding} = \text{notional} \times \frac{\text{current\_fund\_idx} - \text{entry\_fund\_idx}}{\text{SCALAR\_18}}
-$$
+The borrowing fee compensates the vault for the liquidity that open positions reserve. It follows a kink (piecewise-linear) utilization model and is charged **per second** via a cumulative index. Both sides pay the same kink rate, since open interest on either side reserves vault capacity. See [Borrowing Rate](./borrowing-rate.md). Borrowing revenue splits between the vault and the treasury.
 
-Positive funding represents a cost to the position (position paid funding). Negative funding represents a credit (position received funding). Funding is purely peer-to-peer: 100% flows between longs and shorts with no protocol cut. See [Funding Rate](./funding-rate.md) for how indices are computed.
+## Funding
 
-### Borrowing Fee
+Funding is a peer-to-peer transfer between longs and shorts, following a velocity model with an internal pool and per-user claimable balances. It carries no protocol cut. A position that owes funding pays it from collateral at settlement; a position owed funding has the amount credited to its claimable balance, redeemed later through `claim_funding`. See [Funding Rate](./funding-rate.md).
 
-Accumulated borrowing cost since the position was filled:
+## The Fee Split
 
-$$
-\text{borrowing\_fee} = \text{notional} \times \frac{\text{current\_borr\_idx} - \text{entry\_borr\_idx}}{\text{SCALAR\_18}}
-$$
+Settlement is gross-basis. From the four itemized costs:
 
-Borrowing fees are always non-negative and accrue only to the dominant side of the market. They flow to the vault (LPs) and the treasury (protocol revenue), split by the treasury rate. See [Borrowing Rate](./borrowing-rate.md) for how the rate is computed and how indices accrue.
+- The **keeper** takes its `keeper_rate` cut of the trade fee (base plus impact). This is the reward for the permissionless fill.
+- The **treasury** takes its rate (read live from the treasury contract, clamped to `[0, MAX_KEEPER_RATE]`) of the trade fee, the borrowing fee, and any forfeit.
+- The **vault** banks all remainders, funds realized PnL through `strategy_withdraw`, and absorbs `bad_debt`.
 
-### Total Fee
+Fees are subtracted from the posted collateral at fill, so a later fee or rate increase cannot break an existing order allowance: order validation guarantees the posted collateral covers the fees. A failed direct payout to a trader falls back to a pull allowance (`pay_trader`), so a third-party keeper fill never stalls on the receiver.
 
-$$
-\text{total\_fee} = \text{base\_fee} + \text{impact\_fee} + \text{funding} + \text{borrowing\_fee}
-$$
+## Realized-Profit Haircut
 
-### Protocol Fee
+While a side's pending PnL exceeds `max_pnl_trader` of half the vault balance, a closing profit on that side is scaled by `allowance / side_PnL`, cutting every close during the overhang by the same live factor. The withheld share stays with the vault. A loss passes through unchanged.
 
-Protocol revenue excludes funding (which is peer-to-peer):
+Slicing a close across many fills partially escapes the haircut, because each fill re-reads a relieved ratio. The same overhang arms [auto-deleveraging](./auto-deleveraging.md), which bounds what slicing can extract.
 
-$$
-\text{protocol\_fee} = \text{base\_fee} + \text{impact\_fee} + \text{borrowing\_fee}
-$$
+## Liquidation Fee
 
-Treasury receives a cut of `protocol_fee`. Keepers receive a cut of `trading_fee` (base + impact only).
+Liquidation adds a fifth cost, the liquidation fee `ceil(liq_fee * notional)`, which decides the [two-tier liquidation](./liquidation.md) outcome. On the soft tier no liquidation fee is charged and the remaining equity is returned to the trader; on the hard tier it is charged and the remainder is forfeited to the vault. The treasury takes its rate of any forfeit.
 
-## Fee Distribution
+## Treasury Rate Is Read Live
 
-Every settlement uses the same shape. Three constants are computed and the vault gets whatever is left:
-
-```
-treasury_fee = protocol_fee * treasury_rate / SCALAR_7
-caller_fee   = trading_fee  * caller_rate   / SCALAR_7   // zero if user-initiated
-user_payout  = max(equity, 0)                            // zero on opens / fills / liquidations
-vault        = col - user_payout - treasury_fee - caller_fee
-```
-
-Two orthogonal axes decide which terms are non-zero on a given event:
-
-- **Closes** (self close, TP, SL) settle PnL. They pay a `user_payout` and add accrued borrowing into `protocol_fee`. Opens and fills set `user_payout = 0` and have no borrowing yet, so `protocol_fee = base + impact` on those.
-- **Keeper-initiated events** (limit fill, TP / SL close) pay a `caller_fee` cut from the trading fee. User-initiated events (market open, self close) set `caller_fee = 0`.
-
-If `vault` is negative on a close (user profited), the vault pays via `strategy_withdraw`. The keeper's share is always cut from the trading fee (`base + impact`), never from funding or borrowing.
-
-### Liquidation
-
-Liquidation is structurally different because the liquidation fee is added to the keeper and treasury cuts:
-
-```
-liq_fee      = max(equity, 0)                                // remaining equity at liq time
-revenue      = min(protocol_fee + liq_fee, col)
-treasury_fee = revenue                       * treasury_rate / SCALAR_7
-caller_fee   = min(trading_fee + liq_fee, col) * caller_rate / SCALAR_7
-vault        = col - treasury_fee - caller_fee
-user_payout  = 0
-```
-
-No PnL is settled for the user; all collateral is redistributed.
-| User | `0` (all collateral redistributed) |
-
-`liq_fee = max(equity, 0)` is the remaining equity at liquidation time. Treasury receives a share of the total revenue (protocol fees + liquidation fee). No PnL settlement occurs for the user.
-
-## Limit Order Fee Handling
-
-When a limit order is placed, the user's full collateral is transferred to the contract with no fee deduction. Fees are computed and deducted from collateral at fill time via `ctx.open()`, based on the position's dominance at that moment. This means limit orders have no fee cost until they are actually filled by a keeper.
-
-## Treasury Rate
-
-The protocol fee rate is fetched from the treasury contract via a cross-contract call (`TreasuryClient::get_rate()`) on every trade. This allows the protocol to adjust fees dynamically without redeploying or reconfiguring the trading contract.
+The treasury's rate is fetched from the treasury contract on every settlement via `get_rate()`, then clamped to `[0, MAX_KEEPER_RATE]`. This lets governance retune the protocol's fee share without redeploying or reconfiguring the trading contract. See [Treasury](../treasury/overview).

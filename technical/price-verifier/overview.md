@@ -5,55 +5,77 @@ title: Price Verifier
 
 # Price Verifier
 
-Zenex uses [Pyth Lazer](https://pyth.network/) for price feeds. The `PriceVerifierContract` parses and verifies Ed25519-signed binary price updates from the Pyth Lazer network, providing cryptographically authenticated price data to the trading contract.
+Zenex prices markets with [Pyth Lazer](https://pyth.network/). The `PriceVerifierContract` turns a signed binary Lazer update into verified, feed-scoped `PriceData` for the trading contract. Signature checking is delegated to a separate Lazer verification contract; the price verifier parses the payload and enforces feed, exponent, confidence, spread, and staleness bounds on top.
 
 ## PriceData Structure
 
-Each verified price update produces one or more `PriceData` values:
+A verified update produces `PriceData` values carrying both the aggregate mid and the two sides of the quote:
 
 ```rust
 pub struct PriceData {
     pub feed_id: u32,       // Pyth Lazer feed identifier
-    pub price: i128,        // Raw price value
-    pub exponent: i32,      // Decimal exponent (e.g., -8)
-    pub publish_time: u64,  // Unix timestamp (seconds)
+    pub price: i128,        // aggregate mid (native precision)
+    pub exponent: i32,      // decimal exponent (e.g. -8)
+    pub bid: i128,          // best bid (native precision)
+    pub ask: i128,          // best ask (native precision)
+    pub publish_time: u64,  // oracle publish timestamp (seconds)
 }
 ```
 
-The price scalar used in downstream computation is derived from the exponent: `price_scalar = 10^(-exponent)`. For the standard exponent of `-8`, this yields `price_scalar = 100,000,000`.
+The trading contract uses `bid` and `ask` for direction-aware entry and exit (see [Pricing](../trading/pricing.md)). The price scalar for downstream math is `price_scalar = 10^(-exponent)`.
 
 ## Verification Flow
 
-The contract performs a sequence of checks on every incoming price update before returning parsed data.
+The verifier runs the following on every call before returning data.
 
-Verification begins with **envelope parsing**. The contract reads a fixed-layout binary envelope starting with magic bytes `0x821A01B9`, followed by a 64-byte Ed25519 signature, a 32-byte public key, and a `u16` payload length. If the magic bytes do not match, the update is rejected immediately.
+**Signature delegation.** The verifier holds a `lazer` contract address and calls `verify_update` on it, passing the raw update bytes. The Lazer contract checks the update's signature against its trusted-signer set and returns the inner payload bytes. This keeps the signing-key trust and the ECDSA verification in one dedicated contract that the price verifier depends on.
 
-The contract then performs **signer verification**. The public key embedded in the update must match the contract's stored `trusted_signer` exactly. This ensures only Pyth Lazer's authorized key can produce accepted updates.
+**Payload parsing.** The verifier parses the returned payload (its own magic number, a microsecond timestamp, a channel byte, a feed count, and per-feed properties: price, best bid, best ask, exponent, confidence). An empty feed set is rejected.
 
-Next, **signature verification** is performed via `env.crypto().ed25519_verify(pubkey, payload, signature)`, using Soroban's host-provided cryptographic primitives. This confirms the payload has not been tampered with since signing.
+**Feed selection.** `verify_price(update_data, feed_id, exponent)` extracts the one requested feed, raising `FeedNotFound` (790) if the update does not contain it and `WrongExponent` (791) if the feed's exponent differs from the caller's anchor. `verify_prices(update_data)` returns every feed in the update.
 
-With authenticity established, the contract proceeds to **payload parsing**. The payload begins with its own magic bytes (`0x93C7D375`), followed by a microsecond-precision timestamp, a channel byte, a feed count, and per-feed price/exponent/confidence properties.
+**Per-feed validation.** For each returned feed the verifier requires the price, best bid, and best ask to be present, and enforces:
 
-Finally, a **confidence check** is applied when confidence data is present. If `confidence * 10,000 > |price| * max_confidence_bps`, the contract raises `ConfidenceTooHigh`. This guards against consuming prices with excessive uncertainty relative to the configured tolerance.
+- `price > 0`, `bid > 0`, `ask > 0`: a non-positive wire value is malformed.
+- `bid <= ask`: a crossed market is malformed.
+- confidence present and non-negative, with `confidence * 10_000 <= |price| * max_confidence_bps`: a spread wider than the configured tolerance is rejected.
+
+Any violation raises `InvalidPrice` (781).
+
+**Staleness.** The publish time must not be in the future (`publish_time <= now`) and must be no older than `max_staleness` seconds, else `PriceStale` (782). Rejecting future-dated prices prevents replay of a pre-signed future update.
 
 ## Access Control
 
-The price verifier implements OZ Ownable for access control. For standard Ownable behavior, refer to [OpenZeppelin Stellar Contracts](https://github.com/OpenZeppelin/stellar-contracts).
+The price verifier implements OZ Ownable. For standard Ownable behavior, refer to [OpenZeppelin Stellar Contracts](https://github.com/OpenZeppelin/stellar-contracts).
 
 | Function | Auth |
 |---|---|
-| `verify_price(update_data)` | Permissionless |
+| `verify_price(update_data, feed_id, exponent)` | Permissionless |
 | `verify_prices(update_data)` | Permissionless |
-| `max_confidence_bps()` | Permissionless |
-| `max_staleness()` | Permissionless |
-| `update_trusted_signer(signer)` | Owner only (`#[only_owner]`) |
+| `lazer()` / `max_confidence_bps()` / `max_staleness()` | Permissionless (views) |
+| `update_lazer(new_lazer)` | Owner only (`#[only_owner]`) |
 | `update_max_confidence_bps(bps)` | Owner only |
 | `update_max_staleness(max_staleness)` | Owner only |
 
-## Staleness Threshold
+## Staleness and Confidence Bounds
 
-The price verifier enforces a single configurable `max_staleness` parameter on all price data. Any price older than `max_staleness` seconds is rejected. The threshold is set at deployment and can be updated by the owner via `update_max_staleness`.
+`max_staleness` is a single configurable threshold applied to every price. It is set at deployment and updatable by the owner, but both the constructor and `update_max_staleness` enforce a hard cap of `MAX_STALENESS_SECONDS = 15`. A larger value reverts with `InvalidStaleness` (783). The cap keeps the verifier from vending a price older than the short window the trading layer is willing to act on.
 
-Both the constructor and `update_max_staleness` enforce a hard upper bound of `MAX_STALENESS_SECONDS = 30`. Any attempt to configure a larger value reverts with `InvalidStaleness`. The cap is aligned with the trading contract's `MIN_OPEN_TIME` (30s): a stale price older than that window could in principle be paired with an immediate close, so the verifier refuses to vend prices the trading layer would treat as suspect.
+`max_confidence_bps` bounds the acceptable confidence interval relative to price (for example `100` = 1%). It is likewise owner-updatable, with no code-level cap, and drives the confidence check above.
 
-Prices in the future (publish_time > now) are also rejected. This prevents replay of pre-signed future prices.
+## Error Codes
+
+| Code | Name | Meaning |
+|---|---|---|
+| 780 | `InvalidData` | Verified payload contains no feeds |
+| 781 | `InvalidPrice` | Missing, non-positive, crossed, or over-confidence feed data |
+| 782 | `PriceStale` | Update is future-dated or older than `max_staleness` |
+| 783 | `InvalidStaleness` | Configured `max_staleness` exceeds `MAX_STALENESS_SECONDS` |
+| 784 | `TruncatedData` | Payload ended before a field could be read |
+| 785 | `InvalidPayloadLength` | Declared payload length is inconsistent |
+| 786 | `InvalidPayloadMagic` | Payload magic number did not match |
+| 787 | `InvalidChannel` | Unknown channel byte |
+| 788 | `InvalidProperty` | Unknown or malformed feed property |
+| 789 | `InvalidMarketSession` | Market session field is invalid |
+| 790 | `FeedNotFound` | Requested `feed_id` absent from the update |
+| 791 | `WrongExponent` | Feed exponent differs from the caller's scale anchor |

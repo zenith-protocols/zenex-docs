@@ -5,42 +5,33 @@ title: Margin & Leverage
 
 # Margin & Leverage
 
-## Leverage Bounds
+Every position carries two margin lines: an **initial-margin** floor enforced when opening or growing, and a lower **maintenance-margin** floor that triggers liquidation. Both are `SCALAR_18` fractions of notional, set per market by governance.
 
-Every position must satisfy the maximum leverage constraint.
+## Two Margin Lines
 
-### Maximum Leverage
+| Line | Config field | Enforced against | Enforced at |
+|---|---|---|---|
+| Initial margin | `init_margin` | Collateral, measured PnL-free | Increase fill, collateral withdrawal |
+| Maintenance margin | `maintenance_margin` | Equity (collateral + unrealized PnL) | Liquidation check |
 
-$$
-\text{notional} \times \text{margin} \leq \text{col} \times \text{SCALAR\_7}
-$$
+The two are measured differently, and that difference is the point. The initial-margin check looks at **collateral alone**, ignoring unrealized PnL, so a position cannot be opened or topped up on the strength of a favorable price move. The maintenance-margin check looks at **equity**, collateral plus unrealized PnL, so a losing position is liquidated only once its actual net worth erodes past the floor.
 
-Equivalently: `leverage <= 1 / margin`. With `margin` expressed as a SCALAR_7 fraction, the maximum allowed position size is `col / margin`. A `margin` of `100_000` (1%) caps leverage at 100x; halving `margin` doubles the cap.
+Config validation enforces `maintenance_margin < init_margin`. The gap between them is the safety buffer that absorbs adverse PnL and fee accrual before liquidation triggers. The bounds are `MIN_MARGIN` (`SCALAR_18 / 1000`, 0.1%) and `MAX_MARGIN` (`SCALAR_18 / 2`, 50%).
 
-## Initial Margin vs Liquidation Threshold
+## Maximum Leverage
 
-| Property | Initial Margin | Liquidation Threshold |
-|---|---|---|
-| **Rate** | Configurable per market | Configurable per market |
-| **Source** | `MarketConfig.margin` | `MarketConfig.liq_fee` |
-| **Enforced at** | Open, modify collateral | Liquidation check |
-| **Max value** | 50% (`MAX_MARGIN`) | 25% (`MAX_LIQ_FEE`) |
-| **Purpose** | Buffer between opening and liquidation | Equity below this triggers liquidation |
-
-The validation rule `margin > liq_fee` ensures there is always a gap between the opening margin requirement and the liquidation threshold. This gap is the safety buffer that absorbs PnL and fee accrual before liquidation triggers.
-
-## Collateral Modification
-
-When withdrawing collateral from a filled position, an additional margin check is applied:
+Initial margin sets the leverage cap:
 
 $$
-\text{equity} = \text{new\_col} + \text{pnl} - \text{total\_fee}
+\text{max leverage} = \frac{1}{\text{init\_margin}}
 $$
 
-$$
-\text{equity} \geq \text{notional} \times \frac{\text{margin}}{\text{SCALAR\_7}}
-$$
+An `init_margin` of 1% (`SCALAR_18 / 100`) caps leverage at 100x; halving it doubles the cap. On an Increase fill, the collateral must satisfy `collateral >= init_margin * notional`, else the fill aborts with `InsufficientMargin` (713).
 
-Where `total_fee` includes accrued funding and borrowing at current indices. If this check fails, the withdrawal is rejected with `WithdrawalBreaksMargin`. This prevents users from extracting collateral to the point where their position becomes immediately liquidatable.
+## Collateral Withdrawal
 
-Collateral withdrawal uses the initial margin requirement (`margin`), not the liquidation threshold (`liq_fee`). This provides an extra buffer. A user cannot withdraw collateral down to the liquidation threshold level.
+Withdrawing margin is a collateral-only Decrease. The remaining position must still clear both floors. Because the initial-margin check is PnL-free, a user cannot withdraw down to the point where only a favorable unrealized move keeps the position solvent. A withdrawal that would breach the floor aborts with `InsufficientMargin` (713).
+
+## Forced Reductions Waive the Initial Floor
+
+A **forced** reduction (ADL or the delisted-market wind-down) skips the initial-margin floor on the remainder and applies only the maintenance line. Otherwise a partially deleveraged position could be left in a state its own owner could never have opened, and would be stuck. The maintenance floor still applies, so the remainder is never left immediately liquidatable by the reduction itself.

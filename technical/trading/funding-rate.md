@@ -5,51 +5,43 @@ title: Funding Rate
 
 # Funding Rate
 
-Funding incentivizes balanced open interest between longs and shorts. The dominant side (more open interest) continuously pays the minority side, peer-to-peer with no protocol cut.
+Funding is a peer-to-peer transfer between longs and shorts that pushes open interest toward balance. The dominant side pays the minority side, with no protocol cut. Zenex uses a **velocity model** (GMX-style): the market stores a signed funding rate that accelerates, holds, or decays over time based on the token skew, rather than being recomputed from scratch each interval.
 
-A market runs two funding rates side-by-side. The **pay rate** is what the dominant side pays per hour. It is recomputed once per hour by `apply_funding` and stored on the market as `fund_rate`, where it stays fixed until the next hourly update. The **receive rate** is what the minority side earns per hour. It equals the pay rate scaled by `dominant_notional / minority_notional` against the current notional balances, so it is recomputed on every accrue and tracks imbalance changes between the hourly pay-rate updates. By construction, the total paid by the dominant side equals the total received by the minority side at every accrue.
+## The Saved Rate
 
-## Pay Rate
-
-`apply_funding` recomputes the pay rate from the current open-interest imbalance:
+The market stores a single signed `funding_rate` (`SCALAR_18` per second). Positive means longs pay shorts; negative means shorts pay longs. It evolves according to the **token skew**:
 
 $$
-\text{pay\_rate} = \text{r\_funding} \times \frac{|\text{long\_notional} - \text{short\_notional}|}{\text{long\_notional} + \text{short\_notional}}
+\text{skew} = \frac{|\text{long\_tokens} - \text{short\_tokens}|}{\text{long\_tokens} + \text{short\_tokens}}
 $$
 
-Sign follows dominance: positive when longs dominate (longs pay), negative when shorts dominate (shorts pay), zero when balanced. The magnitude is bounded in `[0, r_funding]`. `r_funding` is a global SCALAR_18 parameter in `TradingConfig` shared across all markets; per-market variation comes from each market's own imbalance.
+Three regimes govern how the saved rate moves each second:
 
-`apply_funding` is permissionless, runs across every market in one call, and enforces a 1-hour minimum interval (`ONE_HOUR_SECONDS`). Every-action `accrue` paths advance indices using whatever `fund_rate` the market last stored; they do not recompute the rate.
+- **Accelerate.** When the rate is fresh (zero) or has just flipped sign, or when the skew is above `threshold_stable_funding`, the rate accelerates toward the dominant side by `funding_increase * skew` per second. Persistent imbalance ramps the rate up.
+- **Decay.** When the skew is below `threshold_decrease_funding`, the rate decays flat by `funding_decrease` per second toward zero. A full decay parks at the smallest signed step, preserving the sign until a flip ramps back through it.
+- **Hold.** Between the two thresholds, or on a token-balanced book, the rate holds.
 
-## Index Accrual
+Config validation enforces `threshold_decrease_funding <= threshold_stable_funding`.
 
-Both funding indices advance on every market-touching operation (`data.accrue` is called from open, close, modify, execute). The time component is shared:
+## Caps and Floors
 
-$$
-\text{hours\_elapsed} = \frac{\text{seconds\_elapsed} \times \text{SCALAR\_18}}{\text{3600}}
-$$
+The saved rate is hard-capped at `+/- funding_max`. An empty market resets it to zero. The **charged** magnitude is floored at `funding_min`: below that floor nothing is charged, but the **stored** rate is not floored, so it can decay through the floor and flip sign as the book rebalances.
 
-$$
-\text{pay\_delta} = \frac{|\text{pay\_rate}| \times \text{hours\_elapsed}}{\text{SCALAR\_18}}
-$$
+## Settlement and the Internal Pool
 
-The dominant side's index advances by `pay_delta`. The minority side's index advances by `pay_delta * dominant_notional / minority_notional`, evaluated at the moment of accrual. If longs have 2× the notional of shorts, each short receives 2× the per-unit rate.
+Funding is settled through an internal pool with per-user claimable balances, tracked on `MarketData` as `funding_pool` and `funding_owed`. When a position settles:
 
-### Edge Cases
+- The **paying** side's `funding_idx` rises, and the funding it owes is debited from its collateral and banked into `funding_pool`.
+- The **receiving** side's `funding_idx` falls by the paid total spread over the receiver's notional (floored, with the remainder left in the pool), and the earned amount credits the user's `ClaimableFunding` balance.
 
-- **Empty market** (`l_notional == 0 && s_notional == 0`): rate is zero, accrual is a no-op.
-- **One-sided market** (exactly one side is zero): pay rate equals `±r_funding`, but accrual is skipped because there is no counterparty. Indices only advance once both sides hold open interest.
+With no opposing side to receive it, paid funding is never redistributed and simply accumulates as pool surplus.
 
-## Per-Position Settlement
+## Claiming
 
-When a position is closed, its funding cost or credit is computed as:
+A trader redeems their earned funding with `claim_funding(user)`. It pays the claimable balance from the pool, capped at the pool's holdings (any remainder stays claimable), and shrinks both `funding_pool` and `funding_owed`. `NothingToClaim` (760) if the balance is empty. `claim_funding` is blocked while the market is `Frozen` (`MarketFrozen` 704) but remains available in every other status, including `Retired`.
 
-$$
-\text{funding} = \text{notional} \times \frac{\text{current\_index} - \text{entry\_index}}{\text{SCALAR\_18}}
-$$
+There is no live sweep of the pool surplus. It is swept once to the vault when the market enters `Retired`.
 
-Positive means the position paid funding during its lifetime; negative means it received funding.
+## Accrual
 
-## Design Rationale
-
-Continuous accrual prevents manipulation of the exact payment timestamp. Splitting pay and receive rates keeps the mechanism self-balancing without recomputing the pay rate on every action. LP compensation comes from the separate borrowing fee, which accrues to the vault via protocol fees.
+The funding index advances to now on every funding accrual, which is price-free: the maintenance call `accrue_funding()` advances only funding, while the price-bearing `accrue(price)` advances both funding and borrowing. Continuous accrual removes any incentive to manipulate the exact settlement timestamp.

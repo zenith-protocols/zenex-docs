@@ -5,40 +5,39 @@ title: Deposit Lock
 
 # Deposit Lock
 
-Every deposit or mint operation records a `DepositLock` for the recipient in persistent storage, containing the current timestamp and the number of locked shares:
+LP entry and exit run through the trading contract as **vault orders**, and the locks and gates that protect the pool are enforced there, on the fill, not on the vault. This page covers the vault-order lifecycle and the four protections that gate a fill: cooldowns, the pending-PnL gates, the utilization cap, and the balance cap. All the parameters named here are fields on the trading contract's `Config`, set per market by governance.
 
-```text
-DepositLock[receiver] = { timestamp: current_timestamp, shares: locked_shares }
-```
+## The Vault Order
 
-The recipient cannot withdraw, redeem, or transfer the locked shares until the lock period expires. The unlock time is computed as:
+`create_vault_order(user, kind, amount, max_adverse_pnl)` opens a deposit or redeem:
 
-```text
-unlock_time = deposit_lock.timestamp + lock_time
-```
+- A **deposit** escrows `amount` assets in the trading contract; a **redeem** escrows `amount` shares.
+- The deposited assets net of the vault fee, or a redeem's previewed assets, must clear `min_deposit`, else `InvalidOrder` (732).
+- The order stamps a cooldown deadline (`unlocks_at`) at creation. A `Frozen` market rejects the call with `MarketFrozen` (704).
+- `max_adverse_pnl` is the LP's own opt-in fill bound on adverse share mispricing (`SCALAR_18`, `0` = unbounded): a depositor declines to overpay while shares overprice beyond the tolerance, a redeemer declines to exit below fair value beyond it.
 
-where `lock_time` is the global lock duration stored in instance storage.
+`cancel_vault_order` refunds the escrowed assets or shares in full. `execute_vault_order(keeper, user, id, amount, price)` fills up to `amount`, clamped to the order remainder. A partial fill keeps the remainder pending under the **same id** with `created_at` intact, so a redeem cooldown never restarts, and the remainder must itself stay fillable (at or above `min_deposit`). Every fill deducts the `vault_fee` cut of the moved assets, split keeper / treasury / vault.
 
-## Lock Tracks the Receiver
+## Deposit Fill Gates
 
-The lock is applied to the **receiver** of the shares, not the caller who initiated the deposit. If Alice deposits on behalf of Bob, Bob is the one who becomes locked. Alice's own lock state is unaffected.
+A deposit mints shares net of the vault fee. It must clear:
 
-## New Deposits Accumulate Locked Shares
+- **Conditional cooldown.** The fill is instant while the shares sit within `instant_deposit_pnl` of fair value (nothing to snipe). Otherwise the `deposit_lock` cooldown must elapse, else `VaultOrderLocked` (751).
+- **Snipe gate.** Blocked while share underpricing (net pending trader loss over the vault) exceeds `max_pnl_deposit`, else `PendingPnlExceeded` (752). This stops a depositor from buying cheap shares just before pending trader losses are realized into the pool.
+- **Balance cap.** The post-deposit balance (fee included) may not exceed `max_vault_balance`, else `VaultBalanceExceeded` (753).
 
-If a user deposits again while the previous lock is still active, the new shares are added to the existing locked count and the timestamp resets to the current block time. The user must wait the full lock duration again from the new timestamp.
+## Redeem Fill Gates
 
-If the previous lock has already expired, the lock resets to only the newly deposited shares. Expired locks do not carry over.
+A redeem burns shares and pays assets net of the vault fee. It must clear:
 
-The `available_shares(user)` public query function returns the number of shares that a user can currently transfer, withdraw, or redeem. It subtracts the locked share count from the user's total balance when the lock is active, returning zero if the locked amount exceeds the balance.
+- **Redeem cooldown.** The `redeem_lock` cooldown from `created_at` must elapse, else `VaultOrderLocked` (751).
+- **Withdraw gate.** Blocked while share overpricing (net pending trader profit over the post-redeem vault) exceeds `max_pnl_withdraw`, else `PendingPnlExceeded` (752). This stops a redeemer from cashing out expensive shares just before pending trader profits are paid out of the pool.
+- **Utilization.** The post-withdrawal balance must still back the reserve within `max_util_withdraw`, else `UtilizationExceeded` (714).
 
-## Transfer Lock Behavior
+## Why the Gates Exist
 
-Only newly minted shares are locked. The lock tracks the receiver of a `deposit` or `mint` and is not a property of the shares themselves, so shares received via `transfer` or `transfer_from` arrive unlocked at the recipient.
+Vault share price reflects only realized flow (the token balance), not the trading contract's **pending** PnL. Without gates, an LP could deposit right before pending losses land (buying cheap) or redeem right before pending profits are paid (selling dear), extracting value from honest LPs. The snipe and withdraw gates close both directions, and the cooldowns force a deposit or redeem to sit through the window in which pending PnL would resolve. `max_adverse_pnl` lets an individual LP tighten the bound further for their own order.
 
-Both `transfer` and `transfer_from` still require the **sender** to pass the lock check on their own balance. This prevents a locked user from sidestepping the restriction by moving shares to a second address and withdrawing from there.
+## Two Utilization Caps
 
-## Error Codes
-
-| Error | Code | Trigger |
-|---|---|---|
-| `SharesLocked` | 791 | Withdraw, redeem, or transfer attempted while the lock has not expired |
+The market carries two utilization caps. `max_util_open` gates new opens and is the borrow-reserve denominator; `max_util_withdraw` (`>= max_util_open`) gates redeems, retaining a minimum vault liquidity buffer so the pool can always back its open reserve. A live lock change can only pull a queued order's stamped deadline **earlier**, never extend it.

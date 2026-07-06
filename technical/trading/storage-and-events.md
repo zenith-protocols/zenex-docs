@@ -5,141 +5,139 @@ title: Storage & Events
 
 # Storage & Events
 
-## Storage Layout
-
-All storage keys are defined in `TradingStorageKey`. Storage is split into three TTL tiers.
-
-### Instance Storage (30-day TTL)
-
-Global state that is accessed frequently and shared across all calls.
-
-| Key | Type | Description |
-|---|---|---|
-| `Status` | `u32` | Contract status enum value |
-| `Vault` | `Address` | Vault contract address |
-| `Token` | `Address` | Collateral token address |
-| `PriceVerifier` | `Address` | Pyth Lazer verifier address |
-| `Treasury` | `Address` | Protocol fee recipient |
-| `Config` | `TradingConfig` | Global trading parameters |
-| `TotalNotional` | `i128` | Sum of all position notionals across all markets |
-| `LastFundingUpdate` | `u64` | Timestamp of last `apply_funding` call |
-
-### Persistent Storage: Market Tier (45/52-day TTL)
-
-Per-market data, the global market list, and per-user position-id counters. The user counter is bumped at the market tier so it survives even if all of a user's positions expire, which prevents id reuse.
-
-| Key | Type | Description |
-|---|---|---|
-| `Markets` | `Vec<u32>` | List of registered market IDs (max `MAX_ENTRIES`) |
-| `MarketConfig(u32)` | `MarketConfig` | Per-market parameters |
-| `MarketData(u32)` | `MarketData` | Per-market mutable state |
-| `UserCounter(Address)` | `u32` | Per-user monotonic position-id sequence (next id to allocate) |
-
-### Persistent Storage: Position Tier (14/21-day TTL)
-
-Per-position data. Shorter TTL because perp positions are short-lived (most close within days).
-
-| Key | Type | Description |
-|---|---|---|
-| `Position(Address, u32)` | `Position` | Individual position data, keyed by `(owner, per-user id)` |
-
-Each user has their own counter (`UserCounter(Address)`), so two different users can both hold positions with id `0`. The `(user, id)` pair is the unique on-chain identifier. The `Position` struct itself does not carry a `user` field; the owner is encoded in the storage key.
-
-`UserCounter` is never decremented. Closing a position does not free its id for reuse; this simplifies event indexing and prevents id collisions across the lifetime of a user's account.
-
-There is no on-chain enumeration of a user's open positions: discovery requires off-chain indexing of position-lifecycle events. The contract exposes `get_user_counter(user) -> u32` (the next sequence number, not a list) and `get_position(user, id) -> Position`.
-
-## TTL Strategy
-
-| Tier | Threshold | Bump | Rationale |
-|---|---|---|---|
-| Instance | 30 days | 31 days | Accessed on every call; minimal expiry risk |
-| Market Persistent | 45 days | 52 days | Market config/data and market list; moderate access frequency |
-| Position Persistent | 14 days | 21 days | Per-position records; short-lived data |
-
-All TTLs are bumped on read or write. If a position is not touched for 14+ days, its `Position(user, id)` record could expire. Positions are short-lived (most close within days), so the shorter TTL avoids paying rent for abandoned positions. The `UserCounter(Address)` entry lives at the longer market tier (45/52 days), so the counter survives even when the user's positions are pruned, preventing id reuse.
+This page is the on-chain reference for the trading contract: its 14 events with exact topic layouts, the status lifecycle, the `Config` fields, and the error table.
 
 ## Events
 
-All events use Soroban's `#[contractevent]` derive macro. Fields marked with `#[topic]` are indexed for efficient filtering.
+All events use Soroban's `#[contractevent]` derive. The event-name symbol is the first topic, then the `#[topic]` fields in declared order, then all remaining fields form the data map. Amounts carry units: token decimals (token-dec), base decimals (base-dec), `price_scalar`, or `SCALAR_18`.
 
-### Admin Events
-
-| Event | Topics | Data |
+| Event | Topics (after the name symbol) | Data fields |
 |---|---|---|
-| `SetConfig` | None | (no data) |
-| `SetMarket` | `market_id` | None |
-| `SetStatus` | None | `status: u32` |
+| `create_order` | `user`, `id` | `order` (the stored `Order` row) |
+| `cancel_order` | `user`, `id` | (none) |
+| `create_vault_order` | `user`, `id` | `order` (the stored `VaultOrder` row) |
+| `cancel_vault_order` | `user`, `id` | (none) |
+| `execute_vault_order` | `user`, `id` | `filled`, `remaining` (`remaining = 0` means completed and removed) |
+| `claim_funding` | `user` | `amount` |
+| `adl_update` | (none) | `long`, `short` (per-side ADL enabled flags) |
+| `status_update` | (none) | `status` (u32 discriminant) |
+| `config_update` | (none) | `config` |
+| `terminal_price_update` | (none) | `price` |
+| `increase_fill` | `user`, `id`, `is_long` | `notional`, `tokens`, `collateral`, `base_fee`, `impact_fee`, `funding`, `borrowing` |
+| `decrease_fill` | `user`, `id`, `is_long` | `notional`, `tokens`, `collateral`, `pnl`, `base_fee`, `impact_fee`, `funding`, `borrowing`, `bad_debt`, `returned` |
+| `liquidation` | `user`, `is_long` | `notional`, `tokens`, `collateral`, `pnl`, `base_fee`, `impact_fee`, `funding`, `borrowing`, `bad_debt`, `liq_fee`, `returned`, `forfeit` |
+| `position_update` | `user`, `is_long` | `position` (the stored `Position` row; zeroed = closed) |
 
-### Position Events
+The factory emits one further event, `Deploy { trading, vault }`, when it deploys a pair. See [Factory](../factory/overview).
 
-Each position-lifecycle event carries only the fields that **change** at the emit moment. Off-chain indexers combine each event with the position row they already hold; fields established by an earlier event (e.g. `long`, `col`, `notional` set at `PlaceLimit`) are not repeated on later events.
+### Reading the fill receipts
 
-| Event | Topics | Data |
-|---|---|---|
-| `PlaceLimit` | `market_id, user, position_id` | `long, col, notional, entry_price, sl, tp, created_at` |
-| `OpenMarket` | `market_id, user, position_id` | `long, col, notional, entry_price, sl, tp, fund_idx, borr_idx, adl_idx, created_at, base_fee, impact_fee` |
-| `FillLimit` | `market_id, user, position_id` | `entry_price, fund_idx, borr_idx, adl_idx, created_at, base_fee, impact_fee` |
-| `ClosePosition` | `market_id, user, position_id` | `notional, price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
-| `TakeProfit` | `market_id, user, position_id` | `notional, price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
-| `StopLoss` | `market_id, user, position_id` | `notional, price, pnl, base_fee, impact_fee, funding, borrowing_fee` |
-| `Liquidation` | `market_id, user, position_id` | `notional, price, base_fee, impact_fee, funding, borrowing_fee, liq_fee` |
-| `RefundPosition` | `market_id, user, position_id` | (no data) |
-| `ModifyCollateral` | `market_id, user, position_id` | `col` (new total collateral after modification, **not** a delta) |
-| `SetTriggers` | `market_id, user, position_id` | `sl, tp` |
+`increase_fill`, `decrease_fill`, and `liquidation` carry the fill's itemized receipt; the resulting position state is carried by the paired `position_update`. A few conventions:
 
-Notes:
+- **Fill price is implied**, `notional * SCALAR_18 / tokens` (in `price_scalar` units). No event carries a price field.
+- **`funding` sign**: positive means funding was paid from collateral; negative means it was credited to the trader's claimable balance.
+- **`collateral` and `pnl` are gross** of the itemized fees. On a `decrease_fill`, `returned` is the actual payout (the gross legs less the fees they cover, floored at zero); a partial close pays only the profit leg while a realized loss debits the surviving margin. `bad_debt` is `0` on partial closes.
+- **`liquidation` tier**: `liq_fee = 0` is the soft tier (post-fee remainder on `returned`, to the trader); `liq_fee > 0` is the hard tier (remainder on `forfeit`, to the vault).
+- **ADL** emits a `decrease_fill` with `id = 0`.
 
-- On `ClosePosition`, `TakeProfit`, `StopLoss`, and `Liquidation`, the `notional` field is the **post-ADL** notional actually settled. Traders that have been auto-deleveraged will see a smaller notional on the settlement event than on the original `OpenMarket` / `FillLimit`.
-- `RefundPosition` carries no data. Indexers that need the refund amount must read it from the prior position state, or use the return value of `cancel_position` directly (the refund amount is returned by the call).
-- `ModifyCollateral` exposes `col` (post-modification total). To compute the delta, indexers look up the prior position.
-- `SetTriggers` field order is `sl, tp` (the on-chain field names).
+The Ownable module additionally emits its standard ownership-transfer events.
 
-### Market Events
+## Status Lifecycle {#status-lifecycle}
 
-| Event | Topics | Data |
-|---|---|---|
-| `DelMarket` | `market_id` | (no data) |
+The market runs through five states (the `u32` discriminant is in parentheses):
 
-### System Events
+```text
+Active (0)   OnIce (1)   Frozen (2)   Delisted (3)   Retired (4)
+```
 
-| Event | Topics | Data |
-|---|---|---|
-| `ApplyFunding` | None | (no data) |
-| `ADLTriggered` | None | `reduction_pct, deficit` |
+| Status | Opens | Closes / decreases | Vault orders | Claims | Keeper fills | Accrual |
+|---|---|---|---|---|---|---|
+| Active | yes | yes | yes | yes | yes | yes |
+| OnIce | no | yes | yes | yes | yes | yes |
+| Frozen | no | no | no | no | no | funding only |
+| Delisted | no | yes | deposits only | yes | yes | yes (until terminal price) |
+| Retired | no | no (book already empty) | redeem (direct) only | yes | no | no |
 
-Close events include `borrowing_fee` as a separate field alongside `base_fee`, `impact_fee`, and `funding`. The emitted `pnl` is the net PnL (after all fees, clamped to `-col`). The `notional` data field on close/liquidation events is the post-ADL value at settlement.
+- **Active** is the only status that accepts opens (size-growing increases).
+- **OnIce** blocks opens; everything else keeps running.
+- **Frozen** is an emergency halt: `create_order`, `create_vault_order`, `cancel_vault_order`, `claim_funding`, and every keeper fill revert with `MarketFrozen` (704).
+- **Delisted** starts the wind-down. Opens are blocked. Within `DELIST_GRACE` (1 day) of the first delist it can be reverted to `Active`/`OnIce`; after that the trading statuses are unreachable for good, and a flat terminal settlement price can be set and refreshed. Once `DELIST_DEADLINE` (7 days) passes, keepers may force-close any remaining position at the terminal price regardless of health (healthy positions flow through the soft liquidation tier and keep full equity). Deposits stay allowed so the vault keeps funding payouts.
+- **Retired** is final. It is reachable only from a graced-out `Delisted` market with an **empty book** (all positions closed), and entering it sweeps the funding-pool surplus to the vault (`MarketNotCleared` 706 if any position remains). Only `claim_funding`, a direct vault redeem (a `create_vault_order` redeem forwards straight to `vault.redeem` and returns id `0`; deposits are rejected), and cancels stay live. No transition leaves `Retired`.
+
+`Active`, `OnIce`, and `Frozen` interchange freely on a live market. `Frozen` and `Delisted` are reachable from anything but `Retired`. A same-status set is rejected with `InvalidStatus` (702). The switch to flat pricing is governed by terminal-price presence, not by the status value: accrual (borrowing) keeps charging until a terminal price is stored, after which everything prices flat.
+
+## Config Fields {#config-fields}
+
+The global `Config` is set at deployment and replaced wholesale by `set_config`. Every field is set per market by governance; the protocol only enforces the ordering and range invariants noted. All fractional values are `SCALAR_18`; rate parameters are per second.
+
+| Field | Meaning |
+|---|---|
+| `keeper_rate` | Keeper share of the trade and vault fill fees |
+| `min_position_notional`, `max_position_notional` | Position size floor and ceiling (token-dec) |
+| `max_open_interest` | Per-side open-interest ceiling (token-dec), `>= max_position_notional` |
+| `min_order_notional`, `min_order_collateral` | Per-order dust floors (token-dec) |
+| `fee_dom`, `fee_non_dom` | Dominant and non-dominant trade fee rates, `fee_dom >= fee_non_dom`, capped at 1% |
+| `impact_divisor` | Impact fee = worsening notional / this, floored at `MIN_IMPACT` |
+| `max_util_open` | Opens blocked above this; also the borrow-reserve denominator |
+| `max_util_withdraw` | Withdrawals blocked above this, `>= max_util_open` |
+| `init_margin` | Initial margin; max leverage = `1 / init_margin` |
+| `maintenance_margin` | Hard liquidation floor, `< init_margin` |
+| `liq_fee` | Liquidation fee, capped at 25% |
+| `notional_lock` | Decrease lock on newly added notional (seconds), in `[MIN_NOTIONAL_LOCK, MAX_NOTIONAL_LOCK]` |
+| `target_util` | Borrowing kink utilization, `< 1` |
+| `borrow_rate` | Borrowing slope below the kink (per second) |
+| `increased_borrow_rate` | Borrowing rate at full utilization, `>= borrow_rate`, capped at `MAX_BORROW_RATE` |
+| `funding_increase`, `funding_decrease` | Funding velocity acceleration and decay (per second squared) |
+| `threshold_stable_funding`, `threshold_decrease_funding` | Skew bands for hold vs decay, decrease `<=` stable |
+| `funding_min`, `funding_max` | Charged-rate floor and saved-rate cap (per second), capped at `MAX_FUNDING_RATE` |
+| `adl_max_pnl` | ADL trigger on side PnL over half the vault, in `[MIN_ADL_TRIGGER, max_pnl_trader]`, `< 1` |
+| `adl_clear_target` | ADL clear target, in `[MIN_ADL_CLEAR, adl_max_pnl]` |
+| `max_pnl_trader` | Realized-profit haircut threshold, `< 1` |
+| `redeem_lock`, `deposit_lock` | Vault-order cooldowns from `created_at` (seconds) |
+| `instant_deposit_pnl` | Share underpricing at or under which a deposit skips its cooldown, `<= max_pnl_deposit` |
+| `vault_fee` | Vault fill fee rate on moved assets |
+| `min_deposit` | Minimum assets per vault-order fill (token-dec) |
+| `max_pnl_deposit` | Deposit fills blocked above this share underpricing, `< 1` |
+| `max_pnl_withdraw` | Redeem fills blocked above this share overpricing, `< 1` |
+| `max_vault_balance` | Vault balance ceiling on deposit fills (token-dec) |
+
+Changing a borrowing parameter (`target_util`, `borrow_rate`, `increased_borrow_rate`) requires a same-ledger `accrue`, else `set_config` reverts with `BorrowingNotAccrued` (703).
 
 ## Error Codes
 
-All errors use `panic_with_error!(e, TradingError::Variant)`. Errors are hard panics that abort the entire transaction, including keeper batch execution via `execute` (which returns `()`).
+All errors are hard panics that abort the transaction. Domains follow v1 for auditor familiarity: access `1xx`, config/position/market `7xx`.
 
-| Code | Name | Description |
+| Code | Name | Meaning |
 |---|---|---|
-| 1 | `Unauthorized` | Non-owner tried owner-only action |
-| 700 | `InvalidConfig` | Config parameter out of valid range |
-| 701 | `MarketNotFound` | No market registered for the given market_id |
-| 702 | `MarketDisabled` | Market is disabled or deleted |
-| 703 | `MaxMarketsReached` | `MAX_ENTRIES` markets already registered |
-| 710 | `InvalidPrice` | Price verification failed, market_id mismatch, or missing feed |
-| 711 | `StalePrice` | Price data predates position open time |
-| 712 | `PriceSlippage` | Fill price outside the user-supplied `price_bound` |
-| 720 | `PositionNotFound` | Position ID not found in storage |
-| 721 | `PositionNotPending` | Position is filled; expected pending |
-| 723 | `NegativeValueNotAllowed` | A parameter is zero or negative |
-| 724 | `NotionalBelowMinimum` | Below `min_notional` |
-| 725 | `NotionalAboveMaximum` | Above `max_notional` |
-| 726 | `LeverageAboveMaximum` | Exceeds `1/margin` |
-| 727 | `CollateralUnchanged` | Modify to same value |
-| 728 | `WithdrawalBreaksMargin` | Withdrawal would breach initial margin |
-| 731 | `NotActionable` | No valid action for this position in execute batch |
-| 732 | `PositionTooNew` | `MIN_OPEN_TIME` not elapsed |
-| 733 | `ActionNotAllowedForStatus` | Action not allowed for position status |
-| 734 | `InvalidInput` | Malformed input (e.g. `execute` users/ids vec length mismatch) |
-| 740 | `InvalidStatus` | Invalid or disallowed contract status value |
-| 741 | `ContractOnIce` | New positions blocked (OnIce, AdminOnIce, or Frozen) |
-| 742 | `ContractFrozen` | Position management blocked (Frozen). `cancel_position` is exempt; collateral refunds are not held hostage by a freeze. |
-| 750 | `ThresholdNotMet` | Net PnL below ADL threshold |
-| 751 | `UtilizationExceeded` | Position would exceed notional/vault cap |
-| 752 | `FundingTooEarly` | `apply_funding` called < 1 hour since last call |
-| 760 | `Expired` | Current ledger is past the user-supplied `expiration_ledger` |
+| 700 | `InvalidConfig` | A config value is out of bounds or an ordering invariant is violated |
+| 701 | `InvalidPrice` | Flat settlement price is not strictly positive |
+| 702 | `InvalidStatus` | Illegal status transition, or the action needs a different status |
+| 703 | `BorrowingNotAccrued` | A borrowing rate changed without a same-ledger `accrue` |
+| 704 | `MarketFrozen` | Action halted by status (`Frozen`, or `Retired` on trading paths) |
+| 705 | `IncreaseHalted` | An Increase ran while the market does not accept opens (status or ADL flag) |
+| 706 | `MarketNotCleared` | Retirement attempted while positions remain open |
+| 710 | `NegativeValueNotAllowed` | A value that must be non-negative is negative |
+| 711 | `NotionalBelowMinimum` | Resulting notional below `min_position_notional` |
+| 712 | `NotionalAboveMaximum` | Notional (or an increase delta) above `max_position_notional` |
+| 713 | `InsufficientMargin` | Equity below the initial-margin floor (open, increase, or withdraw) |
+| 714 | `UtilizationExceeded` | Open interest or withdrawal would exceed the utilization cap |
+| 715 | `OpenInterestExceeded` | A side's open interest would exceed `max_open_interest` |
+| 720 | `PositionNotFound` | No position exists for `(user, is_long)` |
+| 721 | `NotionalLocked` | Requested close exceeds the position's unlocked notional |
+| 722 | `NotLiquidatable` | Liquidation attempted while equity is still above maintenance margin |
+| 730 | `OrderNotFound` | No keeper order for `(user, id)` |
+| 731 | `OrderExpired` | Order `expiration` is behind the current ledger sequence |
+| 732 | `InvalidOrder` | Disallowed delta pair, a value below a dust floor, or an expiration beyond the storage horizon |
+| 740 | `StalePrice` | Verified price predates the position or order (anti-replay) |
+| 741 | `PriceBoundExceeded` | Fill price is worse than the order's `price_bound` |
+| 742 | `TriggerNotMet` | The order's `trigger_price` was not crossed |
+| 750 | `VaultOrderNotFound` | No vault order for `(user, id)` |
+| 751 | `VaultOrderLocked` | Vault order filled before its cooldown elapsed |
+| 752 | `PendingPnlExceeded` | Vault fill blocked by a pending-PnL gate (deposit, redeem, or the order's own bound) |
+| 753 | `VaultBalanceExceeded` | Deposit fill would push the vault above `max_vault_balance` |
+| 760 | `NothingToClaim` | Claim attempted with no claimable funding balance |
+| 770 | `AdlNotTriggered` | ADL execution while the side is unflagged or already at the clear target |
+| 771 | `AdlOvershoot` | ADL close overshot below the side's clear target |
+| 772 | `AdlNotEligible` | ADL close did not reduce the side's pending PnL (not a winner) |
+
+Access-control failures (a non-owner calling an owner-only entry point) raise the Ownable module's own unauthorized error.

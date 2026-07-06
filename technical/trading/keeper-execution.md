@@ -5,70 +5,54 @@ title: Keeper Execution
 
 # Keeper Execution
 
-The keeper system enables permissionless execution of limit order fills, stop-loss/take-profit triggers, and liquidations. Any address can call the `execute` function and earn fees for performing these actions.
+Every price-bearing action in Zenex is performed by a permissionless keeper. Traders create price-free intents; keepers fill them at a verified Pyth Lazer price and are paid a cut of the fee for doing so. Any address can act as a keeper.
 
-## Batch Processing
+## Price-Bearing Entry Points
 
-`execute(caller: Address, market_id: u32, users: Vec<Address>, ids: Vec<u32>, price: Bytes)`
+Each of these takes a serialized Pyth Lazer price update (`Bytes`), verified against the contract's immutable feed before anything settles:
 
-The `execute` function processes a batch of positions for a single market in one transaction. The price payload is verified once via `verify_price` (single feed) on the price-verifier, and a `Context` is loaded for the specified `market_id`, which accrues borrowing and funding indices to the current timestamp. The contract must not be `Frozen`.
-
-`users` and `ids` are **parallel vectors**: position `i` in the batch is `Position(users[i], ids[i])`. Both vectors must have the same length. The two-vector shape is required because a single `id` is not unique across users, so the keeper must explicitly state the owner of each position.
-
-All positions in the batch must belong to the same `market_id`. If any position fails its action (not actionable, too new, wrong market), the entire batch aborts with a hard panic. There is no partial success: either all positions are processed or none are.
-
-### Context
-
-The `Context` bundles the verified price (single feed), price scalar, market config and data, global trading config, vault balance, token/vault/treasury addresses, and total notional. It is loaded once at the start of the batch and auto-accrues indices on construction. After all positions are processed, mutated state is written back via `ctx.store()`.
-
-## Auto-Detection
-
-The `execute` function auto-detects the action for each position based on its state:
-
-- **Not filled** (pending limit order) → attempt fill. For longs, fills when `price <= entry_price`; for shorts, fills when `price >= entry_price`. If the fill condition is not met, panics with `NotActionable`.
-- **Filled** (active position) → checks in priority order:
-  1. **Liquidation**: equity < liquidation threshold (`notional * liq_fee`). Bypasses `MIN_OPEN_TIME`.
-  2. **Stop-loss**: trigger price hit. Requires `MIN_OPEN_TIME`.
-  3. **Take-profit**: trigger price hit. Requires `MIN_OPEN_TIME`.
-  4. If none apply, panics with `NotActionable`.
-
-This simplifies keeper logic: keepers only need to submit the parallel `users` / `ids` vectors and price data for a single market.
-
-## Error Handling
-
-All errors are hard panics that abort the entire batch. There is no soft error or per-position result vector.
-
-| Error | Code | Meaning |
+| Function | Action | Keeper reward |
 |---|---|---|
-| `NotActionable` | `731` | No valid action for this position (limit not fillable, not liquidatable, no SL/TP triggered) |
-| `PositionTooNew` | `732` | `MIN_OPEN_TIME` (30s) not elapsed; SL/TP cannot fire yet |
-| `PositionNotPending` | `721` | Position is already filled but was expected to be pending |
-| `InvalidPrice` | `710` | Position's `market_id` does not match the batch's `market_id`, or price feed mismatch |
-| `ContractFrozen` | `742` | Contract is in Frozen state, all operations blocked |
-| `StalePrice` | `711` | Liquidation price predates position open time |
+| `execute_order(keeper, user, id, price)` | Fill an increase or decrease order | `keeper_rate` cut of the trade fee |
+| `execute_liquidation(keeper, user, is_long, price)` | Force-close a position below maintenance margin | `keeper_rate` cut of the close's trade fee |
+| `execute_vault_order(keeper, user, id, amount, price)` | Fill up to `amount` of a deposit or redeem | `keeper_rate` cut of the vault fill fee |
+| `update_adl_state(price)` | Recompute the per-side ADL flags | none (state update only) |
+| `execute_adl(keeper, user, is_long, amount, price)` | Deleverage a winning position on a flagged side | `keeper_rate` cut of the trade fee |
+| `accrue(price)` | Advance borrowing and funding indices to now | none |
 
-## Settlement Ordering
+The price-free maintenance call `accrue_funding()` advances only the funding index, which needs no price.
 
-The batch aggregates all transfers into a map (`Address -> i128`). Settlement follows a specific order:
+## Permissionless and Unauthenticated
 
-1. **Vault pays first**: if the vault's net transfer is negative (vault owes money), `strategy_withdraw` is called to bring tokens into the trading contract.
-2. **Outbound transfers**: all positive transfers to non-vault addresses (keeper fees, user payouts, treasury fees) are paid.
-3. **Vault receives last**: if the vault's net transfer is positive (vault gains), tokens are transferred to the vault.
+The `keeper` argument is only the reward recipient. It is never authenticated, and it need not be related to the trader or the order. The trader consented to the fill in two ways at order creation: the collateral allowance that funds an increase, and the trigger and slippage bounds that constrain the price. This creates a competitive, open keeper network where anyone can run a bot and collect rewards.
 
-This ordering prevents balance shortfalls within the trading contract during batch settlement.
+## Fill Eligibility
 
-## Keeper Fee
+Before settling, `execute_order` evaluates the order against the verified price. Both the trigger and the slippage bound are judged on the **execution-side** price: the entry price (`ask` for a long, `bid` for a short) for an Increase, the exit price (`bid` for a long, `ask` for a short) for a Decrease. So a stop or limit fires on the exact price the fill will touch. Each check is skipped when its field is `0`.
 
-Keepers earn a percentage of trading fees (base + impact) on each successful action:
+- **Trigger.** `trigger_above` selects the cross direction: eligible when the execution-side price is at or above (`true`) or at or below (`false`) `trigger_price`. Not crossed raises `TriggerNotMet` (742).
+- **Slippage bound.** `price_bound` is one-sided: a buy leg (long Increase or short Decrease) caps the price and rejects above the bound; a sell leg floors it and rejects below. Worse than the bound raises `PriceBoundExceeded` (741).
+- **Anti-replay.** The verified price's `publish_time` must be at or after the order's `created_at`, else `StalePrice` (740). One exception: a market order (`trigger_price == 0`) filling in its own creation ledger is an atomic create-and-fill and accepts any verifier-accepted price. A trigger order gets no same-ledger exemption.
 
-$$
-\text{caller\_fee} = \text{trading\_fee} \times \frac{\text{caller\_rate}}{\text{SCALAR\_7}}
-$$
+## Settlement and the Fee Split
 
-Where `trading_fee = base_fee + impact_fee`. The caller fee is deducted from the vault's share, not from the user. On liquidation, `caller_fee = min(trading_fee + liq_fee, col) * caller_rate / SCALAR_7`.
+Fills settle on a gross basis inside `settle()`. Four itemized costs are computed (see [Fee System](./fee-system.md)): the trade fee (base), impact, funding, and borrowing. They are split between three recipients:
 
-## No Authentication Required
+- The **keeper** takes its `keeper_rate` cut of the trade fee (base plus impact).
+- The **treasury** takes its rate (read from the treasury contract, clamped to `[0, MAX_KEEPER_RATE]`) of the trade fee, the borrowing fee, and any forfeit.
+- The **vault** banks every remainder, funds realized PnL through `strategy_withdraw`, and absorbs `bad_debt`.
 
-The `execute` function does not require the caller to authenticate. Any address can submit keeper requests and receive the `caller_rate` percentage of fees. This is an intentional design choice that creates a competitive, permissionless keeper network where anyone can participate.
+Fees are subtracted from the posted collateral at fill, so a later fee or rate increase cannot break an existing allowance. Order validation already guarantees the posted collateral covers the fees. If a direct payout to a trader fails (for example a dropped trustline), the contract falls back to granting a pull allowance (`pay_trader`), so a third-party fill never stalls on its receiver.
 
-The `caller` address parameter determines who receives the keeper fee. The caller does not need to be related to the position owner.
+## Router Batching
+
+Keepers and integrators can bundle work through the stateless trading-router contract, which never holds funds:
+
+- `multicall(calls)` runs a list of calls in order; any failure traps the whole batch (all-or-nothing).
+- `multicall_try(calls)` runs them in order but isolates each failure: a failing call rolls back only its own effects and the batch continues, reporting a `CallOutcome { ok, value, error }` per call.
+- `create_and_fill(trading, keeper, user, approve_amount, ...order args, price)` creates an order and fills it atomically (fill-or-kill: a failing fill unwinds the creation and the approval). With `keeper = user` the reward round-trips to the trader. `approve_amount` sets the collateral allowance first (`0` skips it).
+- `create_and_try_fill(...)` creates strictly, then attempts an isolated fill; a failed fill leaves the order resting with its allowance in place, reporting why in a `FillAttempt`.
+- `create_and_try_fill_vault_order(...)` does the same for a deposit or redeem: a locked order simply rests, and a Retired-market redeem pays out at creation.
+- `adl_sweep(trading, keeper, targets, price)` deleverages a list of targets back to back, isolated, stopping once a target reports `AdlNotTriggered` (the side has reached its clear target).
+
+A router-set collateral approval lasts roughly 120 days. The full type shapes (`Call`, `CallOutcome`, `FillAttempt`, `AdlTarget`) live in the SDK's trading-router module.

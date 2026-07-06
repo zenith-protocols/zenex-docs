@@ -13,8 +13,8 @@ The `GovernanceContract` is a general-purpose timelock proxy for deferred admin 
 __constructor(owner: Address, delay: u64)
 ```
 
-- `owner` -- Admin address authorized to queue/cancel calls and set status.
-- `delay` -- Mandatory waiting period in seconds before queued calls can execute. Must be in the range `[1, 5_184_000]` (1 second to 60 days). Panics with `InvalidDelay` (772) if zero or above the 60-day cap.
+- `owner`: Admin address authorized to queue/cancel calls and set status.
+- `delay`: Mandatory waiting period in seconds before queued calls can execute. Must be in the range `[1, 5_184_000]` (1 second to 60 days). Panics with `InvalidDelay` (772) if zero or above the 60-day cap.
 
 ## Entry Points
 
@@ -48,7 +48,7 @@ execute(nonce: u32)
 set_status(target: Address, status: u32)
 ```
 
-*Owner only.* Immediately calls `set_status(status)` on the target contract, bypassing the timelock delay. This allows emergency pause (`Frozen`, `AdminOnIce`) without waiting.
+*Owner only.* Immediately calls `set_status(status)` on the target contract, bypassing the timelock delay. This allows an emergency status change without waiting, for example freezing a trading market (`Frozen`) or starting its wind-down (`Delisted`). The governance contract is flow-agnostic: it forwards whatever `u32` status value the owner passes and does not interpret it, so the meaning of each value is defined by the target contract (see the trading [status lifecycle](../trading/storage-and-events.md#status-lifecycle)).
 
 ### set_delay
 
