@@ -5,40 +5,49 @@ title: Depositing & Withdrawing
 
 # Depositing & Withdrawing
 
+In v2, providing and withdrawing liquidity happens through **vault orders**. You create an order that escrows your assets or shares in the trading contract, and a permissionless [keeper](../keepers/overview.md) fills it at a verified oracle price. Fills are not instant: the value you deposit or redeem is priced against the market's live price when the keeper executes, not when you submit.
+
 ### Depositing
 
-To provide liquidity, you deposit underlying tokens (e.g., USDC) into the vault. In return, the vault mints **share tokens** proportional to your deposit based on the current share price:
+To provide liquidity you create a **deposit vault order** for an amount of the underlying token (e.g., USDC). At creation, that amount is escrowed inside the trading contract. When a keeper fills the order, the vault mints **shares** to you net of the vault fill fee, based on the share value at the fill price:
 
 $$
-sharesReceived = \frac{depositAmount}{sharePrice}
+sharesReceived = \frac{depositAmount - vaultFee}{sharePrice}
 $$
 
-There are two ways to deposit:
+A deposit fill must clear a minimum size (`min_deposit`, set per market by governance). The vault also enforces a maximum balance cap, so a fill that would push the vault above `max_vault_balance` is rejected until capacity frees up.
 
-- **Deposit**: Specify an exact amount of underlying tokens to deposit. You receive however many shares that amount is worth at the current price.
-- **Mint**: Specify an exact number of shares you want to receive. The vault calculates and takes the required amount of underlying tokens.
+### Redeeming
 
-**Example:** If the current share price is \$1.05 and you deposit \$1,000 USDC, you receive approximately 952.38 vault shares ($1000 / 1.05$).
+To exit, you create a **redeem vault order** for a number of shares. Those shares are escrowed at creation. When a keeper fills the order, the vault burns the shares and pays you the underlying assets net of the vault fill fee, valued at the fill price.
 
-### Withdrawing
+You can cancel a resting vault order at any time before it fills. Cancelling refunds the escrowed assets (for a deposit) or shares (for a redeem) in full.
 
-To exit your position, you burn vault shares in exchange for the underlying tokens. The amount you receive depends on the current share price, which may be higher or lower than when you deposited.
+### Cooldowns
 
-There are two ways to withdraw:
+Vault orders carry a cooldown deadline stamped at creation. The order becomes fillable only once the cooldown elapses. Two locks apply, both set per market by governance:
 
-- **Withdraw**: Specify an exact amount of underlying tokens you want to receive. The vault burns however many shares are required.
-- **Redeem**: Specify an exact number of shares to burn. You receive whatever amount of underlying tokens those shares are worth.
+- **`redeem_lock`**: the cooldown a redeem order must wait before a keeper can fill it. It runs from the order's creation time and cannot be extended once stamped. A later governance change to the lock can only pull a queued order's deadline earlier, never later.
+- **`deposit_lock`**: the cooldown a deposit order must wait. This lock is conditionally waived. When the shares sit within `instant_deposit_pnl` of fair value there is nothing to snipe, so the deposit can fill immediately (the instant-deposit waiver). Otherwise the deposit must wait out `deposit_lock` before it becomes fillable.
 
-### Lock Period
+### Per-Order Adverse-PnL Bound
 
-After depositing, your vault shares are subject to a **lock period**. During this time you cannot transfer or withdraw your shares. This mechanism protects the vault against arbitrage of the share price. The duration is set per-deployment and can be queried on-chain via `lock_time()`; the current testnet deployment uses 60 seconds. Once the lock period has elapsed, you can withdraw or transfer freely at any time.
+Every vault order carries an optional `max_adverse_pnl` bound that you set. It is your own opt-in protection against filling at a mispriced share value: as a depositor it declines to overpay while shares are overpriced beyond your tolerance, and as a redeemer it declines to exit below fair value beyond your tolerance. Set it to zero to leave the order unbounded. This is distinct from the protocol's own gates described in [Risks & Rewards](./risks-and-rewards.md).
 
-### Share Price
+### Partial Fills
 
-The share price reflects the total value of assets held in the vault divided by the total supply of shares:
+A keeper can fill a vault order partially. When that happens, the remainder stays pending under the **same order** with its original creation time intact, so a redeem's cooldown does not restart and the rest can be filled by a later keeper transaction. Any remainder must itself stay large enough to be fillable (at least `min_deposit`).
+
+### Retired-Market Direct Redeem
+
+Once a market reaches the **Retired** status (its final, defunct state after wind-down), the keeper flow no longer applies to redeems. Creating a redeem order forwards straight to the vault and pays out immediately, with no keeper and no cooldown. Deposits are rejected in a Retired market. This gives liquidity providers a direct exit once the market has been fully wound down. For the full status lifecycle, see the trading documentation.
+
+### Share Value
+
+Share value reflects the vault's total assets net of pending trader PnL, divided by the total supply of shares:
 
 $$
-sharePrice = \frac{totalAssets}{totalShares}
+sharePrice = \frac{totalAssets - pendingTraderPnl}{totalShares}
 $$
 
-As the vault earns [fees](../trading/fees.md) and [borrowing interest](../trading/borrowing-interest.md), or absorbs trader losses, the total assets increase and the share price rises. Conversely, when traders are profitable, the vault pays out and the share price decreases. For more on what drives share price changes, see [Risks & Rewards](./risks-and-rewards.md).
+As the vault earns [fees](../trading/fees.md) and [borrowing interest](../trading/borrowing-interest.md), or absorbs trader losses, share value rises. When traders are in profit, the vault owes payouts and share value falls. For what drives these movements and how the protocol protects depositors, see [Risks & Rewards](./risks-and-rewards.md).
