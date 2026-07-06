@@ -5,15 +5,15 @@ title: Parameter Changes
 
 # Parameter Changes
 
-Each Zenex deployment has configurable parameters that control fees, rates, leverage limits, and market behavior. How these parameters are changed depends on the governance model chosen by the deployment owner.
+Each Zenex market is a standalone trading contract with a configurable set of parameters that control fees, interest curves, leverage limits, and lifecycle behavior. Because every market is its own contract, parameter changes are **per market**. How those changes are applied depends on the governance model the market owner has chosen.
 
 ## Direct Ownership
 
-When the trading contract is owned directly by an address or multisig, the owner can update parameters immediately by calling the contract's configuration functions. This is the simplest model and is appropriate for deployments where the owner is trusted or where fast iteration is needed.
+When the trading contract is owned directly by an address or multisig, the owner can update parameters immediately by calling the contract's configuration entry point. This is the simplest model and is appropriate for markets where the owner is trusted or where fast iteration is needed. A change to the borrowing parameters is paired with a same-ledger interest accrual, so switching rates never skips or double-counts accrued borrowing interest.
 
 ## Timelock Governance
 
-For deployments that prioritize transparency, Zenex provides an optional governance contract with a built-in timelock. When the trading contract is owned by this governance contract, parameter changes follow three sequential steps.
+For markets that prioritize transparency, Zenex provides an optional governance contract with a built-in timelock. When the trading contract is owned by this governance contract, parameter changes follow three sequential steps.
 
 1. **Queue.** The governance owner submits a transaction that records the proposed change on-chain. The change is visible to anyone inspecting the contract state. The existing parameters remain in effect.
 
@@ -23,12 +23,14 @@ For deployments that prioritize transparency, Zenex provides an optional governa
 
 The governance owner can cancel a queued change at any time before it is executed. Queued changes have a limited lifetime: they expire after twice the delay period (with a minimum of one day). If a queued change is not executed before it expires, it must be re-queued.
 
-## What Parameters Exist
+## What Can Be Changed
 
-Zenex has two categories of configurable parameters.
+A market owner acts through three entry points, each governing a different kind of change.
 
-Global trading parameters apply across all markets. These include the base fee rates for the dominant and non-dominant sides, the global base borrowing rate and variable borrowing rate, the funding rate, the caller rate that determines keeper compensation, the minimum and maximum notional position sizes, and the global utilization cap.
+**Configuration** replaces the market's full parameter set: the skew-split trade fee rates, the impact fee divisor, the keeper rate, the position size bounds and open-interest ceiling, the order dust floors, the initial and maintenance margins (which set the leverage envelope), the liquidation fee, the notional lock, the utilization caps, and the borrowing and funding curves. Every one of these is set per market by governance.
 
-Per-market parameters are configured individually for each trading pair. These include whether the market is enabled, the margin requirement (which determines maximum leverage), the liquidation threshold, the price impact divisor, the per-market variable borrowing rate, and the per-market utilization cap.
+**Status** moves the market through its lifecycle: normal trading, paused openings, an emergency freeze, a delist wind-down, or final retirement. The status is the only lever that can always be pulled immediately, even under a timelock.
 
-For details on what each parameter controls, see the [Market Parameters](../markets/market-parameters.md) page.
+**Terminal price** sets the flat settlement price used to wind down a delisted market once its grace window has passed.
+
+For details on what each parameter controls, see the [Market Parameters](../markets/market-parameters.md) page. For the lifecycle states, see [Markets Overview](../markets/overview.md).

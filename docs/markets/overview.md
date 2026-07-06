@@ -5,26 +5,34 @@ title: Overview
 
 # Markets Overview
 
-A **market** on Zenex represents a specific asset (e.g. BTC, XLM) that can be traded. Prices are denominated in the vault's collateral token, so if the vault uses USDC, all positions and PnL are settled in USDC. Each market has its own configuration and risk parameters.
+A **market** on Zenex is a single leveraged trading pair, for example BTC or XLM, priced in the market's settlement token. If that token is USDC, then every position, fee, and PnL figure in the market is denominated and settled in USDC.
 
-### Market Configuration
+In Zenex each market is its **own** trading contract, paired with its **own** strategy vault. There is no shared multi-market contract, and there is no market identifier that selects a pair inside a larger contract. To add a market, the [factory](../governance/overview.md) deploys a fresh trading contract and vault together as an isolated pair. That isolation is deliberate: the risk of one market never touches the liquidity of another.
 
-Every market is defined by a set of [configurable parameters](./market-parameters.md) that govern its behavior. These include the initial margin requirement (`margin`) which determines the maximum leverage, the liquidation threshold (`liq_fee`), the price impact fee divisor (`impact`), a per-market utilization cap (`max_util`), and a per-market variable borrowing rate (`r_var_market`).
+### Oracle Price Feed
 
-These parameters vary per asset to reflect differences in liquidity and volatility. The current settings for all assets can be found on the [Supported Assets](./supported-assets.md) page.
+Each market is bound to a single **oracle price feed** at deployment. The feed is identified by a Pyth Lazer `feed_id` and a price `exponent`, and both are **immutable** for the life of the contract. Keepers submit signed Pyth Lazer price updates, which the contract's price verifier checks against these fixed anchors before any fill, liquidation, or accrual runs. The feed cannot be swapped after deployment, so a market always prices the asset it was created for.
 
-### Oracle Price Feeds
+### Per-Market Configuration
 
-Each market is linked to an **oracle** that provides real-time price data. The oracle price is used for position execution, PnL calculations, and liquidation checks.
+Every market carries its own **Config**: the fees, margin requirements, leverage cap, utilization caps, and the borrowing and funding curves that govern its behavior. These values are set per market by governance to reflect the liquidity and volatility of the underlying asset, and they can be adjusted over time. See [Market Parameters](./market-parameters.md) for the full list of what is configurable.
 
-### Open Interest
+### Open Interest and Balance
 
-Markets track **open interest**, the total notional value of all open positions, separately for longs and shorts. This long/short breakdown is critical because it drives both the [funding rate](../trading/funding-rate.md) and the [borrowing interest](../trading/borrowing-interest.md). When one side dominates, funding rates adjust to incentivize balance. Borrowing interest also increases with utilization, discouraging excessive concentration and reducing directional risk for the vault.
+Each market tracks **open interest**, the total size of open positions, separately for longs and shorts. This long/short split drives both the [funding rate](../trading/funding-rate.md) and the [borrowing interest](../trading/borrowing-interest.md). When one side dominates, funding shifts to reward the lighter side and pull the book back toward balance, while borrowing interest rises with utilization to compensate the vault for the liquidity that open positions reserve.
 
-### Supported Assets
+### Market Lifecycle
 
-Zenex currently supports a select set of assets, and that list will expand over time. Anyone can also deploy additional vaults via the factory contract, and those external deployments may list other asset classes. Each asset has tailored parameter settings based on its liquidity profile. See [Supported Assets](./supported-assets.md) for full details.
+A market moves through a small set of operational states, controlled by governance:
+
+- **Active**: normal trading. This is the only state that accepts new position openings.
+- **OnIce**: openings are paused, but everything else keeps working. Traders can still close, reduce, add or remove collateral, place vault orders, and claim funding.
+- **Frozen**: an emergency halt. Every fund-moving action is blocked until the market is unfrozen.
+- **Delisted**: a wind-down. Openings stop. For a short grace window the delist can be reversed, after which a flat terminal settlement price is set. Once a 7-day force-close deadline passes, keepers may close any remaining position at that terminal price regardless of its health.
+- **Retired**: the market is defunct and final. Only funding claims and direct vault redemptions remain.
+
+For how these transitions are triggered and what each one does, see [Governance Overview](../governance/overview.md).
 
 ### Adding New Markets
 
-New markets can only be created by the **contract owner**. Market parameters are configurable and can be adjusted over time, ensuring the protocol can adapt to changing market conditions and community needs.
+New markets are created by deploying a new trading and vault pair through the factory. Because each market is a standalone contract with its own owner and its own configuration, the set of available markets grows by deployment rather than by editing a list inside one shared contract. See [Supported Assets](./supported-assets.md) for how markets are listed and which assets are currently available.
