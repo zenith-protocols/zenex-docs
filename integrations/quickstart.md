@@ -5,146 +5,173 @@ title: Quickstart
 
 # Quickstart
 
-The fastest path to taking a fee on Zenex perpetuals from your own application. You will install the SDK, deploy a trading wrapper, place a first market order against it, and read position state back from the chain.
+The fastest path to trading Zenex perpetuals from your own application. You will install the SDK, point a `TradingContract` at a market, approve the collateral allowance, create a price-free market order, have a keeper fill it at a verified price, and read the resulting position back from the chain.
 
 ## 1. Install the SDK
 
 ```bash
-npm install @zenith-protocols/zenex-sdk
+npm install @zenith-protocols/zenex-sdk @stellar/stellar-sdk
 ```
 
-## 2. Deploy your wrapper
+`@stellar/stellar-sdk` is a peer dependency and supplies transaction building, RPC, and key handling. Every builder in the Zenex SDK returns a base64 XDR operation string. Builders never make RPC calls and never sign, so you assemble, simulate, and submit with `@stellar/stellar-sdk` exactly as you would for any Soroban contract.
 
-:::info Use the wrapper only for open, limit, and close
-The wrapper exposes exactly three methods: **`openMarket`**, **`placeLimit`**, and **`closePosition`**. Those are the fee-charging entry points. Any other call routed at the wrapper address will fail. Send `cancelPosition`, `modifyCollateral`, `setTriggers`, all reads, and funding application straight to the trading contract.
-:::
+## 2. Point the SDK at a market
 
-The wrapper is a small Soroban contract that charges a fee on every open, limit, and close that runs through it. The reference implementation lives at [`zenex-wrapper`](https://github.com/zenith-protocols/zenex-wrapper); build the WASM yourself or use the published hash. Deploy a new instance with your own constructor args:
-
-```bash
-stellar contract deploy \
-  --source-account <YOUR_KEY> \
-  --network testnet \
-  --wasm-hash <ZENEX_WRAPPER_WASM_HASH> \
-  -- \
-  --admin <YOUR_ADMIN_ADDRESS> \
-  --trading <ZENEX_TRADING_ADDRESS> \
-  --fee_recipient <YOUR_FEE_RECIPIENT_ADDRESS> \
-  --fee_rate 10000
-```
-
-`fee_rate` is in `SCALAR_7` units, capped at `1_000_000` (`10%`). The published WASM hash and the trading contract address are in [Contract Addresses](/deployments/contract-addresses).
-
-For richer behavior (tiered rates, referral splits, custom routing), fork [`zenex-wrapper`](https://github.com/zenith-protocols/zenex-wrapper), build your own WASM, and deploy that instead.
-
-## 3. Place a first trade
-
-Trade calls require a signed Pyth Lazer price payload, and the contract rejects the call if the payload's timestamp is outside its staleness window. Signing is rarely instant: a traditional wallet may prompt the user for a password, a hardware key for a button press, a passkey for biometrics. Any payload baked in *before* that prompt risks going stale by the time the tx hits the network. The trading contract works around this by scoping user authorization with `require_auth_for_args` and **excluding the price arg from the auth scope**, so you can swap in a fresher payload *after* the user signs without invalidating their auth.
-
-:::warning Requires a relayer
-The post-sign swap invalidates the **envelope** signature, so a relayer (your backend, OpenZeppelin Relayer, etc.) has to re-sign and submit the tx with its own funded source account. The user's auth-entry signatures still hold across the swap. The user can sign the envelope too if they want (the relayer just discards that signature). If you submit via the user's wallet directly with no relayer in the path, skip the swap and fetch the freshest price possible *before* signing.
-:::
+A trading contract instance is a single market. There is no `marketId`: you construct one `TradingContract` per market address. The published market addresses are in [Contract Addresses](/deployments/contract-addresses).
 
 ```typescript
 import { TradingContract } from '@zenith-protocols/zenex-sdk';
-import { Transaction, xdr } from '@stellar/stellar-sdk';
-
-const wrapper = new TradingContract(WRAPPER_ADDRESS);
-
-// Replace the trailing `Bytes` arg (the Pyth price blob) in the
-// invokeHostFunction op. Auth entries stay valid because the contract
-// excludes `price` from `require_auth_for_args`.
-function swapLastBlobArg(tx: Transaction, fresh: Uint8Array): Transaction {
-  const env = tx.toEnvelope();
-  for (const op of env.v1().tx().operations()) {
-    if (op.body().switch().name !== 'invokeHostFunction') continue;
-    const inv = op.body().invokeHostFunctionOp().hostFunction().invokeContract();
-    const args = inv.args();
-    if (args.length === 0 || args[args.length - 1].switch().name !== 'scvBytes') break;
-    args[args.length - 1] = xdr.ScVal.scvBytes(Buffer.from(fresh));
-    inv.args(args);
-    break;
-  }
-  return new Transaction(env.toXDR('base64'), tx.networkPassphrase);
-}
-
-// 1. Build the op with the current price. This blob is what the user
-//    simulates and authorizes against.
-const initial = await fetchPriceBlob(feedId);
-const op = wrapper.openMarket({
-  user: userPublicKey,
-  market_id: 1,
-  collateral: 1000_0000000n,
-  notional_size: 10_000_0000000n,
-  is_long: true,
-  take_profit: 0n,
-  stop_loss: 0n,
-  price: initial,
-});
-
-// 2. Build, simulate, assemble.
-const tx = await prepareSorobanTx(op);
-
-// 3. User signs.
-const signedTx = await sign(tx);
-
-// 4. Right before submit, swap in a fresher blob.
-const fresh = await fetchPriceBlob(feedId);
-const finalTx = swapLastBlobArg(signedTx, fresh);
-
-// 5. Submit.
-await submit(finalTx);
-```
-
-`fetchPriceBlob` is a one-liner over Pyth Lazer's REST API or your own backend proxy. `sign` is whatever wallet adapter you already use. `submit` hands the tx to a relayer that re-signs the envelope and broadcasts. A full reference implementation of all three lives in the [zenex-trade repo](https://github.com/zenith-protocols/zenex-trade).
-
-The user's wallet pays the protocol's collateral plus your integrator fee. The fee is forwarded directly to the address you set as `fee_recipient`. There is no withdraw step.
-
-## 4. Load position data
-
-Once a position is open, you can read it directly from the chain to render it. The SDK ships static loaders for the trading config, market state, and individual positions. Pass them into `Position` helpers to compute liquidation price, equity, and PnL on the fly.
-
-```typescript
-import { TradingConfig, Market, Position } from '@zenith-protocols/zenex-sdk';
+import {
+  rpc, Contract, Address, TransactionBuilder, BASE_FEE, xdr, nativeToScVal, Networks,
+} from '@stellar/stellar-sdk';
 
 const network = {
   rpc: 'https://soroban-testnet.stellar.org',
-  passphrase: 'Test SDF Network ; September 2015',
+  passphrase: Networks.TESTNET,
 };
 
-const PRICE_DECIMALS = 8; // Pyth Lazer feed exponent magnitude
+const server = new rpc.Server(network.rpc);
+const trading = new TradingContract(TRADING_ADDRESS);
+```
 
-const tradingConfig = await TradingConfig.load(network, TRADING_ADDRESS);
-const market        = await Market.load(network, TRADING_ADDRESS, marketId);
-const position      = await Position.load(
-  network,
-  TRADING_ADDRESS,
-  userPublicKey,
-  positionId,
-  PRICE_DECIMALS,
+Throughout, `sign` is whatever wallet adapter you already use and `submit` sends an assembled transaction to the network (directly, or through a relayer). A small helper simulates and assembles a single operation:
+
+```typescript
+async function prepare(source: string, opXdr: string) {
+  const account = await server.getAccount(source);
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: network.passphrase,
+  })
+    .addOperation(xdr.Operation.fromXDR(opXdr, 'base64'))
+    .setTimeout(30)
+    .build();
+  return server.prepareTransaction(tx); // simulate + assemble
+}
+```
+
+## 3. Approve the collateral allowance
+
+An increase order draws its collateral from the trader's token allowance at fill time, not at creation. Before the first order, approve the trading contract as a spender on the settlement token (a standard SEP-41 `approve`). Set `live_until_ledger` far enough ahead to cover the fill.
+
+```typescript
+const token = new Contract(COLLATERAL_TOKEN_ADDRESS);
+const { sequence } = await server.getLatestLedger();
+const liveUntil = sequence + 200_000; // ~11 days on testnet
+
+const approveOp = token
+  .call(
+    'approve',
+    Address.fromString(userPublicKey).toScVal(),
+    Address.fromString(TRADING_ADDRESS).toScVal(),
+    nativeToScVal(10_000_0000000n, { type: 'i128' }),
+    xdr.ScVal.scvU32(liveUntil),
+  )
+  .toXDR('base64');
+
+await submit(await sign(await prepare(userPublicKey, approveOp)));
+```
+
+The [trading router](./sdk#tradingroutercontract) can set this allowance for you as part of an atomic open; see step 5.
+
+## 4. Create a market order
+
+`openMarket` is a semantic helper over `create_order`. It builds an `Increase` order with no trigger, so a keeper can fill it at the next verified price. The order carries no price of its own: only `priceBound` (a one-sided slippage limit, `0n` to opt out) and `expiration` (a ledger sequence the order stays fillable through).
+
+```typescript
+const { sequence: seq } = await server.getLatestLedger();
+
+const openOp = trading.openMarket({
+  user: userPublicKey,
+  isLong: true,
+  notional: 10_000_0000000n, // size in quote, token-dec
+  collateral: 1_000_0000000n, // margin posted at fill, token-dec
+  priceBound: 0n,             // no slippage cap
+  expiration: seq + 60,       // fillable for ~60 ledgers
+});
+
+const prepared = await prepare(userPublicKey, openOp);
+const sent = await submit(await sign(prepared));
+```
+
+`create_order` returns the allocated order id. Parse it from the transaction's return value with the contract's parser, or read it from the emitted `create_order` event.
+
+```typescript
+import { parseResult } from '@zenith-protocols/zenex-sdk';
+
+const confirmed = await server.getTransaction(sent.hash);
+const orderId = parseResult(confirmed, TradingContract.parsers.createOrder);
+```
+
+All i128 amounts are `bigint`. To place a resting limit instead of a market order, use `openLimit` with a `triggerPrice`; to attach exits, use `placeTakeProfit` / `placeStopLoss`. Every helper is listed in the [SDK reference](./sdk#semantic-helpers).
+
+## 5. Fill the order
+
+Filling is permissionless and price-bearing. A keeper (your own backend, a public keeper, or the router) fetches a fresh serialized Pyth Lazer price update and calls `execute_order`. The `keeper` argument is only the reward recipient; the trader already consented through the allowance. See [Price feed](./price-feed) for fetching the price update.
+
+```typescript
+const priceUpdate = await fetchPriceUpdate(FEED_ID); // Uint8Array, see Price feed
+
+const fillOp = trading.executeOrder(
+  keeperPublicKey, // reward recipient
+  userPublicKey,   // order owner
+  orderId,
+  priceUpdate,
 );
 
-if (!position || !market) throw new Error('position or market not found');
+await submit(await sign(await prepare(keeperPublicKey, fillOp)));
+```
 
-const liquidationPrice = position.getLiquidationPrice(market, tradingConfig.config);
-const breakdown        = position.getBreakdown(currentPrice, market, tradingConfig.config);
+The verified price must not predate the order (`publish_time >= order.created_at`), with one exception: a market order filling in its own creation ledger is an atomic create-and-fill and accepts any verifier-accepted price. That is exactly what the router's `create_and_fill` does, setting the allowance, creating the order, and filling it in one fill-or-kill transaction:
+
+```typescript
+import { TradingRouterContract, OrderKind } from '@zenith-protocols/zenex-sdk';
+
+const router = new TradingRouterContract(ROUTER_ADDRESS);
+
+const atomicOpen = router.createAndFill(
+  TRADING_ADDRESS,
+  userPublicKey,   // keeper = user: the fill reward round-trips to the trader
+  userPublicKey,
+  1_000_0000000n,  // approveAmount: sets the collateral allowance first (0n to skip)
+  true,            // isLong
+  OrderKind.Increase,
+  10_000_0000000n, // notional
+  1_000_0000000n,  // collateral
+  0n,              // triggerPrice (0 = market)
+  false,           // triggerAbove
+  0n,              // priceBound
+  seq + 60,        // expiration
+  priceUpdate,
+);
+
+await submit(await sign(await prepare(userPublicKey, atomicOpen)));
+```
+
+## 6. Read the position back
+
+Reads are operation builders too: simulate them instead of submitting. `getPosition` looks up the netted position for `(user, isLong)`, and the matching parser decodes the return value into a typed `Position`.
+
+```typescript
+import { simulateAndParse } from '@zenith-protocols/zenex-sdk';
+
+const { result: position } = await simulateAndParse(
+  network,
+  trading.getPosition(userPublicKey, true),
+  TradingContract.parsers.getPosition,
+);
 
 console.log({
-  entry: position.entryPrice,
-  notional: position.notional,
-  collateral: position.col,
-  liquidationPrice,
-  equity: breakdown.equity,
-  netPnl: breakdown.netPnl,
-  returnPct: breakdown.returnPct,
+  notional: position.notional,   // size in quote, token-dec
+  tokens: position.tokens,       // size in base, base-dec (entry = notional / tokens)
+  collateral: position.collateral,
 });
 ```
 
-`TradingConfig.load` and `Market.load` read instance and persistent storage on the trading contract directly. No signed transaction or simulation is needed. `Position.load` returns `null` if the position has been closed or liquidated. `currentPrice` is the latest mark for the market's feed; pull it from your price feed (or the hosted backend) at display time.
-
-For a list view, use `Position.loadMultiple` with the position IDs from `Position.loadUserCounter` (or from your indexer) to batch every position into a single RPC call.
+A zeroed `notional` means no open position on that side. To compute display values (PnL, equity, liquidation price) from the loaded state, use the `PositionView` and `MarketView` loaders described in the [SDK reference](./sdk#state-loaders-and-math).
 
 ## What's next
 
-- [Price feed](./price-feed) for setting up a Pyth Lazer proxy that keeps your API token off the client.
-- [SDK](./sdk) for every operation builder, event decoder, and helper the SDK exposes.
+- [Price feed](./price-feed) for serving Pyth Lazer price updates to your keeper or `create_and_fill` flow.
+- [SDK](./sdk) for every operation builder, parser, loader, and event decoder.
+- [Indexing](./indexing) for tracking positions and fills off the event stream.

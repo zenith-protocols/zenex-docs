@@ -5,164 +5,265 @@ title: SDK
 
 # SDK
 
-[`@zenith-protocols/zenex-sdk`](https://www.npmjs.com/package/@zenith-protocols/zenex-sdk) is the JavaScript SDK for Zenex. It exposes:
+[`@zenith-protocols/zenex-sdk`](https://www.npmjs.com/package/@zenith-protocols/zenex-sdk) is the TypeScript SDK for Zenex v2. It exposes:
 
-- typed **operation builders** for the trading contract, the wrapper, and the strategy vault
-- **state loaders** for trading config, market state, and individual positions, plus computed properties for liquidation price, equity, and PnL
-- a unified **event decoder**
-- **error parsing** that turns simulation/send failures into typed `ContractError` instances
+- typed **operation builders** for the trading contract, the trading router, the factory, the price verifier, and the strategy vault
+- **1:1 contract bindings** plus **semantic helpers** that compose the common trader flows
+- **view parsers** and **state loaders** that decode on-chain reads, with client-side math for PnL, equity, and liquidation price
+- **event decoders** for the 14 trading events across RPC, Mercury, and Goldsky payloads
+- **error parsing** that turns a failed simulation or submission into a typed `ContractError`
 
-The [Quickstart](./quickstart) walks the minimal flow end to end. This page is a flat reference for the parts an integrator actually touches. The rest of the package (price verifier, treasury, factory, governance, smart account) is deploy-time or admin tooling and is documented in the [package README](https://github.com/zenith-protocols/zenex-sdk-js).
+The [Quickstart](./quickstart) walks the minimal flow end to end. This page is a flat reference for the parts an integrator touches.
 
 ## Install
 
 ```bash
-npm install @zenith-protocols/zenex-sdk
+npm install @zenith-protocols/zenex-sdk @stellar/stellar-sdk
 ```
 
 `@stellar/stellar-sdk` is a peer dependency and supplies transaction building, RPC, and key handling. The SDK ships ESM and CJS builds and works in Node.js, Bun, Deno, and browser bundlers.
 
 ## Operation builders
 
-Builders return base64-encoded XDR `Operation` strings ready to add to a transaction. They never make RPC calls and never sign. Wrap the result in `xdr.Operation.fromXDR(op, 'base64')` and add it to a `TransactionBuilder`.
+Builders return a base64 XDR `Operation` string ready to add to a transaction. They never make RPC calls and never sign. Wrap the result with `xdr.Operation.fromXDR(op, 'base64')` and add it to a `TransactionBuilder`. Every `i128` argument is a `bigint`; a serialized Pyth Lazer price update is a `Buffer` or `Uint8Array`.
 
-### TradingContract
+## TradingContract
 
 ```typescript
 import { TradingContract } from '@zenith-protocols/zenex-sdk';
 
-const wrapper = new TradingContract(WRAPPER_ADDRESS);
 const trading = new TradingContract(TRADING_ADDRESS);
 ```
 
-Use the wrapper for the three fee-charging methods. Send everything else straight to the trading contract; routing reads or modifications through the wrapper will fail.
+One instance is one market. The class mirrors the contract trait 1:1, then adds semantic helpers on top of `createOrder` / `createVaultOrder`.
 
-| Method | Target | Purpose |
-|---|---|---|
-| `openMarket(args)` | wrapper | Open a market order. `args` includes `priceBound` and `expirationLedger`; `args.price` is a signed Pyth Lazer payload. |
-| `placeLimit(args)` | wrapper | Place a limit order. No price arg; a keeper fills it. |
-| `closePosition(user, id, priceBound, expirationLedger, price)` | wrapper | Close a filled position. `priceBound` is direction-aware; pass `0` to opt out. |
-| `cancelPosition(user, id)` | trading | Cancel an unfilled limit, or clean up a filled position whose market was deleted. |
-| `modifyCollateral(args)` | trading | Add or remove collateral on a filled position. `args` includes `expirationLedger` (no price bound; only the margin check can reject). |
-| `setTriggers(args)` | trading | Update take-profit / stop-loss on a filled position. |
-| `applyFunding()` | trading | Permissionless funding tick. Any account can call it. |
-| `updateStatus(price)` | trading | Permissionless circuit-breaker poke. |
-| `execute(caller, marketId, users, ids, price)` | trading | Keeper batch-fill / batch-liquidate entry point. |
-| `getPosition(user, id)` | trading | Read a single position. |
-| `getUserCounter(user)` | trading | Number of positions ever created by a user. |
-| `getMarketConfig(id)` / `getMarketData(id)` | trading | Market state lookups. |
-| `getMarkets()` | trading | List of active market IDs. |
-| `getConfig()` / `getStatus()` | trading | Top-level instance state. |
-| `getVault()` / `getPriceVerifier()` / `getToken()` / `getTreasury()` | trading | Address lookups. |
-
-Reads are operation builders too: simulate them rather than submitting. Submission requires no user signature.
-
-### VaultContract
-
-```typescript
-import { VaultContract } from '@zenith-protocols/zenex-sdk';
-
-const vault = new VaultContract(VAULT_ADDRESS);
-```
-
-The vault implements the SEP-41 token interface (the share token) plus a SEP-4626-style deposit/redeem surface for the strategy assets.
+### Trader entry points (price-free, authed by the user)
 
 | Method | Purpose |
 |---|---|
-| `deposit(caller, assets, receiver)` | Deposit assets, mint shares to `receiver`. |
-| `mint(caller, shares, receiver)` | Mint exactly `shares`, pulling whatever assets that costs from `caller`. |
-| `withdraw(caller, assets, receiver, owner)` | Burn shares to withdraw exactly `assets`. |
-| `redeem(caller, shares, receiver, owner)` | Burn exactly `shares` and receive their proportional assets. |
-| `previewDeposit/Mint/Withdraw/Redeem(...)` | Pure conversion preview. No state change. |
-| `maxDeposit/Mint/Withdraw/Redeem(account)` | Per-account caps (lock-time, available shares, etc.). |
-| `convertToShares(assets)` / `convertToAssets(shares)` | Round-trip conversion at the current exchange rate. |
-| `totalAssets()` / `totalSupply()` | Vault aggregates. |
-| `balance(account)` / `allowance(owner, spender)` | SEP-41 reads. |
-| `transfer / transferFrom / approve` | SEP-41 writes on the share token. |
-| `availableShares(user)` / `lockTime()` | Withdrawal-cooldown helpers. |
-| `name()` / `symbol()` / `decimals()` / `queryAsset()` | SEP-41 metadata + the underlying asset address. |
+| `createOrder(user, isLong, kind, notional, collateral, triggerPrice, triggerAbove, priceBound, expiration)` | Create an order for a keeper to fill. `kind` is `OrderKind.Increase` or `OrderKind.Decrease`. Returns the order id. |
+| `cancelOrder(user, id)` | Cancel a resting order the caller owns. |
+| `createVaultOrder(user, kind, amount, maxAdversePnl)` | Escrow a vault deposit or redeem for a keeper to fill. `kind` is `VaultOrderKind.Deposit` or `VaultOrderKind.Redeem`. Returns the vault order id. |
+| `cancelVaultOrder(user, id)` | Cancel a pending vault order and refund the escrow. |
+| `claimFunding(user)` | Pay out the user's accrued claimable funding balance. |
 
-## Position state
+`notional` and `collateral` are non-negative magnitudes in token decimals; `kind` sets their direction. `triggerPrice` and `priceBound` are in the feed's price scalar (`10^-exponent`); `0n` disables each. `expiration` is a ledger sequence, and the order stays fillable while the current ledger is at or below it.
 
-Three loader classes pull on-chain state via `getLedgerEntries` and decode it into typed objects. None of them require a signed transaction or a simulation.
+### Keeper entry points (permissionless, price-bearing)
 
-```typescript
-import { TradingConfig, Market, Position } from '@zenith-protocols/zenex-sdk';
-
-const network = { rpc: SOROBAN_RPC_URL, passphrase: NETWORK_PASSPHRASE };
-
-const config = await TradingConfig.load(network, TRADING_ADDRESS);
-const market = await Market.load(network, TRADING_ADDRESS, marketId);
-const position = await Position.load(network, TRADING_ADDRESS, user, positionId, 8);
-```
-
-| Loader | Returns |
+| Method | Purpose |
 |---|---|
-| `TradingConfig.load(network, contract)` | Instance state: status, vault/token/treasury/priceVerifier addresses, fee/funding/borrow params, position counter, totals, market IDs. |
-| `Market.load(network, contract, marketId)` / `Market.loadMultiple(network, contract, ids)` | Per-market config + dynamic state (open notional per side, funding/borrowing/ADL indices, last-update timestamp). |
-| `Position.load(network, contract, user, id, priceDecimals)` / `Position.loadMultiple(...)` | Decoded position with descaled price/notional/collateral. Returns `null` if closed or liquidated. |
-| `Position.loadUserCounter(network, contract, user)` | Highest position ID ever created by `user`. Combine with `loadMultiple` to fetch every position in one RPC call. |
-| `Position.loadRaw(...)` / `Position.loadMultipleRaw(...)` | Same as above but preserves `bigint` fidelity for indexers and reconcilers. |
+| `executeOrder(keeper, user, id, price)` | Fill a resting order at a verified price. Returns the keeper payout. |
+| `executeLiquidation(keeper, user, isLong, price)` | Force-close a position that has fallen below maintenance margin (or any position past a delisted market's deadline). |
+| `updateAdlState(price)` | Recompute both sides' pending PnL and set or clear the ADL flags. |
+| `executeAdl(keeper, user, isLong, amount, price)` | Deleverage a winning position on a flagged side. `amount` of `FULL_CLOSE` closes the whole position. |
+| `executeVaultOrder(keeper, user, id, amount, price)` | Fill up to `amount` of a pending vault order. |
 
-The fifth arg to `Position.load` is the feed exponent magnitude. Pyth Lazer feeds use `8`.
+The `keeper` argument is only the reward recipient; it is not authenticated. Anyone may call these paths.
 
-### Computed properties on `Position`
+### Maintenance (permissionless, no auth)
 
-Once loaded, the `Position` instance exposes pure functions that compute display values from the position state, current market state, and the trading config. Pass the same `Market` and `TradingConfig.config` you loaded above.
+| Method | Purpose |
+|---|---|
+| `accrueFunding()` | Advance the funding index to now. Price-free. |
+| `accrue(price)` | Advance both the borrowing and funding indices at a verified price. |
+
+### Admin (owner only)
+
+| Method | Purpose |
+|---|---|
+| `setConfig(config)` | Replace the global `TradingConfig`. A borrowing-param change needs a same-ledger `accrue`. |
+| `setStatus(status)` | Move through the status lifecycle (`Active`, `OnIce`, `Frozen`, `Delisted`, `Retired`). |
+| `setTerminalPrice(price)` | Set or refresh the flat settlement price of a delisted market once its grace window has passed. |
+
+The trading contract is immutable: there is no upgrade entry point. A logic change ships a fresh trading and vault pair through the factory. The Ownable surface (`getOwner`, `transferOwnership`, `acceptOwnership`, `renounceOwnership`) is also present.
+
+### Views
 
 | Method | Returns |
 |---|---|
-| `getDirection()` | `'long'` / `'short'`. |
-| `isOpen()` | True if filled and not yet closed. |
-| `getFeeBreakdown(market, tradingConfig)` | `{ baseFee, priceImpact, funding, borrowingFee, total }`, in token units. |
-| `calculatePnL(currentPrice, market?, tradingConfig?)` | `{ pnl, fee, netPnl }`. Drops the fee components if `market` is omitted. |
-| `getBreakdown(currentPrice, market, tradingConfig)` | Full display breakdown: `pnl`, fee components, `equity`, `netPnl`, `returnPct`. Mirrors the contract's `settle()` math. |
-| `getLiquidationPrice(market, tradingConfig)` | Mark price at which `equity <= liq_fee × notional`. Computed in fixed-point to match the contract. |
+| `getConfig()` | The global `TradingConfig`. |
+| `getMarketData()` | The market singleton `MarketData` (per-side open interest, indices, funding rate, pool). |
+| `getPosition(user, isLong)` | The netted `Position` for `(user, isLong)`; zeroed if none. |
+| `getOrder(user, id)` / `getVaultOrder(user, id)` | The stored `Order` / `VaultOrder`. |
+| `getStatus()` | The `Status` discriminant (`u32`). |
+| `getAdl()` | The `AdlState` per-side flags. |
+| `getClaimableFunding(user)` | The user's claimable funding balance. |
+| `getToken()` / `getVault()` / `getTreasury()` / `getPriceVerifier()` | The wired contract addresses. |
+| `getRetirement()` | `[terminalPrice, delistedAt]`, or `undefined` if never delisted. |
+| `getFeed()` | The immutable `[feedId, exponent]` oracle anchor. |
 
-### Order validation and fee-adjusted collateral
+Reads are operation builders too: simulate them rather than submitting. See [Decoding view reads](#decoding-view-reads).
 
-Both are static helpers on the `Position` class for use *before* you build the trade.
+### Semantic helpers
+
+Each helper takes a single args object and composes `createOrder` / `createVaultOrder` with the right `kind`, trigger, and sentinel. `FULL_CLOSE` (exported, equal to `i128::MAX`) is the full-close notional.
+
+| Helper | Builds |
+|---|---|
+| `openMarket({ user, isLong, notional, collateral, priceBound, expiration })` | An `Increase` with no trigger. |
+| `openLimit({ user, isLong, notional, collateral, triggerPrice, priceBound, expiration })` | An `Increase` with a trigger; sets `triggerAbove = !isLong` (longs buy at or below the trigger, shorts sell at or above). |
+| `closePosition({ user, isLong, priceBound, expiration })` | A `Decrease` with `FULL_CLOSE` notional and no collateral withdrawal. |
+| `decreasePosition({ user, isLong, notional, collateral, priceBound, expiration })` | A partial `Decrease`, optionally withdrawing collateral. |
+| `addCollateral({ user, isLong, amount, expiration })` | A collateral-only `Increase` (notional 0). |
+| `withdrawCollateral({ user, isLong, amount, expiration })` | A collateral-only `Decrease` (notional 0). |
+| `placeTakeProfit({ user, isLong, triggerPrice, notional?, priceBound, expiration })` | A full-close (or sized) `Decrease`; sets `triggerAbove = isLong` (fires as profits grow). |
+| `placeStopLoss({ user, isLong, triggerPrice, notional?, priceBound, expiration })` | A `Decrease`; sets `triggerAbove = !isLong` (fires on the losing side). |
+| `depositVault({ user, amount, maxAdversePnl })` | A `Deposit` vault order. |
+| `redeemVault({ user, shares, maxAdversePnl })` | A `Redeem` vault order. |
+
+```typescript
+import { TradingContract, FULL_CLOSE } from '@zenith-protocols/zenex-sdk';
+
+const trading = new TradingContract(TRADING_ADDRESS);
+
+// Open a 3x long, filled by a keeper at the next verified price.
+const openOp = trading.openMarket({
+  user, isLong: true, notional: 3_000_0000000n, collateral: 1_000_0000000n,
+  priceBound: 0n, expiration: ledgerSeq + 60,
+});
+
+// Attach a stop-loss on that long. triggerAbove is false: it fires when the
+// exit price falls to or below the trigger.
+const slOp = trading.placeStopLoss({
+  user, isLong: true, triggerPrice: 58_000_00000000n,
+  priceBound: 0n, expiration: ledgerSeq + 200_000,
+});
+
+// Fully close it at market.
+const closeOp = trading.closePosition({
+  user, isLong: true, priceBound: 0n, expiration: ledgerSeq + 60,
+});
+```
+
+### Deploying a market directly
+
+`TradingContract.deploy(deployer, wasmHash, args, salt?, format?)` builds the create-contract operation for a standalone trading contract. In practice you deploy through the [factory](#factorycontract), which atomically pairs a trading contract with its strategy vault.
+
+## TradingRouterContract
+
+```typescript
+import { TradingRouterContract, OrderKind } from '@zenith-protocols/zenex-sdk';
+
+const router = new TradingRouterContract(ROUTER_ADDRESS);
+```
+
+A stateless batching contract for keepers and integrators.
 
 | Method | Purpose |
 |---|---|
-| `Position.validateOrder(params)` | Returns `null` if the order is valid, or an `OrderValidationError` enum value if it would be rejected on-chain (notional below/above bounds, leverage too high, market disabled, invalid TP/SL). |
-| `Position.grossCollateral(params)` | Given a desired *post-fee* collateral, returns the gross collateral to send and the estimated opening fee. Useful for "I want exactly $X of working margin" UX. |
+| `multicall(calls)` | Run `Call[]` in order; any failure traps the whole batch (all or nothing). |
+| `multicallTry(calls)` | Run `Call[]` in order, isolating each failure. Returns a `CallOutcome[]`. |
+| `createAndFill(trading, keeper, user, approveAmount, isLong, kind, notional, collateral, triggerPrice, triggerAbove, priceBound, expiration, price)` | Set the allowance, create an order, and fill it fill-or-kill. Returns the fill payout. With `keeper = user` the reward round-trips to the trader. |
+| `createAndTryFill(...same args...)` | Create strictly, then attempt an isolated fill. A failed fill leaves the order resting with its allowance in place. Returns a `FillAttempt`. |
+| `createAndTryFillVaultOrder(trading, keeper, user, kind, amount, maxAdversePnl, price)` | Create a vault order and attempt an isolated fill. Returns a `FillAttempt`. |
+| `adlSweep(trading, keeper, targets, price)` | Deleverage `AdlTarget[]` back to back, isolated; stops once a side reaches its clear target. Returns a `CallOutcome[]`. |
 
-## Decoding events
+`approveAmount` is the collateral allowance set for `trading` before the creation; `0n` skips it. A router-set allowance rides the user-tier TTL horizon (roughly 120 days).
 
-`decodeEvent` accepts events from any of the three sources you might watch (Soroban RPC `getEvents`, Mercury, Goldsky) and returns a typed event matching the contract's schema.
+Types:
+
+- `Call { contract, func, args }` where `args` is `xdr.ScVal[]`. `TradingRouterContract.buildCall(contract, func, args)` composes one.
+- `CallOutcome { ok, value, error }`: `value` carries an `i128` return (keeper payouts) or `0n`; `error` is `0` on success, the contract error code otherwise.
+- `FillAttempt { id, filled, payout, error }`: the created order `id`, whether the immediate fill landed, the payout when it did, and the fill's error code otherwise.
+- `AdlTarget { user, isLong, amount }`: `amount` of `FULL_CLOSE` lets the contract size each close.
 
 ```typescript
-import { decodeEvent, ZenexContractType } from '@zenith-protocols/zenex-sdk';
+const target = { user: winner, isLong: true, amount: FULL_CLOSE };
+const sweepOp = router.adlSweep(TRADING_ADDRESS, keeper, [target], priceUpdate);
+```
 
-const decoded = decodeEvent({
-  contractType: ZenexContractType.Trading,
-  rawEvent,
-});
+## Decoding view reads
 
-if (decoded.type === 'OpenPosition') {
-  console.log(decoded.user, decoded.id, decoded.notional);
+Every builder ships a matching parser under `TradingContract.parsers` (and `TradingRouterContract.parsers`, `FactoryContract.parsers`, `PriceVerifierContract.parsers`). A parser turns the base64 XDR return value into a typed object. Two helpers wire simulation to parsing:
+
+- `simulateAndParse(network, operation, parser)` simulates a read and returns `{ result, latestLedger }`.
+- `parseResult(response, parser)` parses the return value out of a simulation or a fetched transaction.
+
+```typescript
+import { simulateAndParse, TradingContract } from '@zenith-protocols/zenex-sdk';
+
+const network = { rpc: SOROBAN_RPC_URL, passphrase: NETWORK_PASSPHRASE };
+
+const { result: config } = await simulateAndParse(
+  network, trading.getConfig(), TradingContract.parsers.getConfig,
+);
+const { result: market } = await simulateAndParse(
+  network, trading.getMarketData(), TradingContract.parsers.getMarketData,
+);
+const { result: position } = await simulateAndParse(
+  network, trading.getPosition(user, true), TradingContract.parsers.getPosition,
+);
+```
+
+Parsers decode into the SDK's typed mirrors: `Order`, `VaultOrder`, `Position`, `MarketData`, `AdlState`, and `TradingConfig`. Numeric keeper returns (`executeOrder`, `executeAdl`, `claimFunding`, and the like) parse to `bigint`.
+
+## State loaders and math
+
+For reads that skip simulation, `PositionView` and `MarketView` load persistent storage directly with `getLedgerEntries` and expose the client-side math ported from the contract. Both return `null` when the entry is absent.
+
+```typescript
+import { PositionView, MarketView } from '@zenith-protocols/zenex-sdk';
+
+const market = await MarketView.load(network, TRADING_ADDRESS);
+const view = await PositionView.load(network, TRADING_ADDRESS, user, true);
+
+if (view && market) {
+  const price = 60_000_00000000n; // exit price in price_scalar units
+  const pnl = view.pnl(price);
+  const equity = view.equity(market.data, price);
+  const liqPrice = view.liquidationPrice(config, market.data);
+  const unlocked = view.unlockedNotional(BigInt(Math.floor(Date.now() / 1000)));
 }
 ```
 
-`ZenexContractType.Trading`, `ZenexContractType.Vault`, and `ZenexContractType.Governance` are decoded out of the box. Wrapper-emitted events (`IntegratorFeeCharged`, `CloseFeeCharged`, `FeeRateUpdated`) are not yet covered; decode them with `scValToNative` from `@stellar/stellar-sdk`, or watch inbound transfers to your fee recipient.
+`PositionView` exposes `pnl`, `pendingFunding`, `pendingBorrowing`, `equity`, `liquidationPrice`, and `unlockedNotional`. `MarketView` exposes `sidePnl`, `netPnl`, `utilization`, and `skewSplitFees`. The same math is available as free functions (`positionPnl`, `positionEquity`, `pendingFunding`, `pendingBorrowing`, `liquidationPrice`, `unlockedNotional`, `sidePnl`, `netPnl`, `utilization`, `skewSplitFees`) if you already hold the raw structs. `validateTradingConfig` mirrors the contract's config bounds for pre-flight checks.
+
+## Decoding events
+
+`decodeEvent` accepts an event from any of the three sources you might watch (Soroban RPC `getEvents`, Mercury, Goldsky) and returns a typed union across the trading, vault, and governance contracts.
+
+```typescript
+import { decodeEvent, ZenexContractType, TradingEventType } from '@zenith-protocols/zenex-sdk';
+
+const decoded = decodeEvent(rawEvent);
+
+if (decoded?.contractType === ZenexContractType.Trading
+    && decoded.eventType === TradingEventType.IncreaseFill) {
+  console.log(decoded.user, decoded.orderId, decoded.notional, decoded.baseFee);
+}
+```
+
+To decode only trading events, call `decodeTradingEvent(normalizedEvent)` after normalizing with `normalizeRpc`, `normalizeMercury`, or `normalizeGoldsky`. The full catalog of 14 trading events, their topic layouts, and their fields is in [Indexing](./indexing).
+
+## FactoryContract
+
+```typescript
+import { FactoryContract } from '@zenith-protocols/zenex-sdk';
+
+const factory = new FactoryContract(FACTORY_ADDRESS);
+```
+
+| Method | Purpose |
+|---|---|
+| `deployMarket(admin, salt, token, priceVerifier, feedId, exponent, config, vaultName, vaultSymbol, vaultDecimalsOffset)` | Deploy a trading and strategy-vault pair atomically. Returns the trading address. |
+| `isDeployed(tradingId)` | Whether an address was deployed by this factory. |
+
+The factory deploys the vault first, then the trading contract, wiring the vault as the trading contract's collateral vault and the trading contract as the vault's immutable strategy. Both addresses derive from `admin` and the salts, so a salt alone cannot be front-run. The constructor takes a `FactoryInitMeta { trading_hash, vault_hash, treasury }` of compiled WASM hashes plus the treasury address. Config values are set per market by governance; always review [`deploy.json`](/deployments/contract-addresses) before deploying.
 
 ## Parsing errors
 
-`parseError` turns the raw error response from a failed simulation, send, or get-transaction call into a typed `ContractError`. The error type maps to the contract's enum so you can render specific copy for known failures.
+`parseError` turns the raw error from a failed simulation, send, or get-transaction call into a typed `ContractError` carrying a numeric `type` and a human-readable `message`. Match on the code to render specific copy.
 
 ```typescript
-import { parseError, ContractErrorType, simulateAndParse } from '@zenith-protocols/zenex-sdk';
+import { parseError } from '@zenith-protocols/zenex-sdk';
+import { rpc } from '@stellar/stellar-sdk';
 
 const sim = await server.simulateTransaction(tx);
 if (rpc.Api.isSimulationError(sim)) {
   const err = parseError(sim);
-  if (err.type === ContractErrorType.NotionalAboveMaximum) {
-    showToast('Position size exceeds the market cap.');
-  } else {
-    showToast(err.message);
-  }
+  showToast(err.message); // e.g. the trigger has not been crossed, or the fill price broke the bound
 }
 ```
 
-`ContractErrorType` covers every numeric error code the trading contract emits (`MarketDisabled`, `LeverageAboveMaximum`, `NotionalBelowMinimum`, etc.); see [`errors.ts`](https://github.com/zenith-protocols/zenex-sdk-js/blob/main/src/errors.ts) for the full enum. `parseResult` is the success-path counterpart for read-only simulations: pass it the simulation response and a parser callback.
+The trading contract's own error codes (for example `StalePrice`, `TriggerNotMet`, `PriceBoundExceeded`, `NotionalLocked`, `IncreaseHalted`) map to the numeric codes described in the protocol's error reference. Use `err.type` to branch on a specific failure and `err.message` for a fallback.

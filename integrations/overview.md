@@ -5,35 +5,53 @@ title: Overview
 
 # Integrations Overview
 
-Zenex is designed to be embedded. The core trading contract is a public, permissionless primitive: any frontend, aggregator, wallet, or trading bot can call its functions directly. There is no whitelist, no API gateway, and no application that owns the user relationship. Any developer who wants to offer Zenex perpetuals to their users can do so without permission, and the protocol settles every trade against the same shared vault regardless of which interface initiated it.
+Zenex is designed to be embedded. Every market is a public, permissionless primitive: any frontend, aggregator, wallet, or trading bot can call its functions directly. There is no whitelist, no API gateway, and no application that owns the user relationship. Any developer who wants to offer Zenex perpetuals can do so without permission, and each market settles every trade against the same shared strategy vault regardless of which interface initiated it.
 
-To collect a fee on every trade your users make, deploy a `TradingWrapper`. The wrapper is a small, single-purpose Soroban contract you deploy and control: it proxies the three trade-side write functions (`open_market`, `place_limit`, `close_position`), forwards an integrator fee from the user directly to a fee recipient address you set at construction, and otherwise stays out of the way. Everything else goes directly to the trading contract.
+## One contract per market
 
-## Architecture
+In v2 there is no market registry and no `marketId`. The [factory](./sdk#factorycontract) deploys an isolated pair per market: one trading contract plus one strategy vault, wired together atomically. A trading contract instance _is_ the market. It carries an immutable `(feed_id, exponent)` oracle anchor, its own configuration, its own status, and its own netted positions. To integrate a second market you point the SDK at a second trading address.
+
+Positions are netted, one per `(user, is_long)`. A user holds at most one long and one short position per market, so there are no per-user position ids or counters to track. The zeroed position row is the canonical closed state.
+
+## The order then keeper-execute flow
+
+Trading splits into two roles that never share a transaction.
+
+**Traders** only create and cancel orders, and the orders carry no price. A trader signs with their own key and consents to collateral movement through a token allowance. Creating an order is a plain, price-free write: it validates the order shape, allocates an id, and stores the order for a keeper to fill later. Take-profit and stop-loss are ordinary decrease orders that carry a trigger, not a separate object attached to a position.
+
+**Keepers** are permissionless. Anyone can fill a resting order by calling `execute_order` and passing a serialized Pyth Lazer price update. The trading contract verifies that price against its immutable feed anchor, applies the fill at the verified bid/ask, and pays the caller a keeper reward out of the trade fee. The `keeper` address is just the reward recipient named by the caller; it is not authenticated. The trader already consented through the allowance set at (or before) order creation. Keepers also drive liquidations, auto-deleveraging, vault-order fills, and index accrual.
+
+Collateral moves at fill through the token allowance, not at order creation. The one exception is vault orders (deposits and redeems), which escrow their assets or shares in the trading contract at creation and settle later.
 
 ```mermaid
 flowchart LR
     UI[Your Application]
     SDK[zenex-sdk-js]
-    Wrapper[Your TradingWrapper]
-    Trading[Zenex Trading Contract]
-    FeeRecipient[Your Fee Recipient]
+    Trading[Trading Contract for a Market]
+    Vault[Strategy Vault]
+    Keeper[Keeper / Router]
+    Oracle[Pyth Lazer + Price Verifier]
 
     UI --> SDK
-    SDK -->|opens, limits, closes| Wrapper
-    SDK -->|reads, cancels, modifies| Trading
-    Wrapper -->|forward call| Trading
-    Wrapper -->|integrator fee| FeeRecipient
+    SDK -->|create / cancel order, reads| Trading
+    Keeper -->|execute at a verified price| Trading
+    Oracle -->|serialized price update| Keeper
+    Trading -->|settles PnL, fees, bad debt| Vault
 ```
 
-Your application uses the SDK to build operations. For an open, limit, or close, the operation calls your wrapper; the wrapper transfers the integrator fee from the user directly to the fee recipient, then forwards the call (with the user as the principal) to the trading contract. For everything else, the operation calls the trading contract directly. From the trading contract's perspective the user is always the principal. The wrapper does not custody collateral, does not hold integrator fees, and does not stand between the user and settlement.
+For a trader, the SDK builds a price-free `create_order` operation that the user signs and submits. A keeper (your own backend, a public keeper, or the [trading router](./sdk#tradingroutercontract)) then fetches a fresh price and fills it. If you want to open and fill in one atomic transaction, the router's `create_and_fill` does both: it sets the allowance, creates the order, and fills it fill-or-kill.
 
-## Integrator Fee
+## The trading router
 
-Your wrapper charges a single rate on the position's notional size, capped at `10%`. The fee is transferred from the user straight to your fee recipient on the same transaction as the trade, on top of the collateral transfer. The wrapper holds no balance, so there is no withdraw step. The contract source and fee math live at [`zenex-wrapper`](https://github.com/zenith-protocols/zenex-wrapper).
+The [trading router](./sdk#tradingroutercontract) is a stateless batching contract for keepers and integrators. It runs many calls in one transaction (`multicall` for all-or-nothing, `multicall_try` to isolate each failure), composes the dependent create-and-fill flows (`create_and_fill`, `create_and_try_fill`, `create_and_try_fill_vault_order`), and sweeps a flagged side back toward its clear target with `adl_sweep`. A keeper uses it to fill a batch of orders against a single verified price; an integrator uses `create_and_fill` to give users an atomic open.
 
-Protocol fees (base, impact, funding, borrowing, liquidation) are charged separately by the trading contract and split between the strategy vault and the treasury. Integrators do not earn from them. See [Trading Fees](/technical/trading/fee-system) for the breakdown.
+## Events for indexing
 
-## What's Next
+Every state change emits a typed event. The 14 trading events split fill receipts (`increase_fill`, `decrease_fill`, `liquidation`) from the resulting position snapshot (`position_update`), so an indexer can record both the itemized economics of a fill and the netted position that resulted. The SDK ships decoders keyed on the on-chain topic layout for Soroban RPC, Mercury, and Goldsky payloads. See [Indexing](./indexing) for the full event catalog.
 
-To get running fast, see the [Quickstart](./quickstart). For wiring up a Pyth Lazer feed, see [Price feed](./price-feed). For the full SDK reference, see [SDK](./sdk).
+## What's next
+
+- [Quickstart](./quickstart) walks a minimal end-to-end flow: create an order, fill it, read the position back.
+- [SDK](./sdk) is the flat reference for every builder, parser, loader, and decoder an integrator touches.
+- [Price feed](./price-feed) covers serving Pyth Lazer price updates to the keepers that fill orders.
+- [Indexing](./indexing) documents the event stream and the indexing path.
