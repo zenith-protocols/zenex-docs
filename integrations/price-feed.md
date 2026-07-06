@@ -5,7 +5,7 @@ title: Price feed
 
 # Price feed
 
-In v2 the price is supplied at fill time, not at order creation. A trader's `create_order` is price-free. The serialized Pyth Lazer price update is passed by whoever fills the order: a keeper calling `execute_order`, `execute_liquidation`, `update_adl_state`, `execute_adl`, `execute_vault_order`, or `accrue`, or an integrator opening atomically through the router's `create_and_fill`. If your application only creates orders and leaves fills to public keepers, you do not touch the price feed at all. You need it when you run fills yourself or open atomically.
+A trader's `create_order` is price-free; the price arrives later, at fill time, from whoever fills the order: a keeper calling `execute_order`, `execute_liquidation`, `update_adl_state`, `execute_adl`, `execute_vault_order`, or `accrue`, or an integrator opening atomically through the router's `create_and_fill`. This page matters once you run fills yourself or open atomically; if your application only creates orders and leaves fills to public keepers, you can skip it.
 
 ## How the price is verified on-chain
 

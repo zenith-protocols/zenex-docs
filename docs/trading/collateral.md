@@ -9,7 +9,7 @@ Collateral is the margin that backs your position and protects the vault if the 
 
 **Collateral moves at the fill**
 
-You do not hand over collateral when you create an order. You grant a token allowance, and the collateral is drawn only when a keeper fills an increase. For a decrease, any collateral you withdraw and the fees due are settled out of the position at the fill. This means the value only leaves your wallet at the moment the trade actually executes against a verified price.
+You grant a token allowance when you create an order, and the collateral is drawn only when a keeper fills an increase. For a decrease, any collateral you withdraw and the fees due are settled out of the position at the fill. This means the value only leaves your wallet at the moment the trade actually executes against a verified price.
 
 When you open or increase a position, the collateral posted is subject to the initial-margin floor:
 
@@ -25,7 +25,7 @@ While a side is open you adjust its collateral by creating more orders. An incre
 
 **Collateral-only orders**
 
-An order does not have to change your size. A collateral-only order moves margin and nothing else: a collateral-only increase tops up an existing position, and a collateral-only decrease withdraws margin without closing any exposure. Orders that move no value at all are rejected, and any amount below the market's dust floor is rejected as well.
+A collateral-only order moves margin and nothing else, leaving your size unchanged: a collateral-only increase tops up an existing position, and a collateral-only decrease withdraws margin without closing any exposure. Orders that move no value at all are rejected, and any amount below the market's dust floor is rejected as well.
 
 **The decrease lock on fresh size**
 

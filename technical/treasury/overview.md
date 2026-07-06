@@ -23,12 +23,12 @@ The trading contract reads `get_rate()` on every settlement and clamps it to `[0
 
 ## Fee Collection
 
-The treasury is a passive receiver. The trading contract pushes fees to it via standard SEP-41 token transfers. The treasury contract does not pull fees and keeps no per-token accounting.
+The treasury is a passive receiver. The trading contract pushes fees to it via standard SEP-41 token transfers, and the treasury simply holds whatever balance of each token accumulates from those transfers.
 
 ## Withdrawal
 
-`withdraw(token: Address, to: Address, amount: i128)` is owner-only. It can withdraw any SEP-41 token the treasury holds, to any destination the owner chooses. There is no per-token accounting or whitelist.
+`withdraw(token: Address, to: Address, amount: i128)` is owner-only. It can withdraw any SEP-41 token the treasury holds, in any amount, to any destination the owner chooses.
 
 ## Immutability in Trading
 
-The treasury address is set in the trading contract's constructor (threaded through from the factory's `FactoryInitMeta`) and stored with no setter. A trading contract always sends protocol fees to the same treasury for its lifetime. Changing the treasury means deploying a fresh trading + vault pair.
+The treasury address is set once, in the trading contract's constructor (threaded through from the factory's `FactoryInitMeta`), and stays fixed for the life of the pair. A trading contract always sends protocol fees to the same treasury; changing the treasury means deploying a fresh trading + vault pair.

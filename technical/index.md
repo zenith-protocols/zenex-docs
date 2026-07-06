@@ -19,7 +19,7 @@ Zenex is a leveraged perpetual futures protocol built on [Stellar Soroban](https
 | **Governance** | Optional timelock proxy for governance-controlled parameter changes |
 | **Price Verifier** | Pyth Lazer oracle adapter that verifies signed price updates against a market's feed |
 
-Each trading contract serves exactly one market. There is no market identifier anywhere in the interface: a deployment is the market. To run BTC and ETH perps you deploy two independent trading + vault pairs through the factory. The trading contract is immutable, with no upgrade entry point. Shipping a logic change means deploying a fresh contract and vault pair through the factory, not upgrading an existing one.
+Each trading contract serves exactly one market, identified by its immutable `(feed_id, exponent)` oracle anchors set in the constructor: a deployment is the market. To run BTC and ETH perps you deploy two independent trading + vault pairs through the factory. The trading contract is immutable; shipping a logic change means deploying a fresh contract and vault pair through the factory.
 
 Users interact with the perp engine through any Stellar wallet. The optional [`soroban-smart-account`](https://github.com/zenith-protocols/soroban-smart-account) repo provides a smart account, signature verifiers, a session policy, and a stateless fee-forwarder for gasless relays. See [Smart Account](./account/overview) for the full breakdown.
 
@@ -79,7 +79,7 @@ The governance contract is an independent, optional contract. It is not deployed
 
 ## Token Flow
 
-All collateral flows through a single SEP-41 token (e.g., USDC). The trading contract acts as custodian for active position margin and for escrowed vault-order assets and shares. Protocol fees (trade, impact, funding, borrowing, liquidation) are not paid on top of collateral. They are debited from the position's margin inside the trading contract and split between the vault, the treasury, and the keeper.
+All collateral flows through a single SEP-41 token (e.g., USDC). The trading contract acts as custodian for active position margin and for escrowed vault-order assets and shares. Protocol fees (trade, impact, funding, borrowing, liquidation) are debited from the position's margin inside the trading contract, rather than charged on top of posted collateral, and split between the vault, the treasury, and the keeper.
 
 | Flow | Direction | When |
 |---|---|---|
@@ -96,7 +96,7 @@ Collateral moves at fill, not at order creation, drawn from the trader's token a
 
 ## Deployment Model
 
-The factory deploys a trading contract and its strategy vault as an atomic pair with deterministic, precomputed addresses. Each contract's wiring (dependency addresses, ownership, the immutable feed anchors, the full trading config, vault share metadata) is set in its constructor, so neither needs a separate `initialize` call. Because one contract is one market, there is no per-market registration step after deployment: the market's parameters are the `Config` passed to `deploy`, and the feed is the `(feed_id, exponent)` pair.
+The factory deploys a trading contract and its strategy vault as an atomic pair with deterministic, precomputed addresses. Each contract's wiring (dependency addresses, ownership, the immutable feed anchors, the full trading config, vault share metadata) is set in its constructor, so neither needs a separate `initialize` call. Because one contract is one market, deployment itself is the market's registration: its parameters are the `Config` passed to `deploy`, and the feed is the `(feed_id, exponent)` pair.
 
 If a deployment will route ownership through a governance contract, deploy under a regular account owner and transfer ownership to governance afterward, so the initial config is not forced through the timelock during bringup.
 

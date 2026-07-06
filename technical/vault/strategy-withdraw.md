@@ -24,7 +24,7 @@ Both must pass. An authenticated non-strategy is rejected, and a claim to be the
 
 ## The Trading Contract Is the Immutable Strategy
 
-The strategy address is set at construction and cannot be changed. There is no setter, no admin override, no migration path. The same immutability applies to the vault's ERC-4626 mutations: `deposit`, `mint`, `withdraw`, and `redeem` all require the registered strategy to authorize the call (via the `operator` argument threaded from the trading contract), so the trading contract is the vault's single writer for both share accounting and privileged withdrawals.
+The strategy address is fixed permanently at construction, for the life of the contract. The same immutability applies to the vault's ERC-4626 mutations: `deposit`, `mint`, `withdraw`, and `redeem` all require the registered strategy to authorize the call (via the `operator` argument threaded from the trading contract), so the trading contract is the vault's single writer for both share accounting and privileged withdrawals.
 
 If the trading contract must be replaced, a new vault is deployed alongside it as a fresh pair through the factory. This eliminates the class of attacks where an admin or governance process redirects vault withdrawals to a different contract.
 

@@ -5,7 +5,7 @@ title: Position Lifecycle
 
 # Position Lifecycle
 
-A position in Zenex is **netted**: each `(user, is_long)` pair has at most one position, stored under that key. There are no position ids and no per-user counters. An Increase order grows the position on its side, a Decrease shrinks it, and a fully closed position is a zeroed row. All state changes happen when a keeper fills an order at a verified price, never at order creation.
+A position in Zenex is **netted**: each `(user, is_long)` pair has at most one position, stored under the `Position(Address, bool)` key. An Increase order grows the position on its side, a Decrease shrinks it, and a fully closed position is a zeroed row. All state changes happen when a keeper fills an order at a verified price, never at order creation.
 
 ## The Position Row
 
@@ -66,7 +66,7 @@ A full close unwinds size, collateral, and the lock together. The payout is the 
 
 ## Take-Profit and Stop-Loss
 
-TP and SL are not a separate object on the position. They are ordinary **Decrease orders that carry a trigger**. A Decrease with `trigger_price` set becomes eligible only once the execution-side price crosses the trigger: `trigger_above = true` fires when the exit-side price is at or above the trigger, `false` when at or below. The SDK's `placeTakeProfit` and `placeStopLoss` helpers set `trigger_above` for you (a take-profit fires as profit grows, a stop-loss on the losing side).
+TP and SL are ordinary **Decrease orders that carry a trigger**, expressed through the same `create_order` fields as any other order. A Decrease with `trigger_price` set becomes eligible only once the execution-side price crosses the trigger: `trigger_above = true` fires when the exit-side price is at or above the trigger, `false` when at or below. The SDK's `placeTakeProfit` and `placeStopLoss` helpers set `trigger_above` for you (a take-profit fires as profit grows, a stop-loss on the losing side).
 
 ## Collateral-Only Changes
 

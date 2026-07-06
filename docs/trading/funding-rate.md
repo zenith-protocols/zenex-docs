@@ -25,10 +25,10 @@ Both the acceleration and decay speeds, and the skew thresholds that separate th
 
 Because the rate carries momentum, a persistently one-sided market builds a strong funding rate that makes the crowded side increasingly expensive to hold and the other side increasingly attractive. This is what nudges traders back toward balance and reduces the vault's directional risk.
 
-## Funding Is Claimed, Not Auto-Credited
+## Funding Accrues to a Claimable Balance
 
-Funding does not flow directly onto your position's PnL. It runs through an internal funding pool.
+Funding runs through an internal funding pool rather than flowing directly onto your position's PnL.
 
-When a position settles at a fill, the funding it owes is banked into the pool, and the funding it has earned is added to that user's claimable balance. Earning funding therefore does not top up your collateral automatically. To collect it you call `claim_funding`, which pays out your claimable balance from the pool. If the pool cannot cover the full amount at that moment, it pays what it can and the remainder stays claimable for later.
+When a position settles at a fill, the funding it owes is banked into the pool, and the funding it has earned is added to that user's claimable balance. To collect it you call `claim_funding`, which pays out your claimable balance from the pool rather than topping up your collateral automatically. If the pool cannot cover the full amount at that moment, it pays what it can and the remainder stays claimable for later.
 
 This separation keeps funding fully accounted for: the paying side's contributions accumulate in the pool, and the receiving side draws from it on demand. When there is no opposing side to receive it, paid funding simply accrues as surplus in the pool rather than being redistributed.

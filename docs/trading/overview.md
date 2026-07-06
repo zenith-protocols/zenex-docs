@@ -15,9 +15,9 @@ Higher leverage means greater sensitivity to price movements. A 1% price move tr
 
 ## One Market Per Contract
 
-Each Zenex market is its own isolated trading contract paired with its own strategy vault. There is no shared market registry and no market identifier to pass around: the contract you interact with already is the market. A logic change ships as a fresh contract and vault pair, since the trading contract itself is immutable and has no upgrade path.
+Each Zenex market is its own isolated trading contract paired with its own strategy vault. The contract address you interact with is the market itself, so looking one up never needs a separate registry or market identifier. A logic change ships as a fresh contract and vault pair, since the trading contract itself is immutable and has no upgrade path.
 
-Within a single market your exposure is netted per side. You hold at most one long position and at most one short position, and every fill folds into the matching side rather than creating a new position each time. There are no per-position identifiers or counters to track. A side is open while it carries size and closed once its size returns to zero.
+Within a single market your exposure is netted per side. You hold at most one long position and at most one short position, addressed simply as your long or your short rather than by a per-position id or counter, and every fill folds into the matching side rather than creating a new position each time. A side is open while it carries size and closed once its size returns to zero.
 
 ## Orders and Keeper Fills
 
@@ -35,7 +35,7 @@ A market order is an increase with no trigger. It fills at the next verified pri
 
 A limit order is an increase that carries a trigger price. It stays resting until the market reaches your trigger, at which point a keeper may fill it. For a long the trigger fires as the price falls to your level, for a short as it rises to your level. The trigger and the slippage bound are both judged against the price your fill actually touches.
 
-Take-profit and stop-loss are ordinary decrease orders that carry a trigger. They are not a separate object attached to a position, they are just resting close orders. A take-profit fires on the profitable side of your entry, a stop-loss on the losing side. You can size them to close the whole position or only part of it, and a keeper fills them when the trigger is crossed.
+Take-profit and stop-loss are ordinary decrease orders that carry a trigger, resting on-chain like any other order rather than existing as a separate object attached to a position. A take-profit fires on the profitable side of your entry, a stop-loss on the losing side. You can size them to close the whole position or only part of it, and a keeper fills them when the trigger is crossed.
 
 ## Slippage and Expiration
 
@@ -71,6 +71,6 @@ The impact fee is charged only on the worsening leg, the part of a trade that pu
 
 Borrowing interest accrues continuously and is paid by both sides, since open interest on either side reserves vault capacity. The rate follows a kink model that stays low while vault utilization is modest and climbs steeply as capacity fills.
 
-Funding is a continuous transfer between longs and shorts driven by the market's imbalance. Its sign follows the crowded side (a positive rate means longs pay shorts). Earned funding is not credited to your position automatically. It accrues to a claimable balance that you withdraw with a separate claim.
+Funding is a continuous transfer between longs and shorts driven by the market's imbalance. Its sign follows the crowded side (a positive rate means longs pay shorts). Earned funding accrues to a claimable balance that you withdraw with a separate claim, rather than being credited to your position automatically.
 
 For a detailed breakdown of how each cost works, see the [Fees](./fees.md), [Borrowing Interest](./borrowing-interest.md), and [Funding Rate](./funding-rate.md) pages.

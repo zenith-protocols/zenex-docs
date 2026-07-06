@@ -78,10 +78,10 @@ Two entry points:
 | `forward` | All fields including `target_args` | **Default.** Safe with any target. The backend cannot substitute args. |
 | `forward_unsafe` | Every field **except** `target_args` | Only when the target itself authenticates every argument it cares about, so leaving `target_args` unpinned is safe. |
 
-For v2 trading the safe `forward` path is what a gasless order uses. A trader's `create_order` and `create_vault_order` are **price-free** and fully authenticated by the user's own `require_auth` over every argument, so there is no price blob to exclude and no reason to leave any field unpinned. The keeper attaches the Pyth price later, on its own separate transaction, so gasless submission of the trader's intent never needs to defer an argument to the backend.
+The safe `forward` path is what a gasless order uses. A trader's `create_order` and `create_vault_order` are **price-free** and fully authenticated by the user's own `require_auth` over every argument, so pinning `target_args` in full costs nothing: the keeper attaches the Pyth price later, on its own separate transaction, so gasless submission of the trader's intent never needs to defer an argument to the backend.
 
 ## Relationship to the Perp Engine
 
-The perp engine has no knowledge of the smart account stack. It treats the smart account address the same as any other Stellar account: a caller that produces a valid `require_auth` result on the methods that need it. The smart account stack is what makes the trader-facing experience possible (passkey login, session keys, gasless tx) without modifying any of the perp contracts.
+The perp engine treats the smart account address the same as any other Stellar account: a caller that produces a valid `require_auth` result on the methods that need it. The smart account stack is what makes the trader-facing experience possible (passkey login, session keys, gasless tx), layered entirely on top of the unmodified perp contracts.
 
 If you are auditing the perp protocol, you can scope the smart account contracts out: nothing in `zenex-contracts` depends on a specific account implementation.

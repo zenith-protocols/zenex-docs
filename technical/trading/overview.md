@@ -9,9 +9,9 @@ The trading contract is the core perpetual futures engine. It manages orders, ne
 
 ## Single Market Per Contract
 
-One trading contract serves exactly one market. There is no market identifier in the interface: the market is defined by the contract's immutable `(feed_id, exponent)` oracle anchors, set once in the constructor. The factory deploys one isolated trading + vault pair per market, so running several markets means deploying several independent pairs. This isolates each market's risk, storage, and configuration.
+One trading contract serves exactly one market, identified by the contract's immutable `(feed_id, exponent)` oracle anchors, set once in the constructor. The factory deploys one isolated trading + vault pair per market, so running several markets means deploying several independent pairs. This isolates each market's risk, storage, and configuration.
 
-The contract is **immutable**: there is no upgrade entry point. A logic change ships as a fresh trading + vault pair through the factory. Existing pairs keep running the code they were deployed with.
+The contract is **immutable**: a logic change ships as a fresh trading + vault pair through the factory, and existing pairs keep running the code they were deployed with.
 
 ## The Order then Keeper-Execute Flow
 
@@ -34,7 +34,7 @@ All admin actions require the contract owner (`#[only_owner]`).
 | `set_status` | Set operational status per the [status lifecycle](#operational-status). Entering `Retired` sweeps the funding-pool surplus to the vault. |
 | `set_terminal_price` | Set or refresh the flat settlement price of a delisted market, after its grace window expires. |
 
-The Ownable surface (`transfer_ownership` as a two-step, `accept_ownership`, `renounce_ownership`, `get_owner`) is also owner-gated. There is no `upgrade`.
+The Ownable surface (`transfer_ownership` as a two-step, `accept_ownership`, `renounce_ownership`, `get_owner`) is also owner-gated, and it is the full extent of privileged control: ownership can transfer, but the deployed contract logic is fixed for the life of the pair.
 
 ### Trader Actions (auth = the user's own signature, price-free)
 
@@ -85,7 +85,7 @@ Each keeper entry point pays the caller the `keeper_rate` cut of the relevant fe
 
 ## Netted Positions
 
-Positions are **netted, one per `(user, is_long)`**. A user holds at most one long and one short position in a market. There are no per-user position id counters and no position ids. An Increase order grows the netted position on its side; a Decrease shrinks it. A position is stored under the `(user, is_long)` key, and a fully closed position is a zeroed row (zero notional), which is the canonical closed state. See [Position Lifecycle](./position-lifecycle.md).
+Positions are **netted, one per `(user, is_long)`**. A user holds at most one long and one short position in a market. An Increase order grows the netted position on its side; a Decrease shrinks it. A position is stored under the `Position(Address, bool)` key, `(user, is_long)`, and a fully closed position is a zeroed row (zero notional), which is the canonical closed state. See [Position Lifecycle](./position-lifecycle.md).
 
 Orders and vault orders, by contrast, do carry ids allocated per user, so a trader can have several resting orders at once.
 

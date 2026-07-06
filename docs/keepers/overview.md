@@ -7,7 +7,7 @@ title: Keepers
 
 The **keeper** is the new execution role in Zenex v2. Traders and liquidity providers only create and cancel price-free orders. A keeper is what turns those resting orders into settled positions and shares: it submits a verified oracle price to the trading contract, the contract checks the order against that price, and the fill settles. Keepers are what make the exchange run.
 
-Anyone can be a keeper. The role is fully **permissionless**: there is no registration, no allowlist, and no assignment. The trading contract does not authenticate the keeper. A trader consented to being filled when they set the collateral allowance at order creation, and a liquidity provider consented when they escrowed assets or shares in their vault order. The keeper simply names itself as the reward recipient in each call.
+Anyone can be a keeper. The role is fully **permissionless**: calling a fill entry point takes no registration, allowlisting, or prior assignment, since the trading contract authorizes each call by verifying the signed order and price rather than by checking who the caller is. A trader consented to being filled when they set the collateral allowance at order creation, and a liquidity provider consented when they escrowed assets or shares in their vault order. The keeper simply names itself as the reward recipient in each call.
 
 ### Why Keepers Matter
 

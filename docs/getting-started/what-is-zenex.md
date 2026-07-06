@@ -6,7 +6,7 @@ title: What is Zenex
 
 # What is Zenex
 
-Zenex is a decentralized perpetual futures exchange built on Stellar Soroban. It lets traders open leveraged long and short positions on assets without intermediaries, expiry dates, or centralized custody of funds. Every position is collateralized and settled in its market's settlement token, and the protocol's smart contracts handle position management end to end, from opening and closing to fee accrual and liquidation. There is no off-chain order matching, no hidden spread, and no counterparty you need to trust with your funds.
+Zenex is a decentralized perpetual futures exchange built on Stellar Soroban. It lets traders open leveraged long and short positions on assets without intermediaries, expiry dates, or centralized custody of funds. Every position is collateralized and settled in its market's settlement token, and the protocol's smart contracts handle position management end to end, from opening and closing to fee accrual and liquidation. Every fill matches on-chain against a verified oracle price, and the vault itself, transparent and governed by its own contract, is your counterparty for every trade.
 
 The protocol is built around three roles. **Traders** take leveraged positions on asset prices. **Vault depositors** provide the liquidity that backs those positions, and the vault stands as the counterparty to every trade in its market. **Keepers** are permissionless actors who fill orders, run liquidations, and keep the market's accounting current, earning a fee for the work. Traders pay fees that flow to the vault, keepers, and treasury, which creates yield for depositors and incentives for keepers. The result is a self-sustaining system where liquidity providers earn returns, keepers are rewarded for maintaining the protocol, and traders get on-chain leverage.
 
@@ -26,7 +26,7 @@ Leverage is the other defining feature of perpetual futures. Instead of posting 
 
 ## Why Zenex
 
-Zenex is fully on-chain and permissionless. Anyone with a Stellar wallet can trade or provide liquidity, and anyone can run a keeper. The smart contracts enforce every rule transparently. Fees, margin requirements, liquidation thresholds, and interest curves are all visible on-chain and can be governed through a timelock that gives users advance notice of changes. There is no opaque matching engine, and the way keepers fill at verified prices leaves no room for an operator to front-run or censor trades.
+Zenex is fully on-chain and permissionless. Anyone with a Stellar wallet can trade or provide liquidity, and anyone can run a keeper. The smart contracts enforce every rule transparently. Fees, margin requirements, liquidation thresholds, and interest curves are all visible on-chain and can be governed through a timelock that gives users advance notice of changes. Every fill matches against a verified price that any permissionless keeper can execute, leaving no room for an operator to front-run or censor trades.
 
 Capital efficiency is a core design goal. Each market pairs a trading contract with its own strategy vault, so liquidity is dedicated to the asset it backs and the risk of one market never spills into another. Traders fill against a verified Pyth Lazer price rather than a thin order book. The fee structure rewards balanced markets: the side that improves the long/short balance pays a lower fee than the side that worsens it. Borrowing interest follows a kink curve that steepens as the vault's liquidity is used up, keeping the system stable under heavy load.
 

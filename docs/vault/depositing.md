@@ -5,7 +5,7 @@ title: Depositing & Withdrawing
 
 # Depositing & Withdrawing
 
-In v2, providing and withdrawing liquidity happens through **vault orders**. You create an order that escrows your assets or shares in the trading contract, and a permissionless [keeper](../keepers/overview.md) fills it at a verified oracle price. Fills are not instant: the value you deposit or redeem is priced against the market's live price when the keeper executes, not when you submit.
+In v2, providing and withdrawing liquidity happens through **vault orders**. You create an order that escrows your assets or shares in the trading contract, and a permissionless [keeper](../keepers/overview.md) fills it at a verified oracle price. The value you deposit or redeem is priced against the market's live price at the moment the keeper executes, rather than when you submit the order.
 
 ### Depositing
 

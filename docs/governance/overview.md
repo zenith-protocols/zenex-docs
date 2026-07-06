@@ -9,7 +9,7 @@ Zenex is a protocol primitive. Anyone can deploy a trading contract and its stra
 
 ## Ownership
 
-Every trading contract has an owner, set at deployment time. The owner can update that market's configuration, change its operational status, and set a terminal settlement price when winding the market down. Ownership can be held by a single address, a multisig, a governance contract, or any other on-chain entity, and it can be transferred through a two-step transfer-and-accept process. Because there is no shared multi-market contract, an owner governs one market at a time.
+Every trading contract has an owner, set at deployment time. The owner can update that market's configuration, change its operational status, and set a terminal settlement price when winding the market down. Ownership can be held by a single address, a multisig, a governance contract, or any other on-chain entity, and it can be transferred through a two-step transfer-and-accept process. Because each market is its own standalone contract, an owner governs one market at a time.
 
 ## What the Owner Controls
 
@@ -21,7 +21,7 @@ The owner acts through three entry points on the trading contract:
 
 ## Optional Timelock
 
-Zenex provides an optional governance contract that adds a timelock to configuration changes. When used, a change must be queued on-chain and a mandatory delay must pass before it can take effect. This is covered in detail on the [Parameter Changes](./parameter-changes.md) page. The timelock is not required. The choice of governance model is up to whoever owns the market.
+Zenex provides an optional governance contract that adds a timelock to configuration changes. When used, a change must be queued on-chain and a mandatory delay must pass before it can take effect. This is covered in detail on the [Parameter Changes](./parameter-changes.md) page. Using the timelock is optional: the choice of governance model is up to whoever owns the market.
 
 ## Emergency Status
 

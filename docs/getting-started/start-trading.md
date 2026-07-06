@@ -7,7 +7,7 @@ title: Start Trading
 
 ### How Trading Works on Zenex
 
-Before the steps, it helps to know what happens under the hood. On Zenex you do not fill your own trade. Instead you **create an order** signed by you, and a permissionless **keeper** fills it at a price it verifies against the market's oracle feed. Your order is price-free: it carries the size and collateral you want, a **price bound** that caps the slippage you will accept, an **expiration**, and, for stop-loss and take-profit, a **trigger price**. A keeper can only fill within those limits. Your collateral is pulled from a token allowance at the moment of the fill, not when you submit the order, so you approve the market to spend your collateral token first (the app handles this for you).
+Before the steps, it helps to know what happens under the hood. On Zenex you **create an order** signed by you, and a permissionless **keeper** fills it at a price it verifies against the market's oracle feed. Your order is price-free: it carries the size and collateral you want, a **price bound** that caps the slippage you will accept, an **expiration**, and, for stop-loss and take-profit, a **trigger price**. A keeper can only fill within those limits. Your collateral is pulled from a token allowance at the moment of the fill, not when you submit the order, so you approve the market to spend your collateral token first (the app handles this for you).
 
 The app presents all of this as a familiar trading form. The steps below map onto it.
 

@@ -7,7 +7,7 @@ title: Overview
 
 The Zenex **strategy vault** is the liquidity pool that acts as the counterparty to every trade in its market. Liquidity providers deposit the market's collateral token (e.g., USDC), and traders take leveraged positions against that liquidity. In return, depositors earn yield from [trading fees](../trading/fees.md), [borrowing interest](../trading/borrowing-interest.md), and net trader losses.
 
-Each market has exactly one vault. The factory deploys the vault together with its trading contract as an isolated pair, and the trading contract is registered as the vault's immutable strategy. There is no global, multi-market vault: your deposit backs one market and is exposed only to that market's traders.
+Each market has exactly one vault. The factory deploys the vault together with its trading contract as an isolated pair, and the trading contract is registered as the vault's immutable strategy. Your deposit therefore backs exactly one market and is exposed only to that market's traders.
 
 ### How It Works
 
@@ -25,7 +25,7 @@ If the vault earns fees and interest over time, share value rises and each share
 
 ### Deposits and Redeems Are Orders
 
-This is the key change in v2: deposits and redeems are **vault orders**, not instant transfers. When you deposit, your assets are escrowed inside the trading contract at creation; when you redeem, your shares are escrowed. A permissionless [keeper](../keepers/overview.md) then fills the order at a verified oracle price, minting or burning shares net of the vault fill fee.
+Deposits and redeems on Zenex happen through **vault orders**. When you deposit, your assets are escrowed inside the trading contract at creation; when you redeem, your shares are escrowed. A permissionless [keeper](../keepers/overview.md) then fills the order at a verified oracle price, minting or burning shares net of the vault fill fee.
 
 Routing through the trading contract lets the protocol price your entry or exit against the same verified price the market trades at, and apply the protective gates that stop deposits and redeems from being timed against a stale share value. See [Depositing & Withdrawing](./depositing.md) for the full flow.
 

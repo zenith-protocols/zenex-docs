@@ -42,4 +42,4 @@ Share price is standard ERC-4626: shares are priced against the vault's `total_a
 
 ## Storage
 
-The vault stores its underlying asset, share metadata, decimals offset, and the immutable strategy address. Share balances, allowances, and metadata live in the OpenZeppelin token library's own storage namespace. The vault holds no lock or minimum-deposit state of its own: those rules moved to the trading contract's vault-order logic.
+The vault stores its underlying asset, share metadata, decimals offset, and the immutable strategy address. Share balances, allowances, and metadata live in the OpenZeppelin token library's own storage namespace. Lock and minimum-deposit rules live entirely in the trading contract's `Config` and vault-order logic.

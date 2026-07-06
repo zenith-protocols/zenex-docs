@@ -36,7 +36,7 @@ Mainnet deployment details will be added after launch. The same factory-based de
 
 The factory serves as the canonical registry for all legitimately deployed trading contracts. To verify that a given address is an authentic Zenex trading contract, call the factory's `is_deployed(trading)` function. It returns `true` if the address was deployed through that factory instance and `false` otherwise. Only trading contract addresses are registered in the factory. Vault addresses are not tracked directly, but each trading contract stores its paired vault address, which can be retrieved through the trading contract's configuration.
 
-Note that the factory has no enumeration function. There is no way to list all deployed pools through the contract itself. Discovery of deployed pools relies on indexing the `Deploy` events emitted by the factory at deployment time.
+Discovery of deployed pools relies on indexing the `Deploy` events emitted by the factory at deployment time, since the factory contract itself exposes no enumeration function to list them.
 
 ## WASM Hash Immutability
 

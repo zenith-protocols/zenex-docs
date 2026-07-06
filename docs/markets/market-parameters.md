@@ -5,7 +5,7 @@ title: Market Parameters
 
 # Market Parameters
 
-Each market on Zenex is a standalone trading contract with its own **Config**. The Config holds every tunable value that controls fees, leverage, risk limits, and the interest curves for that market. Because each market is its own contract, these parameters are set **per market by governance** and can be adjusted over time. There are no protocol-wide parameters that apply across markets: what you see below is configured independently for every deployed pair.
+Each market on Zenex is a standalone trading contract with its own **Config**. The Config holds every tunable value that controls fees, leverage, risk limits, and the interest curves for that market. Because each market is its own contract, these parameters are set **per market by governance** and can be adjusted over time: what you see below is configured independently for every deployed pair.
 
 The values themselves depend on the asset's liquidity and volatility, so this page describes what each group of parameters does rather than quoting specific numbers. The live values for any market can always be read from its contract, and material changes flow through the [governance](../governance/parameter-changes.md) process.
 

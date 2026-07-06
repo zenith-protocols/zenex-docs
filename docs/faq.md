@@ -15,7 +15,7 @@ Zenex is built on **Stellar Soroban**, Stellar's smart contract platform. Soroba
 
 ### How does a trade get executed?
 
-You do not fill your own trade. You **create an order** signed by you, and a permissionless **keeper** fills it at a price it verifies against the market's oracle feed. Your order is price-free but sets the bounds a keeper must respect: a size, a slippage price bound, an expiration, and, for stop-loss and take-profit, a trigger price. Your collateral is pulled from a token allowance at the moment of the fill. A market order is one you expect a keeper to fill right away; a limit or trigger order rests until its price condition is met. See [Start Trading](./getting-started/start-trading.md).
+You **create an order** signed by you, and a permissionless **keeper** fills it at a price it verifies against the market's oracle feed. Your order is price-free but sets the bounds a keeper must respect: a size, a slippage price bound, an expiration, and, for stop-loss and take-profit, a trigger price. Your collateral is pulled from a token allowance at the moment of the fill. A market order is one you expect a keeper to fill right away; a limit or trigger order rests until its price condition is met. See [Start Trading](./getting-started/start-trading.md).
 
 ### Can anyone run a keeper?
 

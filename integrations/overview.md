@@ -5,13 +5,13 @@ title: Overview
 
 # Integrations Overview
 
-Zenex is designed to be embedded. Every market is a public, permissionless primitive: any frontend, aggregator, wallet, or trading bot can call its functions directly. There is no whitelist, no API gateway, and no application that owns the user relationship. Any developer who wants to offer Zenex perpetuals can do so without permission, and each market settles every trade against the same shared strategy vault regardless of which interface initiated it.
+Zenex is designed to be embedded. Every market is a public, permissionless primitive: any frontend, aggregator, wallet, or trading bot can call its functions directly, and any developer can offer Zenex perpetuals without whitelisting, an API gateway, or owning the user relationship. Each market settles every trade against the same shared strategy vault regardless of which interface initiated it.
 
 ## One contract per market
 
-In v2 there is no market registry and no `marketId`. The [factory](./sdk#factorycontract) deploys an isolated pair per market: one trading contract plus one strategy vault, wired together atomically. A trading contract instance _is_ the market. It carries an immutable `(feed_id, exponent)` oracle anchor, its own configuration, its own status, and its own netted positions. To integrate a second market you point the SDK at a second trading address.
+Each market is its own trading contract instance, identified by its contract address rather than a numeric id. The [factory](./sdk#factorycontract) deploys an isolated pair per market: one trading contract plus one strategy vault, wired together atomically. A trading contract instance _is_ the market: it carries an immutable `(feed_id, exponent)` oracle anchor, its own configuration, its own status, and its own netted positions. To integrate a second market you point the SDK at a second trading address.
 
-Positions are netted, one per `(user, is_long)`. A user holds at most one long and one short position per market, so there are no per-user position ids or counters to track. The zeroed position row is the canonical closed state.
+Positions are netted, one per `(user, is_long)`: a user holds at most one long and one short position per market. Read a position with `getPosition(user, isLong)`; the zeroed position row is the canonical closed state.
 
 ## The order then keeper-execute flow
 

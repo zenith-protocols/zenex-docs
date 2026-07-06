@@ -42,7 +42,7 @@ deploy(
 
 `deploy` first requires `admin` to authorize the call. Any address can be the admin of a new pair, but it must explicitly authorize both deployments and becomes the owner of the new trading contract.
 
-Because one contract is one market, the market is fully described by the deploy arguments: `token` is the settlement collateral, `(feed_id, exponent)` are the immutable oracle anchors, and `config` is the complete trading configuration. There is no post-deployment market-registration step.
+Because one contract is one market, the market is fully described by the deploy arguments, and deployment itself is the registration step: `token` is the settlement collateral, `(feed_id, exponent)` are the immutable oracle anchors, and `config` is the complete trading configuration.
 
 The vault salt is derived from the trading salt by flipping the last byte (`salt[31] ^= 1`), producing a distinct but deterministic vault salt. Both addresses are precomputed from the **admin** (not the factory) via `deployer().with_address(admin, salt).deployed_address()`, so each contract can receive the other's address during its own construction, and a salt alone cannot be front-run: the host requires `admin` to authorize each deployment.
 
@@ -55,7 +55,7 @@ The vault is thus registered as the trading contract's collateral vault, and the
 
 ## Registry
 
-`is_deployed(trading) -> bool` is a permissionless existence check. Only trading addresses are registered, not vault addresses. There is no enumeration function; callers cannot list all pairs through the contract itself.
+`is_deployed(trading) -> bool` is a permissionless existence check, and only trading addresses are registered this way (the paired vault address is looked up through the trading contract, not the factory). Discovering the full set of deployed pairs means indexing the `Deploy { trading, vault }` event log rather than querying the factory itself.
 
 ## Access Control
 

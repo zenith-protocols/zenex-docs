@@ -17,7 +17,7 @@ A reference of key terms used throughout the Zenex documentation.
 | **Keeper** | A permissionless actor that fills orders, runs liquidations, deleverages, and advances accrual, earning a fee. Anyone can run one |
 | **Price bound** | A one-sided slippage limit on an order. A keeper may only fill at a price at least as good as the bound |
 | **Trigger** | A price condition on a closing order (stop-loss or take-profit). The order becomes fillable once the market crosses the trigger |
-| **Netted position** | Your single position per side in a market. You hold at most one long and one short per market, and every order adjusts that one position. There are no position ids or counters |
+| **Netted position** | Your single position per side in a market, addressed by account and side rather than by an id or counter. You hold at most one long and one short per market, and every order adjusts that one position |
 | **Collateral** | Funds posted to back a position and absorb losses. Pulled from your token allowance at fill time |
 | **Leverage** | Multiplier that amplifies exposure beyond posted collateral. Maximum leverage is one divided by the initial margin |
 | **Notional size** | The total value of a position (collateral x leverage) |

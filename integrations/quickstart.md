@@ -17,7 +17,7 @@ npm install @zenith-protocols/zenex-sdk @stellar/stellar-sdk
 
 ## 2. Point the SDK at a market
 
-A trading contract instance is a single market. There is no `marketId`: you construct one `TradingContract` per market address. The published market addresses are in [Contract Addresses](/deployments/contract-addresses).
+A trading contract instance is a single market, identified by its contract address: construct one `TradingContract` per market address. The published market addresses are in [Contract Addresses](/deployments/contract-addresses).
 
 ```typescript
 import { TradingContract } from '@zenith-protocols/zenex-sdk';

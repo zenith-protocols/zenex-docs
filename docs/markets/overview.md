@@ -7,7 +7,7 @@ title: Overview
 
 A **market** on Zenex is a single leveraged trading pair, for example BTC or XLM, priced in the market's settlement token. If that token is USDC, then every position, fee, and PnL figure in the market is denominated and settled in USDC.
 
-In Zenex each market is its **own** trading contract, paired with its **own** strategy vault. There is no shared multi-market contract, and there is no market identifier that selects a pair inside a larger contract. To add a market, the [factory](../governance/overview.md) deploys a fresh trading contract and vault together as an isolated pair. That isolation is deliberate: the risk of one market never touches the liquidity of another.
+In Zenex each market is its **own** trading contract, paired with its **own** strategy vault. To add a market, the [factory](../governance/overview.md) deploys a fresh trading contract and vault together as an isolated pair, so the contract address itself is the market rather than an identifier selecting a pair inside a shared registry. That isolation is deliberate: the risk of one market never touches the liquidity of another.
 
 ### Oracle Price Feed
 

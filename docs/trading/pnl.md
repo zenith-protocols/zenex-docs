@@ -9,7 +9,7 @@ PnL ("profit and loss") measures how much you have gained or lost on a position 
 
 **PnL is implied, never stored**
 
-Zenex does not store a running PnL figure on your position. A position records its size in the base asset (its tokens) and its notional in the quote asset, and your entry is simply the ratio of the two. PnL is implied from the live price against that entry:
+A position records its size in the base asset (its tokens) and its notional in the quote asset, and your entry is simply the ratio of the two. PnL is implied from the live price against that entry, rather than stored as a running figure:
 
 $$
 PnL_{long} = tokens \times currentPrice - notional

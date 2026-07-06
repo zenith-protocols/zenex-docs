@@ -34,13 +34,13 @@ Funding is settled through an internal pool with per-user claimable balances, tr
 - The **paying** side's `funding_idx` rises, and the funding it owes is debited from its collateral and banked into `funding_pool`.
 - The **receiving** side's `funding_idx` falls by the paid total spread over the receiver's notional (floored, with the remainder left in the pool), and the earned amount credits the user's `ClaimableFunding` balance.
 
-With no opposing side to receive it, paid funding is never redistributed and simply accumulates as pool surplus.
+When one side has no opposing side to receive its payment, the paid funding accumulates as pool surplus instead.
 
 ## Claiming
 
 A trader redeems their earned funding with `claim_funding(user)`. It pays the claimable balance from the pool, capped at the pool's holdings (any remainder stays claimable), and shrinks both `funding_pool` and `funding_owed`. `NothingToClaim` (760) if the balance is empty. `claim_funding` is blocked while the market is `Frozen` (`MarketFrozen` 704) but remains available in every other status, including `Retired`.
 
-There is no live sweep of the pool surplus. It is swept once to the vault when the market enters `Retired`.
+The pool surplus sweeps to the vault a single time, when the market enters `Retired`.
 
 ## Accrual
 

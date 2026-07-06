@@ -5,7 +5,7 @@ title: Supported Assets
 
 # Supported Assets
 
-Zenex does not keep a list of assets inside a single shared contract. Instead, each asset is its own market: a dedicated trading contract paired with its own strategy vault, deployed together by the [factory](../governance/overview.md). The set of supported assets is therefore the set of deployed pairs, and it grows by deploying new ones rather than by editing an entry in a central registry.
+Each asset on Zenex is its own market: a dedicated trading contract paired with its own strategy vault, deployed together by the [factory](../governance/overview.md). The set of supported assets is the set of deployed pairs, and it grows by deploying new ones rather than by editing an entry in a central registry.
 
 ## How an Asset Becomes a Market
 
