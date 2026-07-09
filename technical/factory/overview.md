@@ -21,7 +21,7 @@ __constructor(init_meta: FactoryInitMeta)
 | `vault_hash` | `BytesN<32>` | WASM hash for vault contracts |
 | `treasury` | `Address` | Protocol-wide treasury address |
 
-These values are **immutable**. There are no setters. Applying a security fix or a logic change to the trading or vault WASM means deploying a new factory with updated hashes; pairs from the old factory keep running the original code.
+These values are **immutable**. There are no setters. Applying a security fix or a logic change to the trading or vault WASM means deploying a new factory with updated hashes. Pairs from the old factory keep running the original code.
 
 ## Deployment Flow
 
@@ -42,7 +42,7 @@ deploy(
 
 `deploy` first requires `admin` to authorize the call. Any address can be the admin of a new pair, but it must explicitly authorize both deployments and becomes the owner of the new trading contract.
 
-Because one contract is one market, the market is fully described by the deploy arguments, and deployment itself is the registration step: `token` is the settlement collateral, `(feed_id, exponent)` are the immutable oracle anchors, and `config` is the complete trading configuration.
+Because one contract is one market, the market is fully described by the deploy arguments, and deployment itself is the registration step: `token` is the settlement collateral, `(feed_id, exponent)` are the immutable oracle anchors, `config` is the complete trading configuration, and `vault_decimals_offset` sets the vault's extra share decimals, an inflation-attack mitigation.
 
 The vault salt is derived from the trading salt by flipping the last byte (`salt[31] ^= 1`), producing a distinct but deterministic vault salt. Both addresses are precomputed from the **admin** (not the factory) via `deployer().with_address(admin, salt).deployed_address()`, so each contract can receive the other's address during its own construction, and a salt alone cannot be front-run: the host requires `admin` to authorize each deployment.
 

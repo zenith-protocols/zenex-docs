@@ -11,7 +11,7 @@ In Zenex each market is its **own** trading contract, paired with its **own** st
 
 ### Oracle Price Feed
 
-Each market is bound to a single **oracle price feed** at deployment. The feed is identified by a Pyth Lazer `feed_id` and a price `exponent`, and both are **immutable** for the life of the contract. Keepers submit signed Pyth Lazer price updates, which the contract's price verifier checks against these fixed anchors before any fill, liquidation, or accrual runs. The feed cannot be swapped after deployment, so a market always prices the asset it was created for.
+Each market is bound to a single **oracle price feed** at deployment. The feed is identified by a Pyth Lazer `feed_id` and a price `exponent`, and both are **immutable** for the life of the contract. Keepers submit signed Pyth Lazer price updates, which the contract's price verifier checks against these fixed anchors before any fill, liquidation, or borrowing accrual runs. The feed cannot be swapped after deployment, so a market always prices the asset it was created for.
 
 ### Per-Market Configuration
 
@@ -28,8 +28,8 @@ A market moves through a small set of operational states, controlled by governan
 - **Active**: normal trading. This is the only state that accepts new position openings.
 - **OnIce**: openings are paused, but everything else keeps working. Traders can still close, reduce, add or remove collateral, place vault orders, and claim funding.
 - **Frozen**: an emergency halt. Every fund-moving action is blocked until the market is unfrozen.
-- **Delisted**: a wind-down. Openings stop. For a short grace window the delist can be reversed, after which a flat terminal settlement price is set. Once a 7-day force-close deadline passes, keepers may close any remaining position at that terminal price regardless of its health.
-- **Retired**: the market is defunct and final. Only funding claims and direct vault redemptions remain.
+- **Delisted**: a wind-down. Openings stop. For a short grace window the delist can be reversed. After the window, governance may set (and keep refreshing) a flat terminal settlement price. Once a 7-day force-close deadline passes, keepers may close any remaining position regardless of its health, at the terminal price if one has been set or at the verified oracle price otherwise.
+- **Retired**: the market is defunct and final. Traders can still claim funding, cancel pending orders and vault orders (recovering any escrowed assets), and redeem vault shares directly.
 
 For how these transitions are triggered and what each one does, see [Governance Overview](../governance/overview.md).
 

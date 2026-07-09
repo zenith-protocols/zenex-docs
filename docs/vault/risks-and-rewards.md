@@ -43,7 +43,7 @@ The vault's strongest protection is a balanced book. When longs and shorts are r
 
 **Realized-profit haircut.** While a winning side's pending profit overhangs the vault (beyond `max_pnl_trader` of half the vault balance), each closing profit is scaled down by a live factor and the withheld share stays with the vault. This bounds how fast winners can extract value.
 
-**Auto-deleveraging.** When a side's pending profit grows large relative to the vault, [auto-deleveraging](../trading/adl.md) lets keepers proportionally reduce winning positions on that side, bounding what winners can extract and protecting the vault from insolvency.
+**Auto-deleveraging.** When a side's pending profit grows large relative to the vault, [auto-deleveraging](../trading/adl.md) lets keepers reduce winning positions on that side until the side's pending profit falls back to a safe level, bounding what winners can extract and protecting the vault from insolvency.
 
 **Liquidations.** Positions whose equity falls below the maintenance floor are [liquidated](../trading/liquidation.md) before they accumulate bad debt.
 

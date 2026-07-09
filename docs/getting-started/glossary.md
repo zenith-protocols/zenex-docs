@@ -16,7 +16,7 @@ A reference of key terms used throughout the Zenex documentation.
 | **Order** | A price-free instruction you sign to open, close, or adjust a position. It carries size, collateral, a price bound, an expiration, and (for triggers) a trigger price. A keeper fills it |
 | **Keeper** | A permissionless actor that fills orders, runs liquidations, deleverages, and advances accrual, earning a fee. Anyone can run one |
 | **Price bound** | A one-sided slippage limit on an order. A keeper may only fill at a price at least as good as the bound |
-| **Trigger** | A price condition on a closing order (stop-loss or take-profit). The order becomes fillable once the market crosses the trigger |
+| **Trigger** | A price condition on an order. Limit, stop-loss, and take-profit orders carry one. The order becomes fillable once the market crosses the trigger |
 | **Netted position** | Your single position per side in a market, addressed by account and side rather than by an id or counter. You hold at most one long and one short per market, and every order adjusts that one position |
 | **Collateral** | Funds posted to back a position and absorb losses. Pulled from your token allowance at fill time |
 | **Leverage** | Multiplier that amplifies exposure beyond posted collateral. Maximum leverage is one divided by the initial margin |
@@ -26,7 +26,7 @@ A reference of key terms used throughout the Zenex documentation.
 | **PnL** | Profit and Loss, the unrealized gain or loss on an open position. Implied from size and price, not stored |
 | **Equity** | Collateral plus unrealized PnL, net of fees. Determines position health |
 | **Notional lock** | A short window during which newly added size cannot be decreased or closed. A further increase resets the lock |
-| **Liquidation** | Forced closure of a position by a keeper when equity falls below the maintenance margin. A soft liquidation returns leftover equity to the trader; a hard one forfeits it to the vault |
+| **Liquidation** | Forced closure of a position by a keeper when equity falls below the maintenance margin. A soft liquidation returns leftover equity to the trader, a hard one forfeits it to the vault |
 | **Skew-split fee** | The base trade fee, split so the side that worsens the long/short balance pays more than the side that improves it |
 | **Impact fee** | A fee charged only on the part of a trade that pushes the book further out of balance |
 | **Borrowing interest (kink model)** | Time-based interest paid by open positions to the vault. The rate follows a kink curve that steepens once utilization passes a target level |

@@ -5,9 +5,9 @@ title: Keepers
 
 # Keepers
 
-The **keeper** is the new execution role in Zenex v2. Traders and liquidity providers only create and cancel price-free orders. A keeper is what turns those resting orders into settled positions and shares: it submits a verified oracle price to the trading contract, the contract checks the order against that price, and the fill settles. Keepers are what make the exchange run.
+The **keeper** is the execution role in Zenex. Traders and liquidity providers only create and cancel price-free orders. A keeper is what turns those resting orders into settled positions and shares: it submits a verified oracle price to the trading contract, the contract checks the order against that price, and the fill settles. Keepers are what make the exchange run.
 
-Anyone can be a keeper. The role is fully **permissionless**: calling a fill entry point takes no registration, allowlisting, or prior assignment, since the trading contract authorizes each call by verifying the signed order and price rather than by checking who the caller is. A trader consented to being filled when they set the collateral allowance at order creation, and a liquidity provider consented when they escrowed assets or shares in their vault order. The keeper simply names itself as the reward recipient in each call.
+Anyone can be a keeper. The role is fully **permissionless**: calling a fill entry point takes no registration, allowlisting, or prior assignment, since the trading contract checks the stored order against a verified signed price rather than checking who the caller is. A trader consented to being filled when they set the collateral allowance at order creation, and a liquidity provider consented when they escrowed assets or shares in their vault order. The keeper simply names itself as the reward recipient in each call.
 
 ### Why Keepers Matter
 
@@ -19,7 +19,7 @@ Every fill carries a serialized **Pyth Lazer** price update supplied by the keep
 
 ### Entry Points
 
-Keepers call the trading contract directly. Each price-bearing entry point takes a `keeper` argument that is only the reward recipient.
+Keepers call the trading contract directly. Each fill entry point takes a `keeper` argument that is only the reward recipient. `update_adl_state` and the maintenance pokes carry no keeper and pay no reward.
 
 - **`execute_order`**: fill a trader's resting order (market, limit, take-profit, or stop-loss) once its trigger and slippage bound are satisfied at the verified price.
 - **`execute_liquidation`**: force-close a position whose equity has fallen below the maintenance margin, or any remaining position on a wound-down market past its deadline.

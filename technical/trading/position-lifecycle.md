@@ -15,7 +15,7 @@ A position in Zenex is **netted**: each `(user, is_long)` pair has at most one p
 |---|---|
 | `collateral` | Posted margin (token-dec) |
 | `notional` | Size in quote terms (token-dec) |
-| `tokens` | Size in base terms (base-dec); implied entry price = `notional / tokens` |
+| `tokens` | Size in base terms (base-dec). Implied entry price = `notional / tokens` |
 | `funding_idx`, `borrowing_idx` | Accrual index snapshots at the last change |
 | `locked_notional`, `unlocks_at` | Notional locked against decreases, and its deadline |
 | `updated_at` | Timestamp of the last fill (anti-replay anchor) |
@@ -26,14 +26,14 @@ Zero `notional` means no open position. The zeroed row is the canonical closed s
 
 A trader creates an order with `create_order(user, is_long, kind, notional, collateral, trigger_price, trigger_above, price_bound, expiration)`. The order is price-free and authorized by the trader's own signature.
 
-- `kind` is `Increase` or `Decrease`. `notional` and `collateral` are non-negative magnitudes; `kind` sets their direction.
+- `kind` is `Increase` or `Decrease`. `notional` and `collateral` are non-negative magnitudes, and `kind` sets their direction.
 - `trigger_price` is the eligibility trigger (`0` means market, fillable immediately). `trigger_above` selects the cross direction.
 - `price_bound` is a one-sided slippage limit (`0` means unbounded).
 - `expiration` is a **ledger sequence**. The order is fillable while `ledger_seq <= expiration`.
 
-Three order shapes are valid, all checked at creation: size plus collateral, size only, or collateral only. A no-op with both zero is rejected with `InvalidOrder` (732). Any moved value below its dust floor (`min_order_notional`, `min_order_collateral`) is rejected. Negative inputs raise `NegativeValueNotAllowed` (710). An expiration already behind the current ledger raises `OrderExpired` (731); one beyond the network's storage horizon (`now + max_ttl`) raises `InvalidOrder` (732), since the entry could not outlive its own TTL.
+Three order shapes are valid, all checked at creation: size plus collateral, size only, or collateral only. A no-op with both zero is rejected with `InvalidOrder` (732). Any moved value below its dust floor (`min_order_notional`, `min_order_collateral`) is rejected. Negative inputs raise `NegativeValueNotAllowed` (710). An expiration already behind the current ledger raises `OrderExpired` (731), while one beyond the network's storage horizon (current ledger sequence + `max_ttl`) raises `InvalidOrder` (732), since the entry could not outlive its own TTL.
 
-Submitting an order creates the target position row (zeroed if none yet) and tops up its TTL on the trader's own transaction, so the keeper's later fill always finds a live row. A Decrease may be submitted before any position exists on that side; it simply becomes fillable once one does.
+Submitting an order creates the target position row (zeroed if none yet) and tops up its TTL on the trader's own transaction, so the keeper's later fill always finds a live row. A Decrease may be submitted before any position exists on that side. It simply becomes fillable once one does.
 
 `cancel_order(user, id)` removes a resting order. `OrderNotFound` (730) if there is nothing to cancel.
 
@@ -41,7 +41,7 @@ Submitting an order creates the target position row (zeroed if none yet) and top
 
 A keeper fills an Increase through `execute_order`. Size is bought at the **entry** price (`ask` for a long, `bid` for a short). The implied entry blends across successive increases.
 
-Collateral is drawn from the trader's token allowance at fill. The margin added is the posted collateral minus the settled fees (trade, impact, borrowing, and funding if the position owed any). Newly added notional is locked against decreases for `notional_lock` seconds; a further increase folds into the live lock and resets its deadline.
+Collateral is drawn from the trader's token allowance at fill. The margin added is the posted collateral minus the settled fees (trade, impact, borrowing, and funding if the position owed any). Newly added notional is locked against decreases for `notional_lock` seconds, and a further increase folds into the live lock and resets its deadline.
 
 An Increase fill enforces several guards, any of which aborts the fill:
 
@@ -50,7 +50,7 @@ An Increase fill enforces several guards, any of which aborts the fill:
 - Per-side open interest at or below `max_open_interest`, else `OpenInterestExceeded` (715).
 - Reserve utilization at or below `max_util_open * vault_balance`, else `UtilizationExceeded` (714).
 - Resulting notional within `[min_position_notional, max_position_notional]`.
-- The target side must not be ADL-flagged and the status must accept opens, else `IncreaseHalted` (705).
+- For a size-growing Increase (`notional > 0`), the target side must not be ADL-flagged and the status must accept opens, else `IncreaseHalted` (705). A collateral-only Increase skips this gate (and the open-interest and utilization caps), so margin can be added while opens are halted.
 
 ## Decrease Fill (Partial)
 
@@ -60,17 +60,17 @@ A realized profit is subject to the [realized-profit haircut](./fee-system.md#re
 
 ## Decrease Fill (Full Close)
 
-A Decrease whose `notional` is at or above the position size clamps to a **full close** at fill. `i128::MAX` is the conventional full-close signal (the SDK exports it as `FULL_CLOSE`). `max_position_notional` caps an Increase only; a Decrease is never capped, since it cannot grow the position.
+A Decrease whose `notional` is at or above the position size clamps to a **full close** at fill. `i128::MAX` is the conventional full-close signal. `max_position_notional` caps an Increase only. A Decrease is never capped, since it cannot grow the position.
 
 A full close unwinds size, collateral, and the lock together. The payout is the post-fee equity floored at zero. Any shortfall past the freed margin becomes `bad_debt`, absorbed by the vault. A full close is blocked while any locked notional remains (`NotionalLocked` 721).
 
 ## Take-Profit and Stop-Loss
 
-TP and SL are ordinary **Decrease orders that carry a trigger**, expressed through the same `create_order` fields as any other order. A Decrease with `trigger_price` set becomes eligible only once the execution-side price crosses the trigger: `trigger_above = true` fires when the exit-side price is at or above the trigger, `false` when at or below. The SDK's `placeTakeProfit` and `placeStopLoss` helpers set `trigger_above` for you (a take-profit fires as profit grows, a stop-loss on the losing side).
+TP and SL are ordinary **Decrease orders that carry a trigger**, expressed through the same `create_order` fields as any other order. A Decrease with `trigger_price` set becomes eligible only once the execution-side price crosses the trigger: `trigger_above = true` fires when the exit-side price is at or above the trigger, `false` when at or below (a take-profit fires as profit grows, a stop-loss on the losing side).
 
 ## Collateral-Only Changes
 
-Adding or removing margin without changing size is just an order with `notional = 0`. An Increase adds collateral (pulled from the allowance); a Decrease withdraws it (subject to the maintenance and initial-margin floors on the remainder). The SDK exposes these as `addCollateral` and `withdrawCollateral`.
+Adding or removing margin without changing size is just an order with `notional = 0`. An Increase adds collateral (pulled from the allowance), while a Decrease withdraws it (subject to the maintenance and initial-margin floors on the remainder).
 
 ## Liquidation and ADL
 

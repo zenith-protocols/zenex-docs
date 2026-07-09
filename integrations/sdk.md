@@ -25,7 +25,7 @@ npm install @zenith-protocols/zenex-sdk @stellar/stellar-sdk
 
 ## Operation builders
 
-Builders return a base64 XDR `Operation` string ready to add to a transaction. They never make RPC calls and never sign. Wrap the result with `xdr.Operation.fromXDR(op, 'base64')` and add it to a `TransactionBuilder`. Every `i128` argument is a `bigint`; a serialized Pyth Lazer price update is a `Buffer` or `Uint8Array`.
+Builders return a base64 XDR `Operation` string ready to add to a transaction. They never make RPC calls and never sign. Wrap the result with `xdr.Operation.fromXDR(op, 'base64')` and add it to a `TransactionBuilder`. Every `i128` argument is a `bigint`. A serialized Pyth Lazer price update is a `Buffer` or `Uint8Array`.
 
 ## TradingContract
 
@@ -47,7 +47,7 @@ One instance is one market. The class mirrors the contract trait 1:1, then adds 
 | `cancelVaultOrder(user, id)` | Cancel a pending vault order and refund the escrow. |
 | `claimFunding(user)` | Pay out the user's accrued claimable funding balance. |
 
-`notional` and `collateral` are non-negative magnitudes in token decimals; `kind` sets their direction. `triggerPrice` and `priceBound` are in the feed's price scalar (`10^-exponent`); `0n` disables each. `expiration` is a ledger sequence, and the order stays fillable while the current ledger is at or below it.
+`notional` and `collateral` are non-negative magnitudes in token decimals. `kind` sets their direction. `triggerPrice` and `priceBound` are in the feed's price scalar (`10^-exponent`), and `0n` disables each. `expiration` is a ledger sequence, and the order stays fillable while the current ledger is at or below it.
 
 ### Keeper entry points (permissionless, price-bearing)
 
@@ -56,10 +56,10 @@ One instance is one market. The class mirrors the contract trait 1:1, then adds 
 | `executeOrder(keeper, user, id, price)` | Fill a resting order at a verified price. Returns the keeper payout. |
 | `executeLiquidation(keeper, user, isLong, price)` | Force-close a position that has fallen below maintenance margin (or any position past a delisted market's deadline). |
 | `updateAdlState(price)` | Recompute both sides' pending PnL and set or clear the ADL flags. |
-| `executeAdl(keeper, user, isLong, amount, price)` | Deleverage a winning position on a flagged side. `amount` of `FULL_CLOSE` closes the whole position. |
+| `executeAdl(keeper, user, isLong, amount, price)` | Deleverage a winning position on a flagged side. `amount` at or above the position's notional requests a full close. The close must reduce the side's pending PnL and stay at or above the re-measured clear target, or the call traps (`AdlOvershoot` on an oversized close, `NotionalLocked` on a lock-aged full close). |
 | `executeVaultOrder(keeper, user, id, amount, price)` | Fill up to `amount` of a pending vault order. |
 
-The `keeper` argument is only the reward recipient; it is not authenticated. Anyone may call these paths.
+The `keeper` argument is only the reward recipient. It is not authenticated, and anyone may call these paths.
 
 ### Maintenance (permissionless, no auth)
 
@@ -84,7 +84,7 @@ The trading contract is immutable: there is no upgrade entry point. A logic chan
 |---|---|
 | `getConfig()` | The global `TradingConfig`. |
 | `getMarketData()` | The market singleton `MarketData` (per-side open interest, indices, funding rate, pool). |
-| `getPosition(user, isLong)` | The netted `Position` for `(user, isLong)`; zeroed if none. |
+| `getPosition(user, isLong)` | The netted `Position` for `(user, isLong)`, zeroed if none. |
 | `getOrder(user, id)` / `getVaultOrder(user, id)` | The stored `Order` / `VaultOrder`. |
 | `getStatus()` | The `Status` discriminant (`u32`). |
 | `getAdl()` | The `AdlState` per-side flags. |
@@ -102,13 +102,13 @@ Each helper takes a single args object and composes `createOrder` / `createVault
 | Helper | Builds |
 |---|---|
 | `openMarket({ user, isLong, notional, collateral, priceBound, expiration })` | An `Increase` with no trigger. |
-| `openLimit({ user, isLong, notional, collateral, triggerPrice, priceBound, expiration })` | An `Increase` with a trigger; sets `triggerAbove = !isLong` (longs buy at or below the trigger, shorts sell at or above). |
+| `openLimit({ user, isLong, notional, collateral, triggerPrice, priceBound, expiration })` | An `Increase` with a trigger. Sets `triggerAbove = !isLong` (longs buy at or below the trigger, shorts sell at or above). |
 | `closePosition({ user, isLong, priceBound, expiration })` | A `Decrease` with `FULL_CLOSE` notional and no collateral withdrawal. |
 | `decreasePosition({ user, isLong, notional, collateral, priceBound, expiration })` | A partial `Decrease`, optionally withdrawing collateral. |
 | `addCollateral({ user, isLong, amount, expiration })` | A collateral-only `Increase` (notional 0). |
 | `withdrawCollateral({ user, isLong, amount, expiration })` | A collateral-only `Decrease` (notional 0). |
-| `placeTakeProfit({ user, isLong, triggerPrice, notional?, priceBound, expiration })` | A full-close (or sized) `Decrease`; sets `triggerAbove = isLong` (fires as profits grow). |
-| `placeStopLoss({ user, isLong, triggerPrice, notional?, priceBound, expiration })` | A `Decrease`; sets `triggerAbove = !isLong` (fires on the losing side). |
+| `placeTakeProfit({ user, isLong, triggerPrice, notional?, priceBound, expiration })` | A full-close (or sized) `Decrease`. Sets `triggerAbove = isLong` (fires as profits grow). |
+| `placeStopLoss({ user, isLong, triggerPrice, notional?, priceBound, expiration })` | A `Decrease`. Sets `triggerAbove = !isLong` (fires on the losing side). |
 | `depositVault({ user, amount, maxAdversePnl })` | A `Deposit` vault order. |
 | `redeemVault({ user, shares, maxAdversePnl })` | A `Redeem` vault order. |
 
@@ -152,21 +152,21 @@ A stateless batching contract for keepers and integrators.
 
 | Method | Purpose |
 |---|---|
-| `multicall(calls)` | Run `Call[]` in order; any failure traps the whole batch (all or nothing). |
+| `multicall(calls)` | Run `Call[]` in order. Any failure traps the whole batch (all or nothing). |
 | `multicallTry(calls)` | Run `Call[]` in order, isolating each failure. Returns a `CallOutcome[]`. |
 | `createAndFill(trading, keeper, user, approveAmount, isLong, kind, notional, collateral, triggerPrice, triggerAbove, priceBound, expiration, price)` | Set the allowance, create an order, and fill it fill-or-kill. Returns the fill payout. With `keeper = user` the reward round-trips to the trader. |
 | `createAndTryFill(...same args...)` | Create strictly, then attempt an isolated fill. A failed fill leaves the order resting with its allowance in place. Returns a `FillAttempt`. |
 | `createAndTryFillVaultOrder(trading, keeper, user, kind, amount, maxAdversePnl, price)` | Create a vault order and attempt an isolated fill. Returns a `FillAttempt`. |
-| `adlSweep(trading, keeper, targets, price)` | Deleverage `AdlTarget[]` back to back, isolated; stops once a side reaches its clear target. Returns a `CallOutcome[]`. |
+| `adlSweep(trading, keeper, targets, price)` | Deleverage `AdlTarget[]` back to back, isolated. Stops once a side reaches its clear target. Returns a `CallOutcome[]`. |
 
-`approveAmount` is the collateral allowance set for `trading` before the creation; `0n` skips it. A router-set allowance rides the user-tier TTL horizon (roughly 120 days).
+`approveAmount` is the collateral allowance set for `trading` before the creation, and `0n` skips it. A router-set allowance rides the user-tier TTL horizon (roughly 120 days).
 
 Types:
 
 - `Call { contract, func, args }` where `args` is `xdr.ScVal[]`. `TradingRouterContract.buildCall(contract, func, args)` composes one.
-- `CallOutcome { ok, value, error }`: `value` carries an `i128` return (keeper payouts) or `0n`; `error` is `0` on success, the contract error code otherwise.
+- `CallOutcome { ok, value, error }`: `value` carries an `i128` return (keeper payouts) or `0n`. `error` is `0` on success, the contract error code on a contract failure, and `u32::MAX` for any other failure. `FillAttempt.error` follows the same convention.
 - `FillAttempt { id, filled, payout, error }`: the created order `id`, whether the immediate fill landed, the payout when it did, and the fill's error code otherwise.
-- `AdlTarget { user, isLong, amount }`: `amount` of `FULL_CLOSE` lets the contract size each close.
+- `AdlTarget { user, isLong, amount }`: `amount` at or above the position's notional requests a full close. The contract does not size the close. A close that lands the side's pending PnL under the clear target re-measured on the settled vault balance fails with `AdlOvershoot`, reported in that target's `CallOutcome`, so size `amount` to the reduction still needed.
 
 ```typescript
 const target = { user: winner, isLong: true, amount: FULL_CLOSE };
@@ -249,7 +249,7 @@ const factory = new FactoryContract(FACTORY_ADDRESS);
 | `deployMarket(admin, salt, token, priceVerifier, feedId, exponent, config, vaultName, vaultSymbol, vaultDecimalsOffset)` | Deploy a trading and strategy-vault pair atomically. Returns the trading address. |
 | `isDeployed(tradingId)` | Whether an address was deployed by this factory. |
 
-The factory deploys the vault first, then the trading contract, wiring the vault as the trading contract's collateral vault and the trading contract as the vault's immutable strategy. Both addresses derive from `admin` and the salts, so a salt alone cannot be front-run. The constructor takes a `FactoryInitMeta { trading_hash, vault_hash, treasury }` of compiled WASM hashes plus the treasury address. Config values are set per market by governance; always review [`deploy.json`](/deployments/contract-addresses) before deploying.
+The factory deploys the vault first, then the trading contract, wiring the vault as the trading contract's collateral vault and the trading contract as the vault's immutable strategy. Both addresses derive from `admin` and the salts, so a salt alone cannot be front-run. The constructor takes a `FactoryInitMeta { trading_hash, vault_hash, treasury }` of compiled WASM hashes plus the treasury address. Config values are set per market by governance. Always review [`deploy.json`](/deployments/contract-addresses) before deploying.
 
 ## Parsing errors
 

@@ -15,6 +15,40 @@ Each new market ships with its own [Config](./market-parameters.md), set at depl
 
 ## Currently Available Markets
 
-The initial Zenex deployment lists markets for **XLM**, **BTC**, and **ETH**, each settled in USDC. Every market has parameters tuned to the asset's liquidity and volatility profile, set per market by governance. See [Market Parameters](./market-parameters.md) for what those parameters control, and read a market's contract directly for its live values.
+The initial Zenex deployment lists markets for **XLM**, **BTC**, and **ETH**, each settled in USDC.
+
+| Market | Oracle feed (Pyth Lazer) | Vault share token |
+|---|---|---|
+| XLM | feed 23, exponent -8 | vXLMUSDC |
+| BTC | feed 1, exponent -8 | vBTCUSDC |
+| ETH | feed 2, exponent -8 | vETHUSDC |
 
 Because deployment is permissionless through the factory, other operators can list additional assets by deploying their own trading and vault pairs. Those external markets choose their own oracle feeds, settlement tokens, owners, and configurations.
+
+## Testnet Market Parameters
+
+All three markets launch on testnet with the same starting configuration. Every value below is a per-market governance parameter and can change over time, so the market's contract is always the source of truth. See [Market Parameters](./market-parameters.md) for what each one controls.
+
+| Parameter | Value |
+|---|---|
+| Maximum leverage | 100x (1% initial margin) |
+| Maintenance margin | 0.75% of notional |
+| Liquidation fee rate | 0.5% of notional |
+| Trade fee | 0.06% on the imbalance-worsening side, 0.04% on the improving side |
+| Impact fee divisor | 1,000 |
+| Keeper share of fees | 10% |
+| Position size | 20 to 1,000,000 USDC notional |
+| Per-side open interest cap | 10,000,000 USDC |
+| Minimum order | 2 USDC notional and 2 USDC collateral |
+| Fresh-size decrease lock | 30 seconds |
+| Utilization caps | 80% for opens, 90% for vault withdrawals |
+| Borrowing interest | about 2.5% per year at the 50% target utilization, rising to about 15% per year at full utilization |
+| Funding rate cap | about 25% per year in either direction |
+| ADL thresholds | arms at 50% of half the vault balance, deleverages back to 40% |
+| Profit-haircut threshold | 90% on the same measure |
+| Vault fill fee | 0.1% |
+| Minimum vault fill | 10 USDC |
+| Deposit and redeem cooldowns | 60 seconds |
+| Deposit and withdraw PnL gates | 15% |
+| Vault balance cap | 10,000,000 USDC |
+| Treasury share of protocol fees | 20% |

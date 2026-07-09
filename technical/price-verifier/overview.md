@@ -5,7 +5,7 @@ title: Price Verifier
 
 # Price Verifier
 
-Zenex prices markets with [Pyth Lazer](https://pyth.network/). The `PriceVerifierContract` turns a signed binary Lazer update into verified, feed-scoped `PriceData` for the trading contract. Signature checking is delegated to a separate Lazer verification contract; the price verifier parses the payload and enforces feed, exponent, confidence, spread, and staleness bounds on top.
+Zenex prices markets with [Pyth Lazer](https://pyth.network/). The `PriceVerifier` contract turns a signed binary Lazer update into verified, feed-scoped `PriceData` for the trading contract. Signature checking is delegated to a separate Lazer verification contract. The price verifier parses the payload and enforces feed, exponent, confidence, spread, and staleness bounds on top.
 
 ## PriceData Structure
 
@@ -30,15 +30,16 @@ The verifier runs the following on every call before returning data.
 
 **Signature delegation.** The verifier holds a `lazer` contract address and calls `verify_update` on it, passing the raw update bytes. The Lazer contract checks the update's signature against its trusted-signer set and returns the inner payload bytes. This keeps the signing-key trust and the ECDSA verification in one dedicated contract that the price verifier depends on.
 
-**Payload parsing.** The verifier parses the returned payload (its own magic number, a microsecond timestamp, a channel byte, a feed count, and per-feed properties: price, best bid, best ask, exponent, confidence). An empty feed set is rejected.
+**Payload parsing.** The verifier parses the returned payload (its own magic number, a microsecond timestamp, a channel byte, a feed count, and per-feed properties: price, best bid, best ask, exponent, confidence, and feed update timestamp). An empty feed set is rejected.
 
 **Feed selection.** `verify_price(update_data, feed_id, exponent)` extracts the one requested feed, raising `FeedNotFound` (790) if the update does not contain it and `WrongExponent` (791) if the feed's exponent differs from the caller's anchor. `verify_prices(update_data)` returns every feed in the update.
 
-**Per-feed validation.** For each returned feed the verifier requires the price, best bid, and best ask to be present, and enforces:
+**Per-feed validation.** For each returned feed the verifier requires the price, best bid, best ask, and feed update timestamp to be present, and enforces:
 
 - `price > 0`, `bid > 0`, `ask > 0`: a non-positive wire value is malformed.
 - `bid <= ask`: a crossed market is malformed.
 - confidence present and non-negative, with `confidence * 10_000 <= |price| * max_confidence_bps`: a spread wider than the configured tolerance is rejected.
+- feed update timestamp present: a feed lacking it is rejected, and `publish_time` is derived from it (`t / 1_000_000`).
 
 Any violation raises `InvalidPrice` (781).
 
@@ -50,12 +51,12 @@ The price verifier implements OZ Ownable. For standard Ownable behavior, refer t
 
 | Function | Auth |
 |---|---|
-| `verify_price(update_data, feed_id, exponent)` | Permissionless |
-| `verify_prices(update_data)` | Permissionless |
-| `lazer()` / `max_confidence_bps()` / `max_staleness()` | Permissionless (views) |
-| `update_lazer(new_lazer)` | Owner only (`#[only_owner]`) |
-| `update_max_confidence_bps(bps)` | Owner only |
-| `update_max_staleness(max_staleness)` | Owner only |
+| `verify_price` | Permissionless |
+| `verify_prices` | Permissionless |
+| `lazer` / `max_confidence_bps` / `max_staleness` | Permissionless (views) |
+| `update_lazer` | Owner only (`#[only_owner]`) |
+| `update_max_confidence_bps` | Owner only |
+| `update_max_staleness` | Owner only |
 
 ## Staleness and Confidence Bounds
 

@@ -15,19 +15,17 @@ When a trader opens a position, the vault reserves capacity to cover their poten
 
 ### The Vault Token
 
-Depositing mints **vault shares**, a fungible token representing your proportional claim on the vault's total assets. Share value tracks the vault's assets net of pending trader PnL, so it already reflects the unrealized profit or loss of open positions rather than only settled balances:
+Depositing mints **vault shares**, a fungible token representing your proportional claim on the vault's total assets. Share value is the vault's total assets divided by the total shares outstanding, and it moves only when value actually settles into or out of the vault: trading fees, borrowing interest, and realized trader PnL. The unrealized profit or loss of open positions is not yet in the share price. That gap is why the protocol gates deposits and redeems while pending PnL is large (see [Risks & Rewards](./risks-and-rewards.md)).
 
-$$
-sharePrice = \frac{totalAssets - pendingTraderPnl}{totalShares}
-$$
+For example, say a vault holds 1,040,000 USDC and has 1,000,000 shares outstanding. Each share is worth 1,040,000 / 1,000,000 = 1.04 USDC. If a trader then closes a position at a 40,000 USDC loss, that collateral settles into the vault and each share is worth 1,080,000 / 1,000,000 = 1.08 USDC.
 
-If the vault earns fees and interest over time, share value rises and each share redeems for more underlying tokens than it cost. If traders are collectively in profit, share value falls.
+If the vault earns fees and interest over time, share value rises and each share redeems for more underlying tokens than it cost. When traders close in profit, the vault pays out and share value falls.
 
 ### Deposits and Redeems Are Orders
 
-Deposits and redeems on Zenex happen through **vault orders**. When you deposit, your assets are escrowed inside the trading contract at creation; when you redeem, your shares are escrowed. A permissionless [keeper](../keepers/overview.md) then fills the order at a verified oracle price, minting or burning shares net of the vault fill fee.
+Deposits and redeems on Zenex happen through **vault orders**. When you deposit, your assets are escrowed inside the trading contract at creation. When you redeem, your shares are escrowed instead. A permissionless [keeper](../keepers/overview.md) then fills the order, minting or burning shares net of the vault fill fee.
 
-Routing through the trading contract lets the protocol price your entry or exit against the same verified price the market trades at, and apply the protective gates that stop deposits and redeems from being timed against a stale share value. See [Depositing & Withdrawing](./depositing.md) for the full flow.
+Routing through the trading contract lets the protocol measure the market's pending trader PnL at the same verified price the market trades at, and apply the protective gates that stop deposits and redeems from being timed while share value has not yet caught up with that pending PnL. The keeper's verified price feeds those gates rather than setting the share conversion rate. See [Depositing & Withdrawing](./depositing.md) for the full flow.
 
 ### Risks
 

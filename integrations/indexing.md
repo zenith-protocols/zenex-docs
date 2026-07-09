@@ -37,7 +37,7 @@ if (decoded?.contractType === ZenexContractType.Trading) {
 
 ## Topic layout
 
-Every trading event is a `#[contractevent]`. Its topics are the snake_case event name symbol first, then the `#[topic]` fields in declaration order; every remaining field lands in the data map. Amounts carry units: token decimals for quote-side values, base decimals for `tokens`, the feed's price scalar for prices, and `SCALAR_18` for indices and rates.
+Every trading event is a `#[contractevent]`. Its topics are the snake_case event name symbol first, then the `#[topic]` fields in declaration order. Every remaining field lands in the data map. Amounts carry units: token decimals for quote-side values, base decimals for `tokens`, the feed's price scalar for prices, and `SCALAR_18` for indices and rates.
 
 ## Trading events
 
@@ -58,19 +58,19 @@ There are 14 trading events.
 | `increase_fill` | `user`, `id`, `is_long` | `notional`, `tokens`, `collateral`, `base_fee`, `impact_fee`, `funding`, `borrowing` |
 | `decrease_fill` | `user`, `id`, `is_long` | `notional`, `tokens`, `collateral`, `pnl`, `base_fee`, `impact_fee`, `funding`, `borrowing`, `bad_debt`, `returned` |
 | `liquidation` | `user`, `is_long` | `notional`, `tokens`, `collateral`, `pnl`, `base_fee`, `impact_fee`, `funding`, `borrowing`, `bad_debt`, `liq_fee`, `returned`, `forfeit` |
-| `position_update` | `user`, `is_long` | `position` (the stored `Position` row; zeroed = closed) |
+| `position_update` | `user`, `is_long` | `position` (the stored `Position` row, zeroed = closed) |
 
 The decoded event fields are camelCase (`orderId`, `isLong`, `baseFee`, `impactFee`, `badDebt`, `liqFee`), and nested `order` / `position` / `config` structs decode into the same typed mirrors the view parsers return.
 
 ## Fill receipts versus position snapshots
 
-A fill emits two events. The receipt (`increase_fill`, `decrease_fill`, or `liquidation`) carries the itemized economics of what happened: the size and base tokens moved, the collateral leg, realized PnL, the four fee items (trade, impact, funding, borrowing), and any bad debt. The paired `position_update` carries the resulting netted position row, zeroed when the position closed. Index the receipt to reconstruct the trade's economics and the `position_update` to track live state; join them on the transaction.
+A fill emits two events. The receipt (`increase_fill`, `decrease_fill`, or `liquidation`) carries the itemized economics of what happened: the size and base tokens moved, the collateral leg, realized PnL, the four fee items (trade, impact, funding, borrowing), and any bad debt. The paired `position_update` carries the resulting netted position row, zeroed when the position closed. Index the receipt to reconstruct the trade's economics and the `position_update` to track live state. Join them on the transaction.
 
 A few details worth encoding in an indexer:
 
 - The fill price is implied, not a field. Compute it as `notional * SCALAR_18 / tokens` from a receipt.
 - On `decrease_fill` and `liquidation`, the `funding` sign tells you where funding went: positive was paid from collateral, negative was credited to the trader's claimable balance.
-- On `liquidation`, `liq_fee` of `0` is a soft-tier liquidation (the remainder is `returned` to the trader); a positive `liq_fee` is a hard-tier liquidation (the remainder is `forfeit` to the vault).
+- On `liquidation`, `liq_fee` of `0` is a soft-tier liquidation (the remainder is `returned` to the trader). A positive `liq_fee` is a hard-tier liquidation (the remainder is `forfeit` to the vault).
 - A `decrease_fill` with `orderId` of `0` is an auto-deleveraging slice, not a user-submitted order. The keeper force-decreased the position through the ADL path.
 
 ## Factory events

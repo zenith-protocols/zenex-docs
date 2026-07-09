@@ -11,20 +11,20 @@ LP entry and exit run through the trading contract as **vault orders**, and the 
 
 `create_vault_order(user, kind, amount, max_adverse_pnl)` opens a deposit or redeem:
 
-- A **deposit** escrows `amount` assets in the trading contract; a **redeem** escrows `amount` shares.
-- The deposited assets net of the vault fee, or a redeem's previewed assets, must clear `min_deposit`, else `InvalidOrder` (732).
+- A **deposit** escrows `amount` assets in the trading contract, and a **redeem** escrows `amount` shares.
+- The deposited assets, or a redeem's previewed assets, must clear `min_deposit`, else `InvalidOrder` (732).
 - The order stamps a cooldown deadline (`unlocks_at`) at creation. A `Frozen` market rejects the call with `MarketFrozen` (704).
 - `max_adverse_pnl` is the LP's own opt-in fill bound on adverse share mispricing (`SCALAR_18`, `0` = unbounded): a depositor declines to overpay while shares overprice beyond the tolerance, a redeemer declines to exit below fair value beyond it.
 
-`cancel_vault_order` refunds the escrowed assets or shares in full. `execute_vault_order(keeper, user, id, amount, price)` fills up to `amount`, clamped to the order remainder. A partial fill keeps the remainder pending under the **same id** with `created_at` intact, so a redeem cooldown never restarts, and the remainder must itself stay fillable (at or above `min_deposit`). Every fill deducts the `vault_fee` cut of the moved assets, split keeper / treasury / vault.
+`cancel_vault_order` refunds the escrowed assets or shares in full. A `Frozen` market halts cancels with `MarketFrozen` (704), and the escrow stays in the trading contract until the freeze lifts. `execute_vault_order(keeper, user, id, amount, price)` fills up to `amount`, clamped to the order remainder. A fill also requires the verified price's `publish_time` to be at or after the order's `created_at`, else `StalePrice` (740). An order filling in its creation ledger is exempt. A partial fill keeps the remainder pending under the **same id** with `created_at` intact, so a redeem cooldown never restarts, and each fill and the surviving remainder must both clear `min_deposit`, else `InvalidOrder` (732). Every fill deducts the `vault_fee` cut of the moved assets, split keeper / treasury / vault.
 
 ## Deposit Fill Gates
 
 A deposit mints shares net of the vault fee. It must clear:
 
-- **Conditional cooldown.** The fill is instant while the shares sit within `instant_deposit_pnl` of fair value (nothing to snipe). Otherwise the `deposit_lock` cooldown must elapse, else `VaultOrderLocked` (751).
+- **Conditional cooldown.** The fill is instant while share underpricing (net pending trader loss over the vault) sits at or under `instant_deposit_pnl` (nothing to snipe). Share overpricing never triggers the cooldown. Otherwise the `deposit_lock` cooldown must elapse, else `VaultOrderLocked` (751).
 - **Snipe gate.** Blocked while share underpricing (net pending trader loss over the vault) exceeds `max_pnl_deposit`, else `PendingPnlExceeded` (752). This stops a depositor from buying cheap shares just before pending trader losses are realized into the pool.
-- **Balance cap.** The post-deposit balance (fee included) may not exceed `max_vault_balance`, else `VaultBalanceExceeded` (753).
+- **Balance cap.** The post-deposit balance (the assets net of the fee, plus the vault's own fee cut) may not exceed `max_vault_balance`, else `VaultBalanceExceeded` (753).
 
 ## Redeem Fill Gates
 
@@ -40,4 +40,4 @@ Vault share price reflects only realized flow (the token balance), not the tradi
 
 ## Two Utilization Caps
 
-The market carries two utilization caps. `max_util_open` gates new opens and is the borrow-reserve denominator; `max_util_withdraw` (`>= max_util_open`) gates redeems, retaining a minimum vault liquidity buffer so the pool can always back its open reserve. A live lock change can only pull a queued order's stamped deadline **earlier**, never extend it.
+The market carries two utilization caps. `max_util_open` gates new opens and is the borrow-reserve denominator. `max_util_withdraw` (`>= max_util_open`) gates redeems, retaining a minimum vault liquidity buffer so the pool can always back its open reserve. A live lock change can only pull a queued order's stamped deadline **earlier**, never extend it.

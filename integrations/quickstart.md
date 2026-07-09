@@ -72,7 +72,7 @@ const approveOp = token
 await submit(await sign(await prepare(userPublicKey, approveOp)));
 ```
 
-The [trading router](./sdk#tradingroutercontract) can set this allowance for you as part of an atomic open; see step 5.
+The [trading router](./sdk#tradingroutercontract) can set this allowance for you as part of an atomic open. See step 5.
 
 ## 4. Create a market order
 
@@ -103,11 +103,11 @@ const confirmed = await server.getTransaction(sent.hash);
 const orderId = parseResult(confirmed, TradingContract.parsers.createOrder);
 ```
 
-All i128 amounts are `bigint`. To place a resting limit instead of a market order, use `openLimit` with a `triggerPrice`; to attach exits, use `placeTakeProfit` / `placeStopLoss`. Every helper is listed in the [SDK reference](./sdk#semantic-helpers).
+All i128 amounts are `bigint`. To place a resting limit instead of a market order, use `openLimit` with a `triggerPrice`. To attach exits, use `placeTakeProfit` / `placeStopLoss`. Every helper is listed in the [SDK reference](./sdk#semantic-helpers).
 
 ## 5. Fill the order
 
-Filling is permissionless and price-bearing. A keeper (your own backend, a public keeper, or the router) fetches a fresh serialized Pyth Lazer price update and calls `execute_order`. The `keeper` argument is only the reward recipient; the trader already consented through the allowance. See [Price feed](./price-feed) for fetching the price update.
+Filling is permissionless and price-bearing. A keeper (your own backend, a public keeper, or the router) fetches a fresh serialized Pyth Lazer price update and calls `execute_order`. The `keeper` argument is only the reward recipient. The trader already consented through the allowance. See [Price feed](./price-feed) for fetching the price update.
 
 ```typescript
 const priceUpdate = await fetchPriceUpdate(FEED_ID); // Uint8Array, see Price feed
@@ -163,7 +163,7 @@ const { result: position } = await simulateAndParse(
 
 console.log({
   notional: position.notional,   // size in quote, token-dec
-  tokens: position.tokens,       // size in base, base-dec (entry = notional / tokens)
+  tokens: position.tokens,       // size in base, base-dec (entry price = notional * SCALAR_18 / tokens)
   collateral: position.collateral,
 });
 ```

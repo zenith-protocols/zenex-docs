@@ -26,7 +26,7 @@ The values themselves depend on the asset's liquidity and volatility, so this pa
 
 - **Initial margin**: the collateral required to open, expressed as a fraction of notional. Maximum [leverage](../trading/leverage.md) is one divided by the initial margin.
 - **Maintenance margin**: the hard [liquidation](../trading/liquidation.md) floor, always lower than the initial margin. The gap between the two is the safety buffer before a position becomes liquidatable.
-- **Liquidation fee**: the fee taken at liquidation, which also sets the boundary between a soft liquidation (remaining equity returned to the trader) and a hard one (remaining equity forfeited to the vault).
+- **Liquidation fee**: sets the boundary between a soft liquidation and a hard one. If remaining equity covers the fee, the liquidation is soft, no fee is charged, and the equity returns to the trader. Below that line the fee is taken and the remainder is forfeited to the protocol.
 
 ### Position Lifecycle Lock
 
@@ -35,7 +35,7 @@ The values themselves depend on the asset's liquidity and volatility, so this pa
 ### Borrowing Curve (Kink Model)
 
 - **Target utilization (the kink)**: the utilization point where the borrowing rate steepens.
-- **Base borrowing rate**: the per-second rate applied below the kink.
+- **Base borrowing rate**: sets how fast the per-second rate climbs with utilization below the kink.
 - **Increased borrowing rate**: the steeper rate the curve reaches at full utilization. Both sides of the book pay the same kink rate, since open interest on either side reserves vault capacity. See [Borrowing Interest](../trading/borrowing-interest.md).
 
 ### Funding Curve (Velocity Model)
@@ -46,8 +46,8 @@ The values themselves depend on the asset's liquidity and volatility, so this pa
 
 ### ADL and Profit Risk
 
-- **ADL thresholds**: the winning-side profit level (relative to the vault) that arms [auto-deleveraging](../trading/liquidation.md), and the lower target it deleverages back toward.
-- **Profit-haircut threshold**: the profit level at which a closing winner's realized gain is scaled down, with the withheld share retained by the vault.
+- **ADL thresholds**: the winning-side profit level (measured against half the vault balance, each side against its own half) that arms [auto-deleveraging](../trading/adl.md), and the lower target it deleverages back toward.
+- **Profit-haircut threshold**: the profit level, on the same half-vault measure, at which a closing winner's realized gain is scaled down, with the withheld share retained by the vault.
 
 ### Vault-Order Parameters
 
@@ -55,7 +55,7 @@ The values themselves depend on the asset's liquidity and volatility, so this pa
 - **Deposit and redeem cooldowns**: minimum wait periods before a queued deposit or redeem can fill.
 - **Instant-deposit tolerance**: how close to fair value shares must be for a deposit to skip the cooldown.
 - **Deposit and withdraw PnL gates**: limits on share mispricing that block deposits or redeems while pending trader PnL would let them snipe or drain the pool.
-- **Minimum deposit** and **maximum vault balance**: the smallest deposit that clears, and the ceiling on total vault balance.
+- **Minimum fill size** and **maximum vault balance**: the smallest amount of assets a deposit or redeem fill can move, and the ceiling on total vault balance.
 
 ### How Parameters Interact
 

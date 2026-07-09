@@ -13,7 +13,7 @@ Each Zenex market pairs a trading contract with its own **strategy vault**. The 
 
 Deposits and redeems on Zenex flow **through the trading contract as vault orders**. When you deposit, your assets are held in escrow and a keeper fills the order shortly after, minting your **vault shares** net of the vault fee. When you redeem, your shares are escrowed and a keeper fills the redeem, burning them and paying out assets net of the vault fee. This ordering exists so that share pricing always reflects the market's live PnL and cannot be sniped or drained by a well-timed deposit or withdrawal.
 
-Two things follow from this. First, a deposit or redeem rests until a keeper fills it, and you can cancel it while it rests to get your escrowed assets or shares back in full. Second, fills are subject to cooldowns and safety gates, described below.
+Two things follow from this. First, a deposit or redeem rests until a keeper fills it, and you can cancel it while it rests to get your escrowed assets or shares back in full, except while the market is under an emergency freeze. Second, fills are subject to cooldowns and safety gates, described below.
 
 ### Depositing
 

@@ -9,7 +9,7 @@ Funding is a peer-to-peer transfer between longs and shorts that pushes open int
 
 ## The Saved Rate
 
-The market stores a single signed `funding_rate` (`SCALAR_18` per second). Positive means longs pay shorts; negative means shorts pay longs. It evolves according to the **token skew**:
+The market stores a single signed `funding_rate` (`SCALAR_18` per second). Positive means longs pay shorts, negative means shorts pay longs. It evolves according to the **token skew**:
 
 $$
 \text{skew} = \frac{|\text{long\_tokens} - \text{short\_tokens}|}{\text{long\_tokens} + \text{short\_tokens}}
@@ -17,7 +17,7 @@ $$
 
 Three regimes govern how the saved rate moves each second:
 
-- **Accelerate.** When the rate is fresh (zero) or has just flipped sign, or when the skew is above `threshold_stable_funding`, the rate accelerates toward the dominant side by `funding_increase * skew` per second. Persistent imbalance ramps the rate up.
+- **Accelerate.** When the rate is fresh (zero) or its sign opposes the current token-dominant side (as after the book flips), or when the skew is above `threshold_stable_funding`, the rate accelerates toward the dominant side by `funding_increase * skew` per second. Persistent imbalance ramps the rate up.
 - **Decay.** When the skew is below `threshold_decrease_funding`, the rate decays flat by `funding_decrease` per second toward zero. A full decay parks at the smallest signed step, preserving the sign until a flip ramps back through it.
 - **Hold.** Between the two thresholds, or on a token-balanced book, the rate holds.
 
@@ -25,7 +25,7 @@ Config validation enforces `threshold_decrease_funding <= threshold_stable_fundi
 
 ## Caps and Floors
 
-The saved rate is hard-capped at `+/- funding_max`. An empty market resets it to zero. The **charged** magnitude is floored at `funding_min`: below that floor nothing is charged, but the **stored** rate is not floored, so it can decay through the floor and flip sign as the book rebalances.
+The saved rate is hard-capped at `+/- funding_max`. An empty market resets it to zero. The **charged** magnitude is floored at `funding_min`: while the stored rate is nonzero but below the floor, the charge steps up to `funding_min`. The **stored** rate itself is not floored, so it can decay through the floor and flip sign as the book rebalances. Only a stored rate of exactly zero charges nothing.
 
 ## Settlement and the Internal Pool
 
@@ -38,10 +38,10 @@ When one side has no opposing side to receive its payment, the paid funding accu
 
 ## Claiming
 
-A trader redeems their earned funding with `claim_funding(user)`. It pays the claimable balance from the pool, capped at the pool's holdings (any remainder stays claimable), and shrinks both `funding_pool` and `funding_owed`. `NothingToClaim` (760) if the balance is empty. `claim_funding` is blocked while the market is `Frozen` (`MarketFrozen` 704) but remains available in every other status, including `Retired`.
+A trader redeems their earned funding with `claim_funding`. It pays the claimable balance from the pool, capped at the pool's holdings (any remainder stays claimable), and shrinks both `funding_pool` and `funding_owed`. `NothingToClaim` (760) if the balance is empty or the pool currently holds nothing to pay it with. `claim_funding` is blocked while the market is `Frozen` (`MarketFrozen` 704) but remains available in every other status, including `Retired`.
 
 The pool surplus sweeps to the vault a single time, when the market enters `Retired`.
 
 ## Accrual
 
-The funding index advances to now on every funding accrual, which is price-free: the maintenance call `accrue_funding()` advances only funding, while the price-bearing `accrue(price)` advances both funding and borrowing. Continuous accrual removes any incentive to manipulate the exact settlement timestamp.
+The funding index advances to now on every funding accrual, which is price-free: the maintenance call `accrue_funding` advances only funding, while the price-bearing `accrue` advances both funding and borrowing. Continuous accrual removes any incentive to manipulate the exact settlement timestamp.

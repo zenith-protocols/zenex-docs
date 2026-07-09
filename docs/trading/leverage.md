@@ -13,13 +13,9 @@ When opening a position with leverage, the user effectively draws on the vault t
 
 **Initial margin and maximum leverage**
 
-The maximum leverage depends on the market's initial margin parameter, which is set per market by governance. When opening or increasing a position, the following condition must hold:
+The maximum leverage depends on the market's initial margin parameter, which is set per market by governance. When opening or increasing a position, your collateral must be at least the initial margin's share of the notional size.
 
-$$
-collateral \geq initialMargin \times notionalSize
-$$
-
-So if the initial margin is 0.01 (1%), the collateral has to be at least 1% of the notional size, and users can take up to 100x leverage. Different markets set different initial margins, so the leverage ceiling varies by market.
+For example, a market with a 1% initial margin requires at least 10 USDC of collateral behind a 1,000 USDC position, so the most leverage available is 100x. A market with a 5% initial margin instead requires at least 50 USDC of collateral behind that same 1,000 USDC position, capping leverage at 20x. Different markets set different initial margins, so the leverage ceiling varies by market.
 
 **Initial versus maintenance margin**
 

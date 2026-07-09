@@ -36,5 +36,5 @@ The mechanism has guardrails. A close must actually reduce the side's pending Pn
 
 - **ADL is a backstop, not a routine event.** It only engages when a winning side has grown large relative to the vault. Under normal conditions, ordinary liquidations handle risk.
 - **It only touches winning positions.** If your side is not in profit, ADL never applies to you.
-- **No action is required from you.** Deleveraging is performed by keepers. If your winning position is reduced, you keep the realized profit on the closed portion; only your remaining exposure shrinks.
+- **No action is required from you.** Deleveraging is performed by keepers. If your winning position is reduced, you keep the realized profit on the closed portion, net of the regular close fees and any profit haircut in effect, and only your remaining exposure shrinks.
 - **It caps profit extraction during an overhang.** ADL works alongside the realized-profit haircut described in [PnL](./pnl.md): the haircut scales down gains while a side is overweight, and ADL bounds how large that overhang can grow.

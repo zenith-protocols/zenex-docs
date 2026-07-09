@@ -15,7 +15,7 @@ A keeper calls `update_adl_state(price)` to recompute both sides' pending PnL at
 - It **holds** while the PnL sits between `adl_clear_target` and `adl_max_pnl` (the hysteresis band that prevents flapping).
 - It **clears** at or below `adl_clear_target`.
 
-A side that is not winning is never flagged. Config validation orders the thresholds `MIN_ADL_CLEAR <= adl_clear_target <= adl_max_pnl <= max_pnl_trader < 1` (all `SCALAR_18`), so ADL arms at or below the same overhang that triggers the realized-profit haircut.
+A side that is not winning is never flagged. Config validation orders the thresholds `MIN_ADL_CLEAR <= adl_clear_target <= adl_max_pnl <= max_pnl_trader < 1`, with `adl_max_pnl` additionally floored at `MIN_ADL_TRIGGER` (45%, all `SCALAR_18`), so ADL arms at or below the same overhang that triggers the realized-profit haircut.
 
 ## What a Flagged Side Does
 
@@ -26,7 +26,7 @@ A set flag has two effects:
 
 ## Executing ADL
 
-`execute_adl(keeper, user, is_long, amount, price)` deleverages one winning position on a flagged side, reducing the side's pending PnL back toward `adl_clear_target` of half the vault. It closes `amount` (or the whole position if `amount` is `i128::MAX` or oversized) through the regular decrease path, with **no collateral withdrawal**. It honors the decrease lock and keeps at least a minimum-size remainder on a partial close.
+`execute_adl(keeper, user, is_long, amount, price)` deleverages one winning position on a flagged side, reducing the side's pending PnL back toward `adl_clear_target` of half the vault. It closes `amount` (or the whole position if `amount` is `i128::MAX` or oversized) through the regular decrease path, with **no collateral withdrawal**. The requested amount is never resized. A partial close that would leave the remainder under `min_position_notional` aborts with `NotionalBelowMinimum` (711), while a request at or above the position's notional closes it in full. The decrease lock applies as on any decrease, so a request exceeding the unlocked notional aborts with `NotionalLocked` (721).
 
 A forced reduction waives the initial-margin floor on the remainder (only the maintenance line applies), so a deleveraged position is never left stuck in a state its owner could not restore. The keeper is paid the `keeper_rate` cut of the trade fee, and the call emits a `decrease_fill` with id `0` plus a `position_update`.
 
@@ -37,8 +37,10 @@ Guards:
 | Side not flagged, or its pending PnL already at or below the clear target | `AdlNotTriggered` (770) |
 | The close would overshoot below the re-measured clear allowance | `AdlOvershoot` (771) |
 | The position is not a winner (the close would not reduce the side's pending PnL) | `AdlNotEligible` (772) |
-| The verified price predates the position's last entry change | `StalePrice` (740) |
+| The verified price predates the position's last fill | `StalePrice` (740) |
 | A sized partial close below the `min_order_notional` dust floor | `InvalidOrder` (732) |
+| A partial close leaving the remainder under `min_position_notional` | `NotionalBelowMinimum` (711) |
+| The requested close exceeds the unlocked notional (decrease lock) | `NotionalLocked` (721) |
 
 ## Interaction with the Profit Haircut
 

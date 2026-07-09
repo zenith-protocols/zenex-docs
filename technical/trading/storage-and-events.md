@@ -32,12 +32,12 @@ The factory emits one further event, `Deploy { trading, vault }`, when it deploy
 
 ### Reading the fill receipts
 
-`increase_fill`, `decrease_fill`, and `liquidation` carry the fill's itemized receipt; the resulting position state is carried by the paired `position_update`. A few conventions:
+`increase_fill`, `decrease_fill`, and `liquidation` carry the fill's itemized receipt. The resulting position state is carried by the paired `position_update`. A few conventions:
 
 - **Fill price is implied**, `notional * SCALAR_18 / tokens` (in `price_scalar` units). No event carries a price field.
-- **`funding` sign**: positive means funding was paid from collateral; negative means it was credited to the trader's claimable balance.
-- **`collateral` and `pnl` are gross** of the itemized fees. On a `decrease_fill`, `returned` is the actual payout (the gross legs less the fees they cover, floored at zero); a partial close pays only the profit leg while a realized loss debits the surviving margin. `bad_debt` is `0` on partial closes.
-- **`liquidation` tier**: `liq_fee = 0` is the soft tier (post-fee remainder on `returned`, to the trader); `liq_fee > 0` is the hard tier (remainder on `forfeit`, to the vault).
+- **`funding` sign**: positive means funding was paid from collateral, negative means it was credited to the trader's claimable balance.
+- **`collateral` and `pnl` are gross** of the itemized fees. On a `decrease_fill`, `returned` is the actual payout (the gross legs less the fees they cover, floored at zero). A partial close pays only the profit leg while a realized loss debits the surviving margin. `bad_debt` is `0` on partial closes.
+- **`liquidation` tier**: `liq_fee = 0` is the soft tier (post-fee remainder on `returned`, to the trader), while `liq_fee > 0` is the hard tier (remainder on `forfeit`, to the vault).
 - **ADL** emits a `decrease_fill` with `id = 0`.
 
 The Ownable module additionally emits its standard ownership-transfer events.
@@ -54,21 +54,21 @@ Active (0)   OnIce (1)   Frozen (2)   Delisted (3)   Retired (4)
 |---|---|---|---|---|---|---|
 | Active | yes | yes | yes | yes | yes | yes |
 | OnIce | no | yes | yes | yes | yes | yes |
-| Frozen | no | no | no | no | no | funding only |
-| Delisted | no | yes | deposits only | yes | yes | yes (until terminal price) |
+| Frozen | no | no | no | no | no | no |
+| Delisted | no | yes | yes | yes | yes | yes |
 | Retired | no | no (book already empty) | redeem (direct) only | yes | no | no |
 
 - **Active** is the only status that accepts opens (size-growing increases).
-- **OnIce** blocks opens; everything else keeps running.
-- **Frozen** is an emergency halt: `create_order`, `create_vault_order`, `cancel_vault_order`, `claim_funding`, and every keeper fill revert with `MarketFrozen` (704).
-- **Delisted** starts the wind-down. Opens are blocked. Within `DELIST_GRACE` (1 day) of the first delist it can be reverted to `Active`/`OnIce`; after that the trading statuses are unreachable for good, and a flat terminal settlement price can be set and refreshed. Once `DELIST_DEADLINE` (7 days) passes, keepers may force-close any remaining position at the terminal price regardless of health (healthy positions flow through the soft liquidation tier and keep full equity). Deposits stay allowed so the vault keeps funding payouts.
-- **Retired** is final. It is reachable only from a graced-out `Delisted` market with an **empty book** (all positions closed), and entering it sweeps the funding-pool surplus to the vault (`MarketNotCleared` 706 if any position remains). Only `claim_funding`, a direct vault redeem (a `create_vault_order` redeem forwards straight to `vault.redeem` and returns id `0`; deposits are rejected), and cancels stay live. No transition leaves `Retired`.
+- **OnIce** blocks opens, and everything else keeps running.
+- **Frozen** is an emergency halt: `create_order`, `create_vault_order`, `cancel_vault_order`, `claim_funding`, every keeper fill, and `accrue_funding` revert with `MarketFrozen` (704). No accrual runs while a market is Frozen.
+- **Delisted** starts the wind-down. Opens are blocked. Within `DELIST_GRACE` (1 day) of the first delist it can be reverted to `Active` or `OnIce`, after that the trading statuses are unreachable for good, and a flat terminal settlement price can be set and refreshed. Once `DELIST_DEADLINE` (7 days) passes, keepers may force-close any remaining position regardless of health, at the flat terminal price if one has been stored and at a verified feed price otherwise (healthy positions flow through the soft liquidation tier and keep full equity). Vault orders keep working in both directions, with redeems still gated by the withdraw-utilization and pending-PnL checks.
+- **Retired** is final and reachable from any other status. The only gate is an **empty book** (all positions closed), else `MarketNotCleared` (706). Entering it sweeps the funding-pool surplus to the vault. Only `claim_funding`, a direct vault redeem (a `create_vault_order` redeem forwards straight to `vault.redeem` and returns id `0`, deposits are rejected), and cancels stay live. No transition leaves `Retired`.
 
-`Active`, `OnIce`, and `Frozen` interchange freely on a live market. `Frozen` and `Delisted` are reachable from anything but `Retired`. A same-status set is rejected with `InvalidStatus` (702). The switch to flat pricing is governed by terminal-price presence, not by the status value: accrual (borrowing) keeps charging until a terminal price is stored, after which everything prices flat.
+`Active`, `OnIce`, and `Frozen` interchange freely on a live market. `Frozen`, `Delisted`, and `Retired` are each reachable from any other status except `Retired` itself. A same-status set is rejected with `InvalidStatus` (702). The switch to flat pricing is governed by terminal-price presence, not by the status value. Accrual never stops during the wind-down. Once a terminal price is stored, it keeps running with everything priced flat at the stored value.
 
 ## Config Fields {#config-fields}
 
-The global `Config` is set at deployment and replaced wholesale by `set_config`. Every field is set per market by governance; the protocol only enforces the ordering and range invariants noted. All fractional values are `SCALAR_18`; rate parameters are per second.
+The global `Config` is set at deployment and replaced wholesale by `set_config`. Every field is set per market by governance, and the table notes the main ordering and range invariants the protocol enforces. All fractional values are `SCALAR_18`, and rate parameters are per second.
 
 | Field | Meaning |
 |---|---|
@@ -101,11 +101,11 @@ The global `Config` is set at deployment and replaced wholesale by `set_config`.
 | `max_pnl_withdraw` | Redeem fills blocked above this share overpricing, `< 1` |
 | `max_vault_balance` | Vault balance ceiling on deposit fills (token-dec) |
 
-Changing a borrowing parameter (`target_util`, `borrow_rate`, `increased_borrow_rate`) requires a same-ledger `accrue`, else `set_config` reverts with `BorrowingNotAccrued` (703).
+Changing a borrowing parameter (`target_util`, `borrow_rate`, `increased_borrow_rate`, or `max_util_open`, the borrow-reserve denominator) requires a same-ledger `accrue`, else `set_config` reverts with `BorrowingNotAccrued` (703).
 
 ## Error Codes
 
-All errors are hard panics that abort the transaction. Domains follow v1 for auditor familiarity: access `1xx`, config/position/market `7xx`.
+All errors are hard panics that abort the transaction. Trading errors occupy the `7xx` range.
 
 | Code | Name | Meaning |
 |---|---|---|

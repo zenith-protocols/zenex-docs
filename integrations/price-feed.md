@@ -5,11 +5,11 @@ title: Price feed
 
 # Price feed
 
-A trader's `create_order` is price-free; the price arrives later, at fill time, from whoever fills the order: a keeper calling `execute_order`, `execute_liquidation`, `update_adl_state`, `execute_adl`, `execute_vault_order`, or `accrue`, or an integrator opening atomically through the router's `create_and_fill`. This page matters once you run fills yourself or open atomically; if your application only creates orders and leaves fills to public keepers, you can skip it.
+A trader's `create_order` is price-free. The price arrives later, at fill time, from whoever fills the order: a keeper calling `execute_order`, `execute_liquidation`, `update_adl_state`, `execute_adl`, `execute_vault_order`, or `accrue`, or an integrator opening atomically through the router's `create_and_fill`. This page matters once you run fills yourself or open atomically. If your application only creates orders and leaves fills to public keepers, you can skip it.
 
 ## How the price is verified on-chain
 
-Each trading contract carries an immutable `(feed_id, exponent)` anchor set at deployment, where `price_scalar = 10^-exponent`. When a keeper submits a price update, the contract hands it to the price-verifier, which checks the update's Ed25519 signature against its trusted Pyth Lazer signer, rejects a stale update (older than `max_staleness`), rejects one whose confidence interval is wider than `max_confidence_bps`, and rejects a missing, non-positive, crossed, or wrong-feed price. A malformed update traps the whole call, so a fill can only ever land on a verified price.
+Each trading contract carries an immutable `(feed_id, exponent)` anchor set at deployment, where `price_scalar = 10^-exponent`. When a keeper submits a price update, the contract hands the bytes to the price-verifier, which delegates signature verification to the deployed Pyth Lazer contract (the LE-ECDSA envelope checked against its trusted signer set), then rejects a stale update (older than `max_staleness`), one whose confidence interval is wider than `max_confidence_bps`, and a missing, non-positive, crossed, or wrong-feed price. A malformed update traps the whole call, so a fill can only ever land on a verified price.
 
 Execution prices off the verified bid and ask, not a single mid price:
 
@@ -26,19 +26,19 @@ Sign up at [pyth.network/lazer](https://pyth.network/lazer) and grab your token.
 
 ## The Pyth Lazer request
 
-Pyth Lazer exposes a `POST /v1/latest_price` endpoint. The request asks for one or more feeds and which encodings to return. For Stellar you want the `solana` format because its Ed25519 signature scheme matches what the on-chain price verifier trusts.
+Pyth Lazer exposes a `POST /v1/latest_price` endpoint. The request asks for one or more feeds and which encodings to return. For Stellar you want the `leEcdsa` format because it carries the LE-ECDSA envelope the deployed Pyth Lazer verification contract checks against its trusted signer set. Request all six properties below: the verifier rejects a feed missing its best bid, best ask, or per-feed update timestamp.
 
 ```json
 {
   "channel": "fixed_rate@1000ms",
-  "properties": ["price", "exponent", "confidence"],
-  "formats": ["solana"],
+  "properties": ["price", "bestBidPrice", "bestAskPrice", "exponent", "confidence", "feedUpdateTimestamp"],
+  "formats": ["leEcdsa"],
   "priceFeedIds": [1],
   "jsonBinaryEncoding": "hex"
 }
 ```
 
-Feed IDs map to assets (`1` = BTC, `2` = ETH, `23` = XLM). The full list is in the Pyth Lazer dashboard, and the id you request must match the `feed_id` the target market was deployed with (read it from `getFeed()`). Pyth runs three redundant nodes (`pyth-lazer-0.dourolabs.app`, `-1`, `-2`); fail over between them on error.
+Feed IDs map to assets (`1` = BTC, `2` = ETH, `23` = XLM). The full list is in the Pyth Lazer dashboard, and the id you request must match the `feed_id` the target market was deployed with (read it from `getFeed`). Pyth runs three redundant nodes (`pyth-lazer-0.dourolabs.app`, `-1`, `-2`). Fail over between them on error.
 
 ## Minimum working proxy
 
@@ -63,8 +63,11 @@ app.get('/prices/:feedId', async (c) => {
 
   const body = JSON.stringify({
     channel: 'fixed_rate@1000ms',
-    properties: ['price', 'exponent', 'confidence'],
-    formats: ['solana'],
+    properties: [
+      'price', 'bestBidPrice', 'bestAskPrice',
+      'exponent', 'confidence', 'feedUpdateTimestamp',
+    ],
+    formats: ['leEcdsa'],
     priceFeedIds: [feedId],
     jsonBinaryEncoding: 'hex',
   });
@@ -83,9 +86,9 @@ app.get('/prices/:feedId', async (c) => {
 
       const json = await res.json() as {
         parsed?: { timestampUs?: string; priceFeeds?: { price: string; exponent: number; confidence: number }[] };
-        solana?: { data?: string };
+        leEcdsa?: { data?: string };
       };
-      const hex = json.solana?.data;
+      const hex = json.leEcdsa?.data;
       if (!hex) continue;
 
       const feed = json.parsed?.priceFeeds?.[0];
@@ -118,7 +121,7 @@ const fillOp = trading.executeOrder(keeper, user, orderId, priceUpdate);
 
 ## Previewing a verified price off-chain
 
-To inspect what the verifier would accept without submitting a fill, simulate `PriceVerifierContract.verifyPrice`. It returns the verified `PriceVerifierPriceData` (`feed_id`, `price`, `exponent`, `publish_time`), which is handy for showing an expected fill price or checking staleness before a keeper commits gas.
+To inspect what the verifier would accept without submitting a fill, simulate `PriceVerifierContract.verifyPrice`. It returns the verified `PriceVerifierPriceData` (`feed_id`, `price`, `exponent`, `bid`, `ask`, `publish_time`), which is handy for showing an expected fill price or checking staleness before a keeper commits gas. For the expected fill price, read the execution side: the `ask` for a long increase, the `bid` for a short increase, with `price` as the mid. The `feedId` and `exponent` arguments must match the market's `getFeed` anchors.
 
 ```typescript
 import { PriceVerifierContract, simulateAndParse } from '@zenith-protocols/zenex-sdk';
@@ -126,7 +129,7 @@ import { PriceVerifierContract, simulateAndParse } from '@zenith-protocols/zenex
 const verifier = new PriceVerifierContract(PRICE_VERIFIER_ADDRESS);
 const { result } = await simulateAndParse(
   network,
-  verifier.verifyPrice(priceUpdate),
+  verifier.verifyPrice(priceUpdate, feedId, exponent),
   PriceVerifierContract.parsers.verifyPrice,
 );
 ```

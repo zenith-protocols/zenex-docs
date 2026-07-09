@@ -5,7 +5,7 @@ title: Pricing
 
 # Pricing
 
-Prices enter the contract only on **keeper** paths. A trader's order is price-free; the keeper attaches a serialized Pyth Lazer price update when it fills. Every price-bearing call verifies its bytes against the market's immutable `(feed_id, exponent)` anchors through the [price verifier](../price-verifier/overview), which returns a `PriceData` carrying `price`, `exponent`, `bid`, `ask`, and `publish_time`.
+Prices enter the contract only on **keeper** paths. A trader's order is price-free, and the keeper attaches a serialized Pyth Lazer price update when it fills. Every price-bearing call verifies its bytes against the market's immutable `(feed_id, exponent)` anchors through the [price verifier](../price-verifier/overview), which returns a `PriceData` carrying `price`, `exponent`, `bid`, `ask`, and `publish_time`.
 
 ## Verification on the Keeper Path
 
@@ -29,7 +29,7 @@ Execution is direction- and action-aware, using the two sides of the verified qu
 | Decrease / close | Long | `bid` (exit) |
 | Decrease / close | Short | `ask` (exit) |
 
-A trader always enters on the worse side of the spread and exits on the worse side, which is the on-chain spread cost. `price_scalar = 10^-exponent` converts a raw quote to the token's decimals.
+A trader always enters on the worse side of the spread and exits on the worse side, which is the on-chain spread cost. `price_scalar = 10^-exponent` is the divisor that converts an integer quote into a `price` value. Token-decimal scaling in a notional calculation is a separate step through `SCALAR_18`.
 
 ## Order-Level Protection
 
@@ -41,7 +41,7 @@ Since a trader signs a price-free order, protection against an unfavorable fill 
 | `trigger_price` + `trigger_above` | Eligibility trigger, also judged on the execution-side price. `0` disables (a market order). Not crossed raises `TriggerNotMet` (742). |
 | `expiration` | Last **ledger sequence** the order is fillable at. Past it, a fill raises `OrderExpired` (731). |
 
-The anti-replay rule ties the price to the order in time: the verified `publish_time` must be at or after the order's `created_at`, else `StalePrice` (740). A market order filling in its own creation ledger is the one exception, an atomic create-and-fill that accepts any verifier-accepted price; a trigger order gets no same-ledger exemption.
+The anti-replay rule ties the price to the order in time: the verified `publish_time` must be at or after the order's `created_at`, else `StalePrice` (740). A market order filling in its own creation ledger is the one exception, an atomic create-and-fill that accepts any verifier-accepted price. A trigger order gets no same-ledger exemption.
 
 ## Terminal (Flat) Price
 

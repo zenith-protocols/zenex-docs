@@ -17,10 +17,10 @@ The contract is **immutable**: a logic change ships as a fresh trading + vault p
 
 Traders never fill their own positions. The flow is two-sided:
 
-1. A trader calls `create_order` (or `create_vault_order`) with a **price-free** intent, authorized by their own signature. Collateral for an increase is drawn later from the trader's token allowance; a vault order escrows its assets or shares immediately.
+1. A trader calls `create_order` (or `create_vault_order`) with a **price-free** intent, authorized by their own signature. Collateral for an increase is drawn later from the trader's token allowance. A vault order escrows its assets or shares immediately.
 2. A permissionless **keeper** calls `execute_order` (or a sibling keeper entry point), passing a serialized Pyth Lazer price update. The contract verifies the price against its feed, checks the order's trigger and slippage bound against that price, and settles the fill.
 
-The keeper is not authenticated. It is simply the reward recipient named by the caller. The trader's consent lives in the collateral allowance they set at order creation, and in the trigger and slippage bounds baked into the order. A "market order" is just an order with no trigger, fillable immediately; a limit or stop is an order carrying a trigger.
+The keeper is not authenticated. It is simply the reward recipient named by the caller. The trader's consent lives in the collateral allowance they set at order creation, and in the trigger and slippage bounds baked into the order. A "market order" is just an order with no trigger, fillable immediately, while a limit or stop is an order carrying a trigger.
 
 ## Public Interface
 
@@ -59,7 +59,7 @@ Anyone may call these, passing a serialized Pyth Lazer price. The named `keeper`
 | `execute_adl` | Deleverage a winning position on a flagged side. |
 | `accrue` | Advance both accrual indices (borrowing and funding) to now at a verified price. |
 
-Each keeper entry point pays the caller the `keeper_rate` cut of the relevant fee (the trade fee, or the vault fill fee). See [Keeper Execution](./keeper-execution.md).
+Each fill entry point (`execute_order`, `execute_liquidation`, `execute_vault_order`, `execute_adl`) pays the caller the `keeper_rate` cut of the relevant fee. `update_adl_state` and `accrue` pay nothing. See [Keeper Execution](./keeper-execution.md).
 
 ### Maintenance (permissionless, price-free)
 
@@ -73,7 +73,7 @@ Each keeper entry point pays the caller the `keeper_rate` cut of the relevant fe
 |---|---|
 | `get_config` | Current global `Config` |
 | `get_market_data` | `MarketData` as of its last accrual |
-| `get_position` | Netted `Position` for `(user, is_long)`; zeroed if none open |
+| `get_position` | Netted `Position` for `(user, is_long)`, zeroed if none open |
 | `get_order` | `Order` row for `(user, id)` |
 | `get_vault_order` | `VaultOrder` row for `(user, id)` |
 | `get_status` | Operational status discriminant |
@@ -85,13 +85,13 @@ Each keeper entry point pays the caller the `keeper_rate` cut of the relevant fe
 
 ## Netted Positions
 
-Positions are **netted, one per `(user, is_long)`**. A user holds at most one long and one short position in a market. An Increase order grows the netted position on its side; a Decrease shrinks it. A position is stored under the `Position(Address, bool)` key, `(user, is_long)`, and a fully closed position is a zeroed row (zero notional), which is the canonical closed state. See [Position Lifecycle](./position-lifecycle.md).
+Positions are **netted, one per `(user, is_long)`**. A user holds at most one long and one short position in a market. An Increase order grows the netted position on its side, and a Decrease shrinks it. A position is stored under the `Position(Address, bool)` key, `(user, is_long)`, and a fully closed position is a zeroed row (zero notional), which is the canonical closed state. See [Position Lifecycle](./position-lifecycle.md).
 
 Orders and vault orders, by contrast, do carry ids allocated per user, so a trader can have several resting orders at once.
 
 ## Operational Status
 
-The market runs through a five-state lifecycle. The full transition matrix and wind-down mechanics are on [Storage & Events](./storage-and-events.md#status-lifecycle); the short version:
+The market runs through a five-state lifecycle. The full transition matrix and wind-down mechanics are on [Storage & Events](./storage-and-events.md#status-lifecycle). Short version:
 
 ```text
 Active   (0) : normal trading; the only status that accepts opens
@@ -105,7 +105,7 @@ Only `Active` accepts opens (size-growing increases). `Frozen` blocks `create_or
 
 ## Constants and Scales
 
-All rates, ratios, fees, and margins are stored as `SCALAR_18` (`10^18`) fixed-point fractions. Rate parameters (borrowing, funding) are expressed **per second**. Prices use the feed's own `price_scalar = 10^-exponent`. Token amounts (notional, collateral, payouts) are in the settlement token's decimals; base sizes (`tokens`) are in the feed's base decimals.
+All rates, ratios, fees, and margins are stored as `SCALAR_18` (`10^18`) fixed-point fractions. Rate parameters (borrowing, funding) are expressed **per second**. Prices use the feed's own `price_scalar = 10^-exponent`. Token amounts (notional, collateral, payouts) are in the settlement token's decimals, while base sizes (`tokens`) use the derived base scale `10^(18 + token_decimals + exponent)`, defined by `tokens = notional * SCALAR_18 / price`.
 
 The protocol bounds enforced by config validation include:
 
@@ -120,7 +120,7 @@ The protocol bounds enforced by config validation include:
 | `MAX_UTIL` | `10 * SCALAR_18` | Utilization cap ceiling |
 | `MAX_BORROW_RATE` / `MAX_FUNDING_RATE` | `10 * SCALAR_18 / SECONDS_PER_YEAR` | ~1000% APR ceiling per second |
 | `DELIST_GRACE` | `86_400` (1 day) | Window in which a delist is revertible |
-| `DELIST_DEADLINE` | `7 * 86_400` (7 days) | After this, any remaining position can be force-closed at the terminal price |
+| `DELIST_DEADLINE` | `7 * 86_400` (7 days) | After this, any remaining position can be force-closed regardless of margin health (at the stored terminal price once one is set) |
 | `MIN_NOTIONAL_LOCK` / `MAX_NOTIONAL_LOCK` | `15` / `86_400` s | Bounds on the decrease lock |
 
 Every concrete fee rate, margin, lock, cap, and threshold is a `Config` field set per market by governance, not a protocol constant. The [Config field table](./storage-and-events.md#config-fields) lists them all.

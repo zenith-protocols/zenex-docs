@@ -11,13 +11,7 @@ Collateral is the margin that backs your position and protects the vault if the 
 
 You grant a token allowance when you create an order, and the collateral is drawn only when a keeper fills an increase. For a decrease, any collateral you withdraw and the fees due are settled out of the position at the fill. This means the value only leaves your wallet at the moment the trade actually executes against a verified price.
 
-When you open or increase a position, the collateral posted is subject to the initial-margin floor:
-
-$$
-collateral \geq initialMargin \times notionalSize
-$$
-
-The initial margin is set per market by governance and determines the maximum leverage.
+When you open or increase a position, the collateral posted is subject to the initial-margin floor: it must be at least the initial margin's share of the notional size. For example, a 1% initial margin requires at least 10 USDC of collateral behind a 1,000 USDC position. The initial margin is set per market by governance and determines the maximum leverage, as described on the [Leverage](./leverage.md) page.
 
 **Managing collateral after opening**
 
@@ -33,4 +27,4 @@ Newly added notional is locked against decreases for a short window set per mark
 
 **Collateral token**
 
-The collateral accepted by a market is the vault token of that market's strategy vault. Which token is accepted depends solely on the vault, not on the asset you are trading. The exact settings per market can be seen [here](../markets/supported-assets.md).
+The collateral accepted by a market is the underlying token of that market's strategy vault. Which token is accepted depends solely on the vault, not on the asset you are trading. The exact settings per market can be seen [here](../markets/supported-assets.md).

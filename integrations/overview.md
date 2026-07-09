@@ -9,9 +9,9 @@ Zenex is designed to be embedded. Every market is a public, permissionless primi
 
 ## One contract per market
 
-Each market is its own trading contract instance, identified by its contract address rather than a numeric id. The [factory](./sdk#factorycontract) deploys an isolated pair per market: one trading contract plus one strategy vault, wired together atomically. A trading contract instance _is_ the market: it carries an immutable `(feed_id, exponent)` oracle anchor, its own configuration, its own status, and its own netted positions. To integrate a second market you point the SDK at a second trading address.
+Each market is its own trading contract instance, identified by its contract address. The [factory](./sdk#factorycontract) deploys an isolated pair per market: one trading contract plus one strategy vault, wired together atomically. A trading contract instance _is_ the market: it carries an immutable `(feed_id, exponent)` oracle anchor, its own configuration, its own status, and its own netted positions. To integrate a second market you point the SDK at a second trading address.
 
-Positions are netted, one per `(user, is_long)`: a user holds at most one long and one short position per market. Read a position with `getPosition(user, isLong)`; the zeroed position row is the canonical closed state.
+Positions are netted, one per `(user, is_long)`: a user holds at most one long and one short position per market. Read a position with `getPosition(user, isLong)`. The zeroed position row is the canonical closed state.
 
 ## The order then keeper-execute flow
 
@@ -19,7 +19,7 @@ Trading splits into two roles that never share a transaction.
 
 **Traders** only create and cancel orders, and the orders carry no price. A trader signs with their own key and consents to collateral movement through a token allowance. Creating an order is a plain, price-free write: it validates the order shape, allocates an id, and stores the order for a keeper to fill later. Take-profit and stop-loss are ordinary decrease orders that carry a trigger, not a separate object attached to a position.
 
-**Keepers** are permissionless. Anyone can fill a resting order by calling `execute_order` and passing a serialized Pyth Lazer price update. The trading contract verifies that price against its immutable feed anchor, applies the fill at the verified bid/ask, and pays the caller a keeper reward out of the trade fee. The `keeper` address is just the reward recipient named by the caller; it is not authenticated. The trader already consented through the allowance set at (or before) order creation. Keepers also drive liquidations, auto-deleveraging, vault-order fills, and index accrual.
+**Keepers** are permissionless. Anyone can fill a resting order by calling `execute_order` and passing a serialized Pyth Lazer price update. The trading contract verifies that price against its immutable feed anchor, applies the fill at the verified bid/ask, and pays the caller a keeper reward out of the trade fee. The `keeper` address is just the reward recipient named by the caller. It is not authenticated. The trader already consented through the allowance set at (or before) order creation. Keepers also drive liquidations, auto-deleveraging, vault-order fills, and index accrual.
 
 Collateral moves at fill through the token allowance, not at order creation. The one exception is vault orders (deposits and redeems), which escrow their assets or shares in the trading contract at creation and settle later.
 
@@ -43,7 +43,7 @@ For a trader, the SDK builds a price-free `create_order` operation that the user
 
 ## The trading router
 
-The [trading router](./sdk#tradingroutercontract) is a stateless batching contract for keepers and integrators. It runs many calls in one transaction (`multicall` for all-or-nothing, `multicall_try` to isolate each failure), composes the dependent create-and-fill flows (`create_and_fill`, `create_and_try_fill`, `create_and_try_fill_vault_order`), and sweeps a flagged side back toward its clear target with `adl_sweep`. A keeper uses it to fill a batch of orders against a single verified price; an integrator uses `create_and_fill` to give users an atomic open.
+The [trading router](./sdk#tradingroutercontract) is a stateless batching contract for keepers and integrators. It runs many calls in one transaction (`multicall` for all-or-nothing, `multicall_try` to isolate each failure), composes the dependent create-and-fill flows (`create_and_fill`, `create_and_try_fill`, `create_and_try_fill_vault_order`), and sweeps a flagged side back toward its clear target with `adl_sweep`. A keeper uses it to fill a batch of orders against a single verified price. An integrator uses `create_and_fill` to give users an atomic open.
 
 ## Events for indexing
 

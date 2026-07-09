@@ -5,7 +5,7 @@ title: Liquidation
 
 # Liquidation
 
-Liquidation protects the vault from positions whose losses outrun their margin. A keeper force-closes the whole position with `execute_liquidation(keeper, user, is_long, price)` at a verified price. Unlike a trader's Decrease order, liquidation is not the owner's intent; it is triggered by anyone once the position becomes eligible.
+Liquidation protects the vault from positions whose losses outrun their margin. A keeper force-closes the whole position with `execute_liquidation(keeper, user, is_long, price)` at a verified price. Unlike a trader's Decrease order, liquidation is not the owner's intent. It is triggered by anyone once the position becomes eligible.
 
 ## Eligibility
 
@@ -15,22 +15,40 @@ $$
 \text{equity} < \text{maintenance\_margin} \times \text{notional}
 $$
 
-A position can cross this line purely from fee accrual (funding and borrowing eat into equity), even with a flat price. Because equity includes unrealized PnL while the initial-margin floor did not, the [gap between the two margin lines](./margin-and-leverage.md) is the buffer that must erode first.
+The check runs on the settled close: equity here is the post-fee remainder, with the close's own trade fee, borrowing, and paid funding deducted, and a profit measured post-haircut. A position can also cross this line purely from fee accrual (funding and borrowing eat into equity), even with a flat price. Because equity includes unrealized PnL while the initial-margin floor did not, the [gap between the two margin lines](./margin-and-leverage.md) is the buffer that must erode first.
 
 There is one further trigger: the **wind-down waiver**. Once a `Delisted` market's 7-day delist deadline (`DELIST_DEADLINE`) has passed, any remaining position can be force-closed regardless of health, so the market can be wound down. A healthy position hit this way flows through the soft tier and keeps its full equity.
 
 A healthy position with no waiver in effect raises `NotLiquidatable` (722).
 
+Before eligibility is evaluated, the verified price must not predate the position's last fill, or the call aborts with `StalePrice` (740). A position filled in the current ledger accepts any verifier-accepted price.
+
+## Liquidation Price
+
+The eligibility condition can be restated as a price level. With the entry price implied by the stored fields (`notional * SCALAR_18 / tokens`) and costs meaning the accrued borrowing plus paid funding, the position crosses the maintenance line at approximately:
+
+$$
+P_{\text{liq}} \approx P_{\text{entry}} \times \left(1 \pm \left(\text{maintenance\_margin} + \frac{\text{costs} - \text{collateral}}{\text{notional}}\right)\right)
+$$
+
+with plus for a long and minus for a short. In leverage terms, ignoring costs, a long at leverage L liquidates around:
+
+$$
+P_{\text{liq}} \approx P_{\text{entry}} \times \left(1 + \text{maintenance\_margin} - \frac{1}{L}\right)
+$$
+
+This is an approximation, and the exact trigger sits slightly closer to entry, for three reasons. Eligibility is judged on the settled close, so the close's own trade fee (base plus impact) is part of what equity must cover. The close prices at the exit side of the verified spread (`bid` for a long, `ask` for a short), not the mid. And a profit-side close during a haircut overhang measures post-haircut PnL. Because costs grow with accrued borrowing and funding, the level also drifts toward entry over time. Adding collateral moves it away.
+
 ## Two Tiers
 
 The outcome is decided by the **liquidation margin** `ceil(liq_fee * notional)`, compared against the position's equity at liquidation time:
 
-| Tier | Condition | Liquidation fee | Remainder |
+| Tier | Condition | Receipt `liq_fee` | Remainder |
 |---|---|---|---|
-| **Soft** | Equity still covers the liquidation margin | Not charged | Returned to the trader |
-| **Hard** | Equity below the liquidation margin | Charged | Forfeited to the vault (trader gets zero) |
+| **Soft** | Equity still covers the liquidation margin | `0` | Returned to the trader |
+| **Hard** | Equity below the liquidation margin | The full liquidation margin, as a tier marker | Entire equity forfeited (trader gets zero): the treasury takes its rate, the vault the rest |
 
-On the soft tier the position is close to the line but not underwater on the protocol's terms, so no penalty is levied and the post-fee remainder (equity) is returned to the trader. On the hard tier the liquidation fee `ceil(liq_fee * notional)` is charged and the post-fee remainder is forfeited to the vault. `liq_fee` is a `SCALAR_18` config value capped at `MAX_LIQ_FEE` (25%).
+On the soft tier the position is close to the line but not underwater on the protocol's terms, so no penalty is levied and the post-fee remainder (equity) is returned to the trader. On the hard tier the entire remaining equity is forfeited: the treasury takes its rate of the forfeit and the vault banks the rest. No separate fee amount is collected: the receipt's `liq_fee` field carries the full liquidation margin `ceil(liq_fee * notional)` as the tier marker, and it always exceeds the forfeited equity, which on this tier is by definition below the liquidation margin. `liq_fee` is a `SCALAR_18` config value capped at `MAX_LIQ_FEE` (25%).
 
 Any shortfall past the freed margin is `bad_debt`, absorbed by the vault. The keeper receives the `keeper_rate` cut of the close's trade fee. The call emits a `liquidation` receipt (with `liq_fee = 0` marking the soft tier, `> 0` the hard tier, and the remainder on `returned` for soft or `forfeit` for hard) plus a zeroed `position_update`.
 

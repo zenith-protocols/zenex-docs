@@ -21,13 +21,13 @@ For markets that prioritize transparency, Zenex provides an optional governance 
 
 3. **Execute.** After the delay period has elapsed, anyone can submit a transaction to apply the queued change. Execution is permissionless. The governance owner does not need to be the one who triggers it.
 
-The governance owner can cancel a queued change at any time before it is executed. Queued changes have a limited lifetime: they expire after twice the delay period (with a minimum of one day). If a queued change is not executed before it expires, it must be re-queued.
+The governance owner can cancel a queued change at any time before it is executed. Queued changes have a limited lifetime: they expire after roughly twice the delay period plus one day, with a minimum of about two days. If a queued change is not executed before it expires, it must be re-queued.
 
 ## What Can Be Changed
 
 A market owner acts through three entry points, each governing a different kind of change.
 
-**Configuration** replaces the market's full parameter set: the skew-split trade fee rates, the impact fee divisor, the keeper rate, the position size bounds and open-interest ceiling, the order dust floors, the initial and maintenance margins (which set the leverage envelope), the liquidation fee, the notional lock, the utilization caps, and the borrowing and funding curves. Every one of these is set per market by governance.
+**Configuration** replaces the market's full parameter set: the skew-split trade fee rates, the impact fee divisor, the keeper rate, the position size bounds and open-interest ceiling, the order dust floors, the initial and maintenance margins (which set the leverage envelope), the liquidation fee, the notional lock, the utilization caps, the borrowing and funding curves, the auto-deleveraging thresholds, the profit haircut threshold, and the vault order parameters (the deposit and redeem cooldowns, the instant-deposit waiver, the vault fill fee, the minimum deposit, the pending-profit and pending-loss fill gates, and the vault balance cap). Every one of these is set per market by governance.
 
 **Status** moves the market through its lifecycle: normal trading, paused openings, an emergency freeze, a delist wind-down, or final retirement. The status is the only lever that can always be pulled immediately, even under a timelock.
 

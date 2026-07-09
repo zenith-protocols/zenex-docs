@@ -9,17 +9,11 @@ PnL ("profit and loss") measures how much you have gained or lost on a position 
 
 **PnL is implied, never stored**
 
-A position records its size in the base asset (its tokens) and its notional in the quote asset, and your entry is simply the ratio of the two. PnL is implied from the live price against that entry, rather than stored as a running figure:
+A position records its size in the base asset (its tokens) and its notional in the quote asset, and your entry is simply the ratio of the two. PnL is implied from the live price against that entry, rather than stored as a running figure.
 
-$$
-PnL_{long} = tokens \times currentPrice - notional
-$$
+For a long, PnL is the current value of your tokens at the live price, minus your entry notional. It turns positive as the price rises above your entry and negative as it falls below. For a short, PnL runs the other way: it is your entry notional minus the current value of your tokens at the live price, so it turns positive as the price falls and negative as it rises.
 
-$$
-PnL_{short} = notional - tokens \times currentPrice
-$$
-
-PnL turns positive when the price moves in your favor and negative when it moves against you. Because it is computed from the current price each time, it always reflects the latest oracle value with no separate accounting to keep in sync.
+Because it is computed from the current price each time, PnL always reflects the latest oracle value with no separate accounting to keep in sync.
 
 **Realizing PnL on a decrease**
 

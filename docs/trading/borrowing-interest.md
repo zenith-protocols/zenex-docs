@@ -11,13 +11,9 @@ Both sides of the market pay borrowing interest. Long and short open interest al
 
 ## How the Rate Is Determined
 
-The borrowing rate follows a kink model driven by vault utilization. Utilization measures how much of the vault's lendable capacity the market's open interest is currently reserving:
+The borrowing rate follows a kink model driven by vault utilization. Utilization measures how much of the vault's lendable capacity the market's open interest is currently reserving: it is the capacity locked up by open positions on both sides, divided by the share of the vault that may be committed to open positions. Utilization is clamped between 0 and 1.
 
-$$
-u = \frac{reserved}{maxUtilOpen \times vaultBalance}
-$$
-
-Here `reserved` is the capacity locked up by open positions on both sides, and `maxUtilOpen` is the share of the vault that may be committed to open positions. Utilization is clamped between 0 and 1.
+For example, if a market allows up to 80% of a 1,000,000 USDC vault to back open positions, its lending capacity is 800,000 USDC. If open positions currently reserve 400,000 USDC of that capacity, utilization is 400,000 divided by 800,000, or 50%.
 
 The rate has two regimes separated by a target utilization (the kink):
 
