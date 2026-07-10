@@ -11,7 +11,7 @@ ADL is decided per side. Each side (long and short) is evaluated on its own pend
 
 ## When ADL Triggers
 
-The protocol tracks each side's pending PnL against a share of the vault, and a keeper can refresh this evaluation at any time by submitting a verified price. A side's ADL flag is managed with hysteresis, using two thresholds that are set per market by governance:
+The protocol tracks each side's pending PnL against a share of the vault, and a keeper can refresh this evaluation at any time by submitting a verified price. A side's ADL flag is managed with hysteresis, using two per-market thresholds set through the protocol's [parameter-change process](../governance/parameter-changes.md):
 
 - The flag **sets** when the side's pending PnL rises above the upper threshold (a share of half the vault balance).
 - Once set, it **holds** while pending PnL stays above a lower clear target.
@@ -23,12 +23,12 @@ The gap between the two thresholds prevents the flag from rapidly toggling on an
 
 While a side is flagged, two things happen:
 
-1. **New opens on that side are halted.** Orders that would grow a position on the flagged side are rejected until the flag clears. Closing, reducing, and trading the other side all continue normally.
+1. **New opens on that side are halted.** Orders that would grow a position on the flagged side cannot fill until the flag clears, though the orders themselves can still be placed and will rest. Adding collateral to an existing position still works, so you can defend your margin while the flag is up. Closing, reducing, and trading the other side all continue normally.
 2. **Winning positions on that side become eligible for deleveraging.** A keeper can close part or all of a winning position through the regular decrease path, bringing the side's pending PnL back down toward the clear target.
 
 ## How Deleveraging Works
 
-A keeper runs ADL permissionlessly by naming a position on the flagged side and an amount to close, along with a verified oracle price. The close settles at that oracle price through the ordinary decrease path, with no collateral withdrawn: it simply realizes a slice of the position's profit and shrinks its size.
+A keeper runs ADL permissionlessly by naming a position on the flagged side and an amount to close, along with a verified oracle price. The close settles at that oracle price through the ordinary decrease path. A partial deleverage realizes a slice of the position's profit and shrinks its size, leaving the collateral in place. A full deleverage closes the position and pays out the remaining collateral together with the realized profit.
 
 The mechanism has guardrails. A close must actually reduce the side's pending PnL, and it may not overshoot below the clear target that the deleveraging is aiming for. A partial deleverage respects the decrease lock on freshly added size and always leaves at least a minimum-size remainder rather than dust. Deleveraging stops once the side has been brought back to its clear target.
 

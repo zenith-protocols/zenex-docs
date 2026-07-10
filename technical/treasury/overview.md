@@ -5,7 +5,7 @@ title: Treasury
 
 # Treasury
 
-The treasury is a passive fee sink with a single configurable rate. It implements [OpenZeppelin Ownable](https://github.com/OpenZeppelin/stellar-contracts/tree/main/contracts/access) for access control. For standard Ownable behavior (`transfer_ownership`, `renounce_ownership`), refer to the OZ documentation.
+The treasury is a passive fee sink with a single configurable rate. It implements [OpenZeppelin Ownable](https://github.com/OpenZeppelin/stellar-contracts/tree/main/contracts/access) for access control. For the standard Ownable surface (`get_owner`, two-step `transfer_ownership` plus `accept_ownership`, `renounce_ownership`), refer to the OZ documentation.
 
 ## Constructor
 
@@ -15,11 +15,13 @@ Sets the Ownable owner and the initial fee rate. The rate must be in `[0, SCALAR
 
 ## Fee Rate
 
-`get_rate() -> i128` is permissionless. It returns the current protocol fee rate as a `SCALAR_18` fraction (for example `1e17` = 10%), defaulting to `0` if unset.
+`get_rate() -> i128` is permissionless. It returns the current protocol fee rate as a `SCALAR_18` fraction (for example `1e17` = 10%). The constructor always sets a rate, so the storage default of `0` is unreachable on a deployed contract.
 
 `set_rate(rate: i128)` is owner-only. The rate is bounded to `[0, SCALAR_18/2]`. A value outside the range panics with `InvalidRate` (900).
 
-The trading contract reads `get_rate` on every settlement and clamps it to `[0, MAX_KEEPER_RATE]` (which is `SCALAR_18/2`, the same 50% ceiling). The treasury then receives its clamped share of the fees the protocol keeps: the trade fee (base plus impact), the borrowing fee, any liquidation forfeit, and the vault fill fee on vault-order deposits and redeems. Funding carries no treasury cut, since it is a peer-to-peer transfer between traders. Reading the rate live means governance can retune the protocol's revenue share without redeploying or reconfiguring the trading contract.
+All three entry points (`get_rate`, `set_rate`, `withdraw`) extend the treasury's instance storage TTL (threshold 30 days, bump 31 days), so routine settlements that read the rate keep the contract instance alive.
+
+The trading contract reads `get_rate` on every settlement and applies the returned rate directly, relying on the treasury's own `[0, SCALAR_18/2]` bound. The treasury then receives its share of the fees the protocol keeps: the trade fee (base plus impact), the borrowing fee, any liquidation forfeit, and the vault fill fee on vault-order deposits and redeems. Each component's treasury share is floored separately and computed on the gross fee, before the keeper cut, so the keeper rate cannot dilute the treasury's take. Funding carries no treasury cut, since it is a peer-to-peer transfer between traders. Reading the rate live means the treasury owner can retune the protocol's revenue share without redeploying or reconfiguring the trading contract.
 
 ## Fee Collection
 
@@ -28,6 +30,8 @@ The treasury is a passive receiver. The trading contract pushes fees to it via s
 ## Withdrawal
 
 `withdraw(token: Address, to: Address, amount: i128)` is owner-only. It can withdraw any SEP-41 token the treasury holds, in any amount, to any destination the owner chooses.
+
+The treasury emits no events of its own. Rate changes and withdrawals surface only through transaction effects, governance `Executed` events when routed through governance, and the token contract's transfer events.
 
 ## Immutability in Trading
 

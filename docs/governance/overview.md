@@ -21,12 +21,14 @@ The owner acts through three entry points on the trading contract:
 
 ## Optional Timelock
 
-Zenex provides an optional governance contract that adds a timelock to configuration changes. When used, a change must be queued on-chain and a mandatory delay must pass before it can take effect. This is covered in detail on the [Parameter Changes](./parameter-changes.md) page. Using the timelock is optional: the choice of governance model is up to whoever owns the market.
+Zenex provides an optional governance contract that adds a timelock to owner actions. When used, any change (a new configuration, a terminal price, an ownership transfer) must be queued on-chain and a mandatory delay must pass before it can be executed. This is covered in detail on the [Parameter Changes](./parameter-changes.md) page. Using the timelock is optional: the choice of governance model is up to whoever owns the market.
 
 ## Emergency Status
 
-Regardless of whether a timelock is used, the market's status can always be changed immediately. This means the owner (or the governance contract owner) can pause new position openings, freeze all trading activity, or restore normal operations without delay. This emergency power is deliberately narrow: it applies only to the status, not to fee rates, margin requirements, or any other financial parameter.
+Status changes never wait on the timelock. The owner (or the governance contract owner) can pause new position openings, freeze all trading activity, or restore normal operations immediately, within the market's lifecycle rules: a retired market is final, and a delisted market can only return to normal operation during its grace window. This emergency power is deliberately narrow: it applies only to the status, not to fee rates, margin requirements, or any other financial parameter.
 
 ## Immutable Addresses
 
 Certain core addresses are set at construction and cannot be changed by anyone after deployment. The vault, the price verifier, the treasury, and the oracle feed (its `feed_id` and `exponent`) are fixed for the lifetime of the trading contract. The contract itself has no upgrade path: shipping a logic change means deploying a fresh trading and vault pair through the factory. This guarantees that where liquidity is held, how prices are verified, where fees flow, and which asset the market prices cannot be altered after the fact.
+
+One nuance on fees: the treasury is its own contract with its own owner. That owner sets the protocol's share of fees (bounded between 0% and 50%) and withdraws whatever the treasury has collected. The trading contract reads the rate live at every settlement, so a rate change applies immediately unless the treasury itself is owned by a timelocked governance contract. The address a market pays into is fixed at deployment, but the rate it reads from that address is not.

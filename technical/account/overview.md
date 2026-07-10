@@ -17,7 +17,7 @@ This page is a directory of what lives in that repo and why each piece exists. I
 | **`ed25519-verifier`** | Stateless Ed25519 signature verifier. Deploy once, share across many accounts. |
 | **`webauthn-verifier`** | Stateless WebAuthn / passkey signature verifier. Deploy once, share across many accounts. |
 | **`session-policy`** | Policy that restricts a session signer (typically a passkey) to a whitelisted set of target contracts and a single token-transfer destination. |
-| **`fee-forwarder`** | Stateless gasless-transaction primitive. A backend pays gas, the user pays a fee in the target token. |
+| **`fee-forwarder`** | Stateless gasless-transaction primitive. A backend pays gas, the user pays a fee in a token of the caller's choice (`fee_token`). |
 
 ## How They Fit Together
 
@@ -33,7 +33,7 @@ graph LR
 
   subgraph GS["Gasless submission"]
     Backend["backend"]
-    FF["fee-forwarder<br/>collects fee in target token"]
+    FF["fee-forwarder<br/>collects fee in fee_token"]
     Target["target contract<br/>(e.g. Trading)"]
     Backend --> FF --> Target
   end
@@ -49,11 +49,11 @@ The account contract is **upgradeable** so the signer/policy logic can evolve wi
 
 Both verifiers are **stateless and reusable**. They take a message hash, a public key, and a signature, and return a verdict. Deploy each once per network. Many smart accounts can point at the same verifier address.
 
-`webauthn-verifier` exists because passkeys produce P-256 (secp256r1) signatures with WebAuthn-specific framing (`authenticatorData`, `clientDataJSON`), which the host environment does not validate natively. The verifier parses the WebAuthn envelope and checks the P-256 signature.
+`webauthn-verifier` exists because passkeys produce P-256 (secp256r1) signatures wrapped in WebAuthn-specific framing (`authenticatorData`, `clientDataJSON`) that must be parsed before the host's native secp256r1 check can run. The verifier parses the WebAuthn envelope and verifies the P-256 signature.
 
 ### `session-policy`
 
-A policy contract that solves the DeFi composability problem where a trading action triggers a sub-auth on the token contract. A trader opens a position by calling `create_order` on the trading contract and setting a collateral allowance the keeper later draws (`token.approve`). Without a policy, allowing the session passkey to authorize the token contract would let it drain funds to any address. With this policy attached:
+A policy contract that solves the DeFi composability problem where a trading action triggers a sub-auth on the token contract. A trader opens a position by calling `create_order` on the trading contract, which escrows the collateral and keeper execution fee at creation through a `token.transfer` sub-auth from the trader to the trading contract. Without a policy, allowing the session passkey to authorize the token contract would let it drain funds to any address. With this policy attached:
 
 - Calls are restricted to a whitelist of target contracts (for example the trading contract and the trading router).
 - Token transfers are locked to a single allowed destination (the trading contract). Token approvals are not destination-checked, so a session key can approve any spender on a whitelisted token.
@@ -69,7 +69,7 @@ The owner bypasses the policy. The passkey is locked into the session scope. Thi
 
 ### `fee-forwarder`
 
-A **stateless gasless-transaction primitive**. A backend submits the transaction and pays gas. The user pays a fee in the target token (e.g. USDC). Both entry points pin the user's intent via `require_auth_for_args` before calling into the target contract, differing only in whether `target_args` is included in what gets pinned, as the table below details.
+A **stateless gasless-transaction primitive**. A backend submits the transaction and pays gas. The user pays a fee in a token of the caller's choice (`fee_token`, e.g. USDC). Both entry points pin the user's intent via `require_auth_for_args` before calling into the target contract, differing only in whether `target_args` is included in what gets pinned, as the table below details.
 
 Two entry points:
 
@@ -84,6 +84,6 @@ The safe `forward` path is what a gasless order uses. A trader's `create_order` 
 
 ## Relationship to the Perp Engine
 
-The perp engine treats the smart account address the same as any other Stellar account: a caller that produces a valid `require_auth` result on the methods that need it. The smart account stack is what makes the trader-facing experience possible (passkey login, session keys, gasless tx), layered entirely on top of the unmodified perp contracts.
+The perp engine treats the smart account address the same as any other caller: an address that produces a valid `require_auth` result on the methods that need it. The smart account stack is what makes the trader-facing experience possible (passkey login, session keys, gasless tx), layered entirely on top of the unmodified perp contracts.
 
 If you are auditing the perp protocol, you can scope the smart account contracts out: nothing in `zenex-contracts` depends on a specific account implementation.

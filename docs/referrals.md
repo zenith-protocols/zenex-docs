@@ -5,4 +5,4 @@ title: Referrals
 
 # Referrals
 
-A referral program is planned for Zenex and will be announced in the near future.
+A referral program is planned for Zenex. Details will be published here when available.

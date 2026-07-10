@@ -31,7 +31,7 @@ The trading contract is deployed through the factory's `deploy` function, which 
 | `price_verifier` | `Address` | Pyth Lazer price verification contract |
 | `treasury` | `Address` | Protocol treasury (inherited from factory) |
 | `feed_id` | `u32` | Pyth Lazer feed id for the market, immutable for the life of the contract |
-| `exponent` | `i32` | Price exponent for the feed, immutable, sets `price_scalar = 10^-exponent` |
+| `exponent` | `i32` | Price exponent for the feed, immutable, sets `price_scalar = 10^-exponent`. Must be between -18 and 0 inclusive, rejected otherwise |
 | `config` | `Config` | Global trading configuration (see below) |
 
 `feed_id` and `exponent` anchor the contract to a single oracle feed and its precision for good. There is no function to change either after deployment. A new feed or a re-scaled exponent means a fresh trading contract.
@@ -50,26 +50,27 @@ The `Config` struct carries the fee, sizing, risk, and vault-order parameters th
 | `max_open_interest` | token-dec | at least `max_position_notional` | Per-side open-interest ceiling across all positions on that side |
 | `min_order_notional` | token-dec | greater than 0, at most `min_position_notional` | Minimum absolute notional per order, a dust floor sized so a full position can still close in a single order |
 | `min_order_collateral` | token-dec | greater than 0 | Minimum absolute collateral per order, a dust floor |
+| `exec_fee` | token-dec | at least 0, no upper bound | Flat keeper execution fee escrowed with every trade and vault order at creation, paid to the keeper on fill and refunded on cancel, including the auto-cancel of resting decrease orders when a position fully closes |
 | `fee_dom` | SCALAR_18 | 0 to `MAX_FEE_RATE` (1%), at least `fee_non_dom` | Trade fee charged to the dominant side |
 | `fee_non_dom` | SCALAR_18 | 0 to `MAX_FEE_RATE` (1%) | Trade fee charged to the non-dominant side |
 | `impact_divisor` | SCALAR_18 | at least `MIN_IMPACT` (a divisor of 10) | Sets the price-impact fee on the worsening leg of a trade. The floor caps the impact fee at 10% of notional |
 
 ### Utilization Caps
 
-Utilization is open interest divided by vault balance.
+Utilization is measured per side: each side's reserved open interest against half the vault balance. Opens are blocked once either side's utilization would exceed `max_util_open`, and the same half-vault capacity is the denominator of that side's borrowing curve.
 
 | Field | Scale | Bounds | Description |
 |---|---|---|---|
-| `max_util_open` | SCALAR_18 | greater than 0, at most `MAX_UTIL` (1000%) | Opens are blocked once utilization would exceed this cap. Also sets the borrow-reserve denominator used by the borrowing curve |
-| `max_util_withdraw` | SCALAR_18 | at least `max_util_open`, at most `MAX_UTIL` (1000%) | Vault-order withdrawals are blocked once utilization exceeds this higher cap, holding a buffer of vault liquidity above the open cap |
+| `max_util_open` | SCALAR_18 | greater than 0, at most `MAX_UTIL` (1000%) | Opens are blocked once either side's utilization would exceed this cap. Also sets the per-side borrow-reserve denominator used by the borrowing curve |
+| `max_util_withdraw` | SCALAR_18 | at least `max_util_open`, at most `MAX_UTIL` (1000%) | Redeem fills are blocked once either side's utilization exceeds this higher cap, holding a buffer of vault liquidity above the open cap |
 
 ### Margin and Liquidation
 
 | Field | Scale | Bounds | Description |
 |---|---|---|---|
 | `init_margin` | SCALAR_18 | `MIN_MARGIN` (0.1%) to `MAX_MARGIN` (50%), greater than `maintenance_margin` | Initial margin requirement. Maximum leverage is 1 divided by `init_margin` |
-| `maintenance_margin` | SCALAR_18 | greater than `liq_fee`, less than `init_margin` | Maintenance margin floor. A position is liquidated once its margin falls to this level |
-| `liq_fee` | SCALAR_18 | 0 to `MAX_LIQ_FEE` (25%), less than `maintenance_margin` | Fee charged on liquidation |
+| `maintenance_margin` | SCALAR_18 | greater than `liq_fee`, less than `init_margin` | Maintenance margin floor. A position becomes liquidatable once its equity falls below this fraction of notional |
+| `liq_fee` | SCALAR_18 | 0 to `MAX_LIQ_FEE` (25%), less than `maintenance_margin` | Fee charged on hard liquidations, where equity has fallen below this fraction of notional. Liquidations above that line charge no fee |
 
 ### Position Lifecycle
 
@@ -108,21 +109,18 @@ Every rung below is a side's pending PnL measured as a fraction of half the vaul
 |---|---|---|---|
 | `adl_max_pnl` | SCALAR_18 | `MIN_ADL_TRIGGER` (45%) to `max_pnl_trader`, under 100% | Threshold that arms auto-deleveraging for the crowded side |
 | `adl_clear_target` | SCALAR_18 | `MIN_ADL_CLEAR` (40%) to `adl_max_pnl` | Target that auto-deleveraging closes positions down to once armed |
-| `max_pnl_trader` | SCALAR_18 | at least `adl_max_pnl`, under 100% | Realized-profit haircut threshold. While a side's pending PnL exceeds this fraction, close payouts on that side scale down proportionally |
+| `max_pnl_trader` | SCALAR_18 | at least `adl_max_pnl`, under 100% | Realized-profit haircut threshold. While a side's pending PnL exceeds this fraction, close payouts on that side scale down proportionally. Also caps each side's pending profit in the net PnL used to price vault shares |
 
 ### Vault Orders
 
-Every rung below is measured against net pending trader PnL as a fraction of the vault balance (the pre-fill balance for the deposit gates, the post-redeem balance for the redeem gate). See [providing liquidity](../vault/depositing.md) for the mechanics.
+A deposit order fills as soon as a keeper submits a verified price published strictly after the order's creation, subject to the order's own `min_out` bound, the `min_deposit` floor at creation, and the `max_vault_balance` ceiling. Only the redeem side has a cooldown, and redeem fills are additionally gated on pending trader PnL, with each side's pending profit measured against half the post-redeem vault balance. See [providing liquidity](../vault/depositing.md) for the mechanics.
 
 | Field | Scale | Bounds | Description |
 |---|---|---|---|
 | `redeem_lock` | seconds | 0 to `MAX_REDEEM_LOCK` (30 days) | Cooldown from a vault order's creation before a redeem can fill |
-| `deposit_lock` | seconds | 0 to `MAX_REDEEM_LOCK` (30 days) | Cooldown from a vault order's creation before a deposit can fill. Waived while pending trader losses sit at or under `instant_deposit_pnl` |
-| `instant_deposit_pnl` | SCALAR_18 | 0 to `max_pnl_deposit` | Share underpricing at or under which a deposit fills immediately, skipping the cooldown |
 | `vault_fee` | SCALAR_18 | 0 to `MAX_FEE_RATE` (1%) | Fee charged on vault-order fills, taken from the assets moved |
-| `min_deposit` | token-dec | greater than 0, at most `max_vault_balance` divided by 100 | Minimum assets per vault-order fill |
-| `max_pnl_deposit` | SCALAR_18 | at least `instant_deposit_pnl`, under 100% | Deposit fills are blocked while share underpricing exceeds this |
-| `max_pnl_withdraw` | SCALAR_18 | 0 to under 100% | Redeem fills are blocked while share overpricing, measured against the post-redeem vault balance, exceeds this |
+| `min_deposit` | token-dec | greater than 0, at most `max_vault_balance` divided by 100 | Minimum assets per deposit order, enforced at creation. Redeems have no minimum amount |
+| `max_pnl_withdraw` | SCALAR_18 | greater than 0, at most `max_pnl_trader` | Redeem fills are blocked while either side's pending PnL exceeds this fraction of half the post-redeem vault balance |
 | `max_vault_balance` | token-dec | greater than 0, at least `min_deposit` times 100 | Vault balance ceiling enforced on deposit fills |
 
 A configuration that violates any bound, or that gets the relative ordering between two fields wrong (such as `fee_dom` below `fee_non_dom`, or `min_position_notional` above `max_position_notional`), is rejected at construction and on every later `set_config` call.
@@ -136,10 +134,10 @@ The vault is also deployed through the factory, receiving its parameters from th
 | `name` | `String` | Vault share token name (e.g., "Zenex USDC Vault") |
 | `symbol` | `String` | Vault share token symbol (e.g., "zUSDC") |
 | `asset` | `Address` | Underlying collateral token (same as trading's `token`) |
-| `decimals_offset` | `u32` | Extra share-token decimals on top of the asset's own decimals, mitigating ERC-4626 inflation attacks |
+| `decimals_offset` | `u32` | Extra share-token decimals on top of the asset's own decimals, hardening the share price against donation-based inflation attacks. Capped at 10 by the token library |
 | `strategy` | `Address` | Authorized trading contract (precomputed by factory) |
 
-The `strategy` parameter is the only address authorized to call the vault's deposit, mint, withdraw, redeem, and `strategy_withdraw` entry points. It is set to the precomputed trading contract address, which the factory calculates before either contract exists. LP sizing rules, including the minimum vault-order fill amount, the deposit and redeem cooldowns, and the vault-order fee, are not vault constructor parameters. They live on the trading contract's `Config` and are documented above under Vault Orders.
+The `strategy` parameter is the only address authorized to call the vault's `strategy_deposit`, `strategy_redeem`, and `strategy_withdraw` entry points. It is set to the precomputed trading contract address, which the factory calculates before either contract exists. LP sizing rules, including the minimum deposit amount, the redeem cooldown, and the vault-order fee, are not vault constructor parameters. They live on the trading contract's `Config` and are documented above under Vault Orders.
 
 ## Price Verifier
 
@@ -174,7 +172,7 @@ The governance contract is an optional timelock proxy deployed independently and
 | `owner` | `Address` | Admin who can queue parameter changes |
 | `delay` | `u64` | Minimum seconds between queuing and executing a change |
 
-The `delay` must be non-zero and at most 60 days (`60 * 24 * 3600` seconds). Values outside this range cause the constructor to panic.
+The `delay` must be non-zero and at most 60 days (`60 * 24 * 3600` seconds). Values outside this range cause the constructor to panic. The delay can be changed after deployment via `set_delay`, and the new value takes effect only after the current delay has elapsed, so the timelock cannot be shortened instantly.
 
 The delay parameter enforces a timelock on all configuration updates. When the owner queues a parameter change (such as updating `Config`), it specifies the target contract address at call time. The change cannot be executed until `delay` seconds have passed. This gives traders and LPs time to react to upcoming parameter changes. `set_status` is exempt from the timelock, allowing immediate emergency pauses.
 

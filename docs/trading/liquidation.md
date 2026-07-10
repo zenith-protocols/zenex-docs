@@ -11,7 +11,7 @@ Liquidations are permissionless. Anyone can run a keeper, submit a verified orac
 
 ## When a Position Is Liquidatable
 
-A position's health is measured by its equity against the maintenance margin. Equity is your collateral plus unrealized PnL, net of accrued fees. The maintenance margin is a share of your notional, set per market by governance, and it always sits below the initial margin. A position becomes eligible for liquidation once its equity falls below the maintenance margin's share of its notional.
+A position's health is measured by its equity against the maintenance margin. Equity is your collateral plus unrealized PnL, net of accrued fees. The maintenance margin is a share of your notional, set per market through the protocol's [parameter-change process](../governance/parameter-changes.md), and it always sits below the initial margin. A position becomes eligible for liquidation once its equity falls below the maintenance margin's share of its notional.
 
 For example, on a market with a 1% maintenance margin, a position with a 10,000 USDC notional becomes liquidatable once its equity falls below 100 USDC.
 
@@ -25,10 +25,12 @@ Treat it as a moving line, not a fixed one. Borrowing interest and any funding y
 
 ## Two Tiers: Soft and Hard
 
-When a position is liquidated, the outcome depends on how much equity is left, compared against a liquidation margin equal to the market's liquidation fee rate, set per market by governance, applied to the notional. On that same 10,000 USDC position, a 0.5% liquidation fee rate puts the liquidation margin at 50 USDC.
+When a position is liquidated, the outcome depends on how much equity is left, compared against a liquidation margin equal to the market's liquidation fee rate (a per-market parameter) applied to the notional. On that same 10,000 USDC position, a 0.5% liquidation fee rate puts the liquidation margin at 50 USDC.
 
-- **Soft liquidation**: equity still covers the liquidation margin (between 50 and 100 USDC in this example). No liquidation fee is charged, and the remaining equity after fees is returned to you. You are closed out, but you keep what is left.
-- **Hard liquidation**: equity has fallen below the liquidation margin. The liquidation fee is charged, and the remainder is forfeited to the protocol. Nothing is returned to you.
+- **Soft liquidation**: equity still covers the liquidation margin (between 50 and 100 USDC in this example). The remaining equity after fees is returned to you. You are closed out, but you keep what is left.
+- **Hard liquidation**: equity has fallen below the liquidation margin. All remaining equity is forfeited to the protocol. Nothing is returned to you.
+
+In both tiers, any take-profit or stop-loss orders still resting on the position are cancelled when it closes, and their escrowed execution fees are refunded to you. That refund is the one amount that comes back even from a hard liquidation.
 
 The two tiers mean a position caught early, while it still holds meaningful equity, is treated far more gently than one that has deteriorated close to insolvency.
 

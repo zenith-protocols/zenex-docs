@@ -9,12 +9,11 @@ Zenex prices markets with [Pyth Lazer](https://pyth.network/). The `PriceVerifie
 
 ## PriceData Structure
 
-A verified update produces `PriceData` values carrying both the aggregate mid and the two sides of the quote:
+A verified update produces `PriceData` values carrying the two sides of the quote. The aggregate Pyth price is validated (positivity, confidence bound) but not returned. Consumers mark off `bid` and `ask`:
 
 ```rust
 pub struct PriceData {
     pub feed_id: u32,       // Pyth Lazer feed identifier
-    pub price: i128,        // aggregate mid (native precision)
     pub exponent: i32,      // decimal exponent (e.g. -8)
     pub bid: i128,          // best bid (native precision)
     pub ask: i128,          // best ask (native precision)
@@ -32,7 +31,7 @@ The verifier runs the following on every call before returning data.
 
 **Payload parsing.** The verifier parses the returned payload (its own magic number, a microsecond timestamp, a channel byte, a feed count, and per-feed properties: price, best bid, best ask, exponent, confidence, and feed update timestamp). An empty feed set is rejected.
 
-**Feed selection.** `verify_price(update_data, feed_id, exponent)` extracts the one requested feed, raising `FeedNotFound` (790) if the update does not contain it and `WrongExponent` (791) if the feed's exponent differs from the caller's anchor. `verify_prices(update_data)` returns every feed in the update.
+**Feed selection.** `verify_price(update_data, feed_id, exponent)` extracts the one requested feed, raising `FeedNotFound` (790) if the update does not contain it and `WrongExponent` (791) if the feed's exponent differs from the caller's anchor. It validates only the requested feed, so an unrelated malformed feed in the same payload does not fail a scoped read. `verify_prices(update_data)` returns every feed in the update, validating and staleness-checking each one (a single malformed feed fails the whole call) and applying no exponent check.
 
 **Per-feed validation.** For each returned feed the verifier requires the price, best bid, best ask, and feed update timestamp to be present, and enforces:
 
@@ -43,7 +42,7 @@ The verifier runs the following on every call before returning data.
 
 Any violation raises `InvalidPrice` (781).
 
-**Staleness.** The publish time must not be in the future (`publish_time <= now`) and must be no older than `max_staleness` seconds, else `PriceStale` (782). Rejecting future-dated prices prevents replay of a pre-signed future update.
+**Staleness.** The publish time must not be in the future (`publish_time <= now`) and must be no older than `max_staleness` seconds, else `PriceStale` (782). A future publish time indicates a malformed payload (the oracle publishes before transaction inclusion), and rejecting it also keeps the age subtraction from underflowing.
 
 ## Access Control
 
@@ -73,10 +72,10 @@ The price verifier implements OZ Ownable. For standard Ownable behavior, refer t
 | 782 | `PriceStale` | Update is future-dated or older than `max_staleness` |
 | 783 | `InvalidStaleness` | Configured `max_staleness` exceeds `MAX_STALENESS_SECONDS` |
 | 784 | `TruncatedData` | Payload ended before a field could be read |
-| 785 | `InvalidPayloadLength` | Declared payload length is inconsistent |
+| 785 | `InvalidPayloadLength` | Trailing bytes remain after the last feed is parsed |
 | 786 | `InvalidPayloadMagic` | Payload magic number did not match |
 | 787 | `InvalidChannel` | Unknown channel byte |
-| 788 | `InvalidProperty` | Unknown or malformed feed property |
+| 788 | `InvalidProperty` | Unknown feed property id (the parser cannot skip a property of unknown length) |
 | 789 | `InvalidMarketSession` | Market session field is invalid |
 | 790 | `FeedNotFound` | Requested `feed_id` absent from the update |
 | 791 | `WrongExponent` | Feed exponent differs from the caller's scale anchor |

@@ -9,7 +9,7 @@ Using Zenex involves real financial risk. This page describes the main categorie
 
 ## Smart Contract Risk
 
-Zenex operates through smart contracts deployed on Stellar Soroban. Each market's trading contract is immutable: once deployed it executes autonomously and has no upgrade path, so a logic change means deploying a fresh trading and vault pair rather than patching a live one. This immutability gives strong guarantees about how a market behaves, but it also means any bug or vulnerability in the code could lead to unexpected behavior or loss of funds. The protocol undergoes internal review, threat modeling, integration testing, and property-based fuzzing. An independent security audit is underway, and the report will be published when complete. No amount of review can guarantee the absence of all defects.
+Zenex operates through smart contracts deployed on Stellar Soroban. Each market's trading contract is immutable: once deployed it executes autonomously and has no upgrade path, so a logic change means deploying a fresh trading and vault pair rather than patching a live one. This immutability gives strong guarantees about how a market behaves, but it also means any bug or vulnerability in the code could lead to unexpected behavior or loss of funds. No amount of review or testing can guarantee the absence of all defects.
 
 ## Oracle and Price Verification Risk
 
@@ -27,9 +27,9 @@ Each market's vault has a finite pool of liquidity, and trader profits are paid 
 
 Vault depositors provide the liquidity that backs every trade in their market, so they collectively take the opposite side of every position. When traders lose, those losses flow into the vault as yield. When traders win, their profits come out of the vault. If net trader profitability is high over a sustained period, the vault's value declines and depositors may redeem for less than they deposited. If a position closes with a shortfall past its freed margin, that **bad debt is absorbed by the vault**, reducing share value for everyone. Depositors should understand they are taking directional risk against the aggregate trading population.
 
-## Vault Order, Cooldown, and Gate Risk
+## Vault Order and Redeem Cooldown Risk
 
-Deposits and redeems are not instant. They are routed through the trading contract as vault orders that escrow first and are filled later by a keeper, and each is subject to a cooldown and to safety gates set per market by governance. A deposit can be gated while pending trader losses would let it snipe the pool, and a redeem can be gated while pending trader profits would let it drain the pool or while withdrawing would leave too little liquidity to back open positions. This means you may not be able to withdraw exactly when you want, and your redeem may rest until conditions clear. You can cancel a resting order to recover your escrowed assets or shares, except while the market is under an emergency freeze. The value you eventually realize still depends on the vault's state when the order fills.
+Deposits and redeems settle in two steps: you place a vault order that escrows your assets or shares in the trading contract, and a keeper fills it later at a verified price. Redeems are subject to a per-market cooldown before they can fill, and both deposits and redeems face safety checks at fill time. A deposit prices its shares against the vault's current state including pending trader profit and loss, with the mark set adverse to the depositor, so you cannot capture value from losses that have not yet realized, and the fill fails if it would push the vault past its size cap. A redeem can be gated while pending trader profits would let it drain the pool or while withdrawing would leave too little liquidity to back open positions. This means you may not be able to withdraw exactly when you want, and your redeem may rest until conditions clear. You can cancel a resting order to recover your escrowed assets or shares, except while the market is under an emergency freeze. The value you eventually realize still depends on the vault's state when the order fills.
 
 ## Liquidation Risk for Traders
 
@@ -37,7 +37,7 @@ Leveraged trading amplifies both gains and losses. If the market moves against y
 
 ## Wind-Down Risk
 
-A market can be delisted and, eventually, retired by its owner through governance. When a market is **delisted**, new openings stop and, after a grace window, a flat terminal settlement price is set. Once a force-close deadline passes, a keeper may close any remaining position at that terminal price regardless of its health, which can close your position at a level you did not choose. When a market is **retired**, only funding claims, cancels of resting orders and vault orders (recovering any escrow), and direct vault redemptions remain. If you hold a position or unclaimed funding in a market that is winding down, act within the published windows so you are not settled or closed on the protocol's timeline instead of your own.
+A market can be delisted and, eventually, retired by the market owner. When a market is **delisted**, new openings stop. After a grace window a flat terminal settlement price can be set, and once the force-close deadline passes a keeper may close any remaining position regardless of its health, at the terminal price if one has been set and otherwise at a live verified price. Either way, your position can be closed at a level you did not choose. When a market is **retired**, only funding claims, cancels of resting orders and vault orders (recovering any escrow), and direct vault redemptions remain. If you hold a position or unclaimed funding in a market that is winding down, act within the published windows so you are not settled or closed on the protocol's timeline instead of your own.
 
 ## Regulatory Risk
 

@@ -11,17 +11,17 @@ PnL ("profit and loss") measures how much you have gained or lost on a position 
 
 A position records its size in the base asset (its tokens) and its notional in the quote asset, and your entry is simply the ratio of the two. PnL is implied from the live price against that entry, rather than stored as a running figure.
 
-For a long, PnL is the current value of your tokens at the live price, minus your entry notional. It turns positive as the price rises above your entry and negative as it falls below. For a short, PnL runs the other way: it is your entry notional minus the current value of your tokens at the live price, so it turns positive as the price falls and negative as it rises.
+The oracle delivers two prices, a bid and an ask, and PnL is marked at the side your position would actually close at: a long is valued at the bid, a short at the ask. For a long, PnL is the current value of your tokens at the bid, minus your entry notional. It turns positive as the price rises above your entry and negative as it falls below. For a short, PnL runs the other way: it is your entry notional minus the current value of your tokens at the ask, so it turns positive as the price falls and negative as it rises. Marking each side at its closing price means the bid-ask spread is always reflected in your PnL.
 
-Because it is computed from the current price each time, PnL always reflects the latest oracle value with no separate accounting to keep in sync.
+Because it is computed from the current prices each time, PnL always reflects the latest oracle update with no separate accounting to keep in sync.
 
 **Realizing PnL on a decrease**
 
-Unrealized PnL only becomes cash when you reduce the position. A partial decrease realizes PnL pro-rata: closing half the size realizes half the position's PnL, and the implied entry of the remaining size is preserved. A full close realizes all of it. On a losing close the loss is taken out of the position's proceeds and margin, and a partial close never runs past the margin, so a partial reduction cannot create bad debt.
+Unrealized PnL only becomes cash when you reduce the position. A partial decrease realizes PnL pro-rata: closing half the size realizes half the position's PnL, and the implied entry of the remaining size is preserved. A full close realizes all of it. On a partial losing close the loss is charged against the margin that stays with the position, while the withdrawal you requested is paid out minus fees. On a full close the loss simply reduces the equity returned. A partial close never runs past the margin, so a partial reduction cannot create bad debt.
 
 **The realized-profit haircut**
 
-When a whole side of the market is sitting on very large unrealized profit, the vault protects itself by scaling down realized gains while that overhang lasts. If a side's pending PnL exceeds a threshold (a share, set per market by governance, of half the vault balance), a closing profit is scaled by the ratio of the allowance to the side's pending PnL. Every profitable close during the overhang is cut by the same live factor, and the withheld share stays with the vault. Losses always pass through unchanged.
+When a whole side of the market is sitting on very large unrealized profit, the vault protects itself by scaling down realized gains while that overhang lasts. If a side's pending PnL exceeds a threshold (a per-market share of half the vault balance), a closing profit is scaled by the ratio of the allowance to the side's pending PnL. Every profitable close during the overhang is cut by the same live factor, and the withheld share stays with the vault. Losses always pass through unchanged.
 
 The factor is re-read on each fill, so as the overhang relaxes the haircut eases. Slicing a close into many small fills can partially escape the haircut, but the same overhang is what arms [auto-deleveraging](./adl.md), which bounds how much can be extracted that way.
 

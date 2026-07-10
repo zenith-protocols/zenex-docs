@@ -40,7 +40,7 @@ cancel(nonce: u32)
 execute(nonce: u32)
 ```
 
-*Permissionless.* Executes a queued call after the delay has passed. The queued entry is removed from storage before the external call (CEI pattern). Panics with `NotQueued` (770) if not found, or `NotUnlocked` (771) if the delay has not yet passed.
+*Permissionless.* Executes a queued call after the delay has passed. The queued entry is removed from storage before the external call, so a queued call can execute at most once. The governance contract itself is the invoker of the queued call, so target contracts whose admin functions require owner auth must have the governance contract set as their owner for the call to succeed. Panics with `NotQueued` (770) if not found, or `NotUnlocked` (771) if the delay has not yet passed.
 
 ### set_status
 
@@ -82,6 +82,19 @@ get_queued(nonce: u32) -> QueuedCall
 
 *Permissionless.* Returns the queued call for a given nonce. Panics with `NotQueued` (770) if not found or expired.
 
+### Ownership functions
+
+The contract implements OpenZeppelin `Ownable`, which adds four public entry points:
+
+```
+get_owner() -> Option<Address>
+transfer_ownership(new_owner: Address, live_until_ledger: u32)
+accept_ownership()
+renounce_ownership()
+```
+
+Ownership transfer is two-step. The owner calls `transfer_ownership` with the new owner and a ledger deadline for acceptance, and the pending owner completes the transfer with `accept_ownership` before that ledger passes. `renounce_ownership` permanently gives up ownership. This is the admin-key rotation surface for the whole timelock. The exact behavior and error codes of these functions live in the OpenZeppelin `stellar-access` library.
+
 ## Access Control
 
 | Function | Auth |
@@ -94,12 +107,16 @@ get_queued(nonce: u32) -> QueuedCall
 | `apply_delay` | Permissionless (after current delay) |
 | `get_delay` | Permissionless (read-only) |
 | `get_queued` | Permissionless (read-only) |
+| `get_owner` | Permissionless (read-only) |
+| `transfer_ownership` | Owner only (starts two-step transfer) |
+| `accept_ownership` | Pending owner only |
+| `renounce_ownership` | Owner only (irreversible) |
 
 The contract implements OZ `Ownable` only, and is permanently pinned to its deployed WASM: an upgradeable governance contract could swap out its own bytecode (and the timelock with it) under the owner key, which would defeat the point of the delay.
 
 ## Two-Step Delay Change
 
-The delay itself cannot be changed instantly. `set_delay` stores a `PendingDelay { new_delay, unlock_time }` in temporary storage, where `unlock_time = now + current_delay`. Only after the current delay elapses can anyone call `apply_delay` to activate the new value. This prevents an attacker who gains owner access from immediately reducing the delay to zero and bypassing the timelock.
+The delay itself cannot be changed instantly. `set_delay` stores a `PendingDelay { new_delay, unlock_time }` in temporary storage, where `unlock_time = now + current_delay`. Only one pending delay change exists at a time: a subsequent `set_delay` overwrites it with a fresh unlock time. Only after the current delay elapses can anyone call `apply_delay` to activate the new value. This prevents an attacker who gains owner access from instantly shortening the delay and bypassing the timelock.
 
 ## Storage
 
@@ -126,10 +143,12 @@ Where `1_day_ledgers = 17280` (assuming 5-second ledger close time). The 2x mult
 
 | Code | Name | Description |
 |---|---|---|
-| 1 | `Unauthorized` | Caller is not the contract owner |
+| 1 | `Unauthorized` | Declared in the error enum but never raised by code (see below) |
 | 770 | `NotQueued` | Queue entry not found or expired |
 | 771 | `NotUnlocked` | Timelock delay not yet passed |
 | 772 | `InvalidDelay` | Delay value is zero or exceeds the 60-day cap |
+
+Owner-only functions are gated by `require_auth` on the owner address, so an unauthorized call fails with a Soroban host auth error, not with contract error code 1. Integrators should not match on `Unauthorized` for auth failures.
 
 ## Events
 

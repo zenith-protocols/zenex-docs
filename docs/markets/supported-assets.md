@@ -11,7 +11,7 @@ Each asset on Zenex is its own market: a dedicated trading contract paired with 
 
 To list a new asset, the factory deploys a fresh trading and vault pair for a chosen **oracle price feed**. The feed is a Pyth Lazer `feed_id` with a fixed price `exponent`, and both are immutable for the life of the market. Whoever deploys the pair also picks its **settlement token**: the token used as collateral and for every fee and PnL figure in that market. A market that settles in USDC takes USDC as collateral, denominates positions in USDC, and pays out in USDC.
 
-Each new market ships with its own [Config](./market-parameters.md), set at deployment and adjustable afterward by that market's owner through [governance](../governance/parameter-changes.md). Because markets are isolated contracts, one market's parameters and liquidity never affect another.
+Each new market ships with its own [Config](./market-parameters.md), set at deployment and adjustable afterward by that market's owner through the [parameter-change process](../governance/parameter-changes.md). Because markets are isolated contracts, one market's parameters and liquidity never affect another.
 
 ## Currently Available Markets
 
@@ -27,7 +27,7 @@ Because deployment is permissionless through the factory, other operators can li
 
 ## Testnet Market Parameters
 
-All three markets launch on testnet with the same starting configuration. Every value below is a per-market governance parameter and can change over time, so the market's contract is always the source of truth. See [Market Parameters](./market-parameters.md) for what each one controls.
+All three markets launch on testnet with the same starting configuration. Every value below is a per-market parameter and can change through the [parameter-change process](../governance/parameter-changes.md), so the market's contract is always the source of truth. See [Market Parameters](./market-parameters.md) for what each one controls.
 
 | Parameter | Value |
 |---|---|
@@ -47,8 +47,10 @@ All three markets launch on testnet with the same starting configuration. Every 
 | ADL thresholds | arms at 50% of half the vault balance, deleverages back to 40% |
 | Profit-haircut threshold | 90% on the same measure |
 | Vault fill fee | 0.1% |
-| Minimum vault fill | 10 USDC |
-| Deposit and redeem cooldowns | 60 seconds |
-| Deposit and withdraw PnL gates | 15% |
+| Minimum vault deposit | 10 USDC |
+| Redeem cooldown | 60 seconds |
+| Withdraw PnL gate | 15% |
 | Vault balance cap | 10,000,000 USDC |
-| Treasury share of protocol fees | 20% |
+| Order execution fee | flat per-order keeper fee, read from the market's contract |
+
+One fee parameter lives outside the per-market table. The treasury's share of protocol fees is a single protocol-wide rate stored on the treasury contract shared by every market deployed through the factory, and that contract is the source of truth for its current value.

@@ -5,4 +5,4 @@ title: Audits
 
 # Audits
 
-A formal security audit for the Zenex smart contracts is currently underway. The full audit report will be published on this page once complete.
+Security audit reports for the Zenex smart contracts will be published on this page as they are completed.

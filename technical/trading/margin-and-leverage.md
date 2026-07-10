@@ -5,7 +5,7 @@ title: Margin & Leverage
 
 # Margin & Leverage
 
-Every position carries two margin lines: an **initial-margin** floor enforced when opening or growing, and a lower **maintenance-margin** floor that triggers liquidation. Both are `SCALAR_18` fractions of notional, set per market by governance.
+Every position carries two margin lines: an **initial-margin** floor enforced when opening or growing, and a lower **maintenance-margin** floor that triggers liquidation. Both are `SCALAR_18` fractions of notional, set per market in `Config`.
 
 ## Two Margin Lines
 
@@ -14,7 +14,7 @@ Every position carries two margin lines: an **initial-margin** floor enforced wh
 | Initial margin | `init_margin` | Collateral, measured PnL-free | Every Increase fill and every partial Decrease fill (size reduction or collateral withdrawal) |
 | Maintenance margin | `maintenance_margin` | Equity (collateral + unrealized PnL) | Every increase/decrease fill, and the liquidation check |
 
-The two are measured differently, and that difference is the point. The initial-margin check looks at **collateral alone**, ignoring unrealized PnL, so a position cannot be opened or topped up on the strength of a favorable price move. The maintenance-margin check looks at **equity**, collateral plus unrealized PnL, so a losing position is liquidated only once its actual net worth erodes past the floor.
+The two are measured differently, and that difference is the point. The initial-margin check looks at **collateral alone**, ignoring unrealized PnL, so a position cannot be opened or topped up on the strength of a favorable price move. The maintenance-margin check looks at **equity**, collateral plus unrealized PnL, so a losing position is liquidated only once its actual net worth erodes past the floor. The unrealized PnL in that equity is marked at the exit side of the verified price, bid for a long and ask for a short.
 
 The initial-margin floor is held against the remainder of every voluntary partial Decrease, even one that withdraws no collateral. A partial close whose fees or realized loss leave collateral under `ceil(init_margin * notional)` on the remainder aborts with `InsufficientMargin` (713). Only a full close settles without the check, since nothing remains to hold to a floor.
 
@@ -28,7 +28,7 @@ $$
 \text{max leverage} = \frac{1}{\text{init\_margin}}
 $$
 
-An `init_margin` of 1% (`SCALAR_18 / 100`) caps leverage at 100x, and halving it doubles the cap. On an Increase fill, the collateral must satisfy `collateral >= init_margin * notional`, else the fill aborts with `InsufficientMargin` (713).
+An `init_margin` of 1% (`SCALAR_18 / 100`) caps leverage at 100x, and halving it doubles the cap. On an Increase fill the check runs after the fill's fees are debited: the base fee, impact fee, accrued borrowing, and any positive funding come out of the escrowed collateral first, and what remains must satisfy `collateral >= ceil(init_margin * notional)`, else the fill aborts with `InsufficientMargin` (713). A trader who posts exactly `init_margin * notional` fails the check, because the fees erode the collateral below the floor before it runs.
 
 ## Collateral Withdrawal
 

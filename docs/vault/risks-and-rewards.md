@@ -15,7 +15,9 @@ The vault accrues value from several sources.
 
 **Vault fill fees.** Each deposit and redeem pays a vault fee on the moved assets. That fee is split between the keeper, the treasury, and the vault, so existing depositors earn a cut of the flow in and out of the pool.
 
-**Borrowing interest.** Traders holding leveraged positions pay continuous [borrowing interest](../trading/borrowing-interest.md) that scales with utilization. This compensates liquidity providers for their capital backing leverage, and it is a primary source of yield.
+**Deposit and redeem pricing.** Every deposit and redeem is priced against the vault's assets adjusted for the pending profit and loss of open positions, always at the valuation least favorable to the depositor or redeemer. The small spread between the two marks stays in the pool and accrues to existing depositors.
+
+**Borrowing interest.** Positions on the larger side of the book pay continuous [borrowing interest](../trading/borrowing-interest.md) that scales with how much of the vault's capacity that side reserves. This compensates liquidity providers for their capital backing leverage, and it is a primary source of yield.
 
 **Net trader losses.** When traders close at a loss, their collateral is absorbed by the vault. In aggregate, if traders are net unprofitable, the vault grows.
 
@@ -27,21 +29,21 @@ The vault accrues value from several sources.
 
 ### Risk Mitigation
 
-The vault's strongest protection is a balanced book. When longs and shorts are roughly equal, profits on one side are offset by losses on the other and the vault's net exposure is small. The protocol pushes toward balance and, on top of that, applies gates that directly protect share value and vault solvency.
+The vault's strongest protection is a balanced book. When longs and shorts are roughly equal, profits on one side are offset by losses on the other and the vault's net exposure is small. The protocol pushes toward balance and, on top of that, applies pricing rules and gates that directly protect share value and vault solvency.
 
 **Funding rate.** The [funding rate](../trading/funding-rate.md) is a continuous payment from the dominant side to the minority side, creating a financial incentive to take the less crowded position and pushing the book toward balance.
 
 **Skew-split and impact fees.** The [trade fee](../trading/fees.md) charges the book-worsening leg more than the balancing leg, and a price impact fee falls on trades that push the book further out of balance. Both discourage the imbalance that exposes the vault.
 
-**Borrowing interest.** [Borrowing interest](../trading/borrowing-interest.md) rises with utilization through a kink model, steepening past a target so depositors are rewarded proportionally as the vault takes on more exposure.
+**Borrowing interest.** [Borrowing interest](../trading/borrowing-interest.md) rises with the paying side's own utilization through a kink model, steepening past a target so depositors are rewarded proportionally as more of the vault's capacity is reserved.
 
-**Deposit snipe gate.** A deposit is blocked while the vault's share value is depressed by net pending trader losses beyond `max_pnl_deposit` (set per market by governance). This stops a new depositor from minting shares cheaply at a moment the pending PnL is about to swing back, diluting existing LPs.
+**Deposit pricing.** A deposit mints shares against the vault's backing marked with pending trader PnL at the valuation least favorable to the depositor. A depositor cannot mint cheap shares while pending trader losses temporarily depress the pool, so existing depositors are never diluted by deposit timing.
 
-**Withdraw gate.** A redeem is blocked while share value is inflated by net pending trader profit beyond `max_pnl_withdraw` (set per market by governance). This stops a redeemer from cashing out an unrealized spike at the expense of the LPs who remain.
+**Redeem pricing and gate.** A redeem pays out against the vault's backing marked with pending trader PnL at the valuation least favorable to the redeemer, so a leaving depositor cannot cash out an unrealized spike at the expense of those who remain. A redeem is also blocked while either side's pending trader profit is too large relative to the vault that would remain after it, keeping enough backing in the pool to pay winners.
 
-**Utilization cap.** Withdrawals must leave the vault with enough liquidity to keep backing the reserved capacity, bounded by `max_util_withdraw` (which is at least the open-side cap `max_util_open`). This retains a minimum level of liquidity so the vault can always cover its open positions.
+**Utilization cap.** A redeem will not fill if it would leave either side's reserved capacity above a per-market withdrawal cap. This retains a minimum level of liquidity so the vault can always cover its open positions.
 
-**Realized-profit haircut.** While a winning side's pending profit overhangs the vault (beyond `max_pnl_trader` of half the vault balance), each closing profit is scaled down by a live factor and the withheld share stays with the vault. This bounds how fast winners can extract value.
+**Realized-profit haircut.** While a winning side's pending profit exceeds a per-market cap on what the vault recognizes, each closing profit is scaled down by a live factor and the withheld share stays with the vault. This bounds how fast winners can extract value.
 
 **Auto-deleveraging.** When a side's pending profit grows large relative to the vault, [auto-deleveraging](../trading/adl.md) lets keepers reduce winning positions on that side until the side's pending profit falls back to a safe level, bounding what winners can extract and protecting the vault from insolvency.
 

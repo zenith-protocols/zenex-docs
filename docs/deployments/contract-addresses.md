@@ -9,7 +9,7 @@ Zenex contracts are deployed through the factory contract, which deterministical
 
 ## Address Derivation
 
-The factory uses Soroban's `with_address` deployer to precompute both the trading and vault addresses before either contract is instantiated. Each address is derived from the admin's address and a salt, not from the factory contract itself, so the same admin and salt always produce the same pair of addresses regardless of which factory instance is asked to deploy them. Soroban also requires the address passed to `with_address` to authorize the call, so the admin's own signature is what unlocks a deployment at a given address. A salt alone cannot be front-run by another caller. The caller provides a `salt: BytesN<32>`, used directly for the trading address. The vault salt is derived by XORing the last byte: `salt[31] ^= 1`. No hashing is applied to either salt. The two salts differ by exactly one bit, producing two distinct but deterministic addresses from the same admin and salt.
+The factory uses Soroban's `with_address` deployer to precompute both the trading and vault addresses before either contract is instantiated. Each address is derived from the admin's address and a salt, not from the factory contract itself, so the same admin and salt always produce the same pair of addresses regardless of which factory instance is asked to deploy them. Soroban also requires the address passed to `with_address` to authorize the call, so the admin's own signature is what unlocks a deployment at a given address. A salt alone cannot be front-run by another caller. The caller supplies a 32-byte salt for the trading address, and the vault address uses the same salt with a single bit flipped, so one salt deterministically yields both addresses. The exact derivation is documented on the [technical factory page](/technical/factory/overview).
 
 Because the WASM hashes are immutable within a factory instance (set at construction and never modifiable), every pool deployed by the same factory runs identical contract code. A new factory must be deployed to use updated WASM.
 
@@ -24,7 +24,7 @@ The following contracts are deployed on Stellar testnet (`https://soroban-testne
 | Strategy Vault | _TBD_ | Deployed via factory (paired with trading) |
 | Price Verifier | _TBD_ | Pyth Lazer oracle verification |
 | Treasury | _TBD_ | Protocol fee accumulator |
-| Governance | _TBD_ | Timelock proxy for parameter updates |
+| Governance | Not deployed | Timelock that queues and executes owner actions after a delay. Not part of the current testnet deployment. |
 | Trading Router | _TBD_ | Stateless call router for batched and atomic flows |
 
 These addresses will be populated after the current testnet deployment cycle is finalized.
@@ -41,6 +41,6 @@ Discovery of deployed pools relies on indexing the `Deploy` events emitted by th
 
 ## WASM Hash Immutability
 
-The WASM hashes stored in the factory at construction time cannot be changed. This is an intentional security property: it guarantees that every pool deployed by a given factory runs the same audited code. If a security fix or feature upgrade is needed, a new factory must be deployed with the updated WASM hashes. Existing pools deployed by the old factory continue running their original code.
+The WASM hashes stored in the factory at construction time cannot be changed. This is an intentional security property: it guarantees that every pool deployed by a given factory runs the same contract code. If a security fix or feature upgrade is needed, a new factory must be deployed with the updated WASM hashes. Existing pools deployed by the old factory continue running their original code.
 
-No Zenex contract exposes an upgrade function. Trading, vault, factory, treasury, price-verifier, governance, and the trading router are all immutable once deployed. A logic change to any of them means deploying a fresh instance, and for a market, that means a fresh trading contract and vault pair through a new (or the existing) factory.
+No Zenex contract exposes an upgrade function. Trading, vault, factory, treasury, price-verifier, governance, and the trading router all keep their code immutable once deployed. Configuration values remain adjustable through each contract's owner-gated setters, but no contract can swap out its logic. A logic change to any of them means deploying a fresh instance, and for a market, that means a fresh trading contract and vault pair through a new factory carrying the updated WASM hashes.
