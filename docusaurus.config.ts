@@ -33,7 +33,26 @@ const config: Config = {
     },
   },
 
-  themes: ['@docusaurus/theme-mermaid'],
+  themes: [
+    '@docusaurus/theme-mermaid',
+    [
+      '@easyops-cn/docusaurus-search-local',
+      {
+        // Index all three docs plugin instances. The default instance is
+        // served at the site root, hence the empty-string route base.
+        docsRouteBasePath: ['/', 'technical', 'integrations'],
+        docsDir: ['docs', 'technical', 'integrations'],
+        indexDocs: true,
+        indexBlog: false,
+        indexPages: false,
+        hashed: true,
+        highlightSearchTermsOnTargetPage: true,
+        searchResultLimits: 8,
+        language: ['en'],
+        removeDefaultStopWordFilter: true,
+      },
+    ],
+  ],
 
   onBrokenLinks: 'warn',
   trailingSlash: false,
@@ -95,15 +114,26 @@ const config: Config = {
         rehypePlugins: [rehypeKatex],
       },
     ],
+    [
+      // Copy page as Markdown + open in Claude/ChatGPT/Perplexity/Gemini.
+      // One entry covers all three docs instances; generateMarkdownRoutes
+      // emits a .md twin next to every built page for clean AI ingestion.
+      'docusaurus-plugin-copy-page-button',
+      {
+        placement: 'toc',
+        generateMarkdownRoutes: true,
+      },
+    ],
   ],
 
   // Add KaTeX stylesheet
   stylesheets: [
     {
-      href: 'https://cdn.jsdelivr.net/npm/katex@0.13.24/dist/katex.min.css',
+      // Must match the installed katex version rehype-katex renders against
+      href: 'https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css',
       type: 'text/css',
       integrity:
-        'sha384-odtC+0UGzzFL/6PNoE8rX/SPcQDXBJ+uRepguP4QkPCm2LBxH3FA3y+fKSiJ+AmM',
+        'sha384-Wsr4Nh3yrvMf2KCebJchRJoVo1gTU6kcP05uRSh5NV3sj9+a8IomuJoQzf3sMq4T',
       crossorigin: 'anonymous',
     },
     {
@@ -115,6 +145,18 @@ const config: Config = {
   themeConfig: {
     // Replace with your project's social card
     image: 'img/zenex-social-card.jpg',
+    mermaid: {
+      theme: { light: 'neutral', dark: 'dark' },
+      options: {
+        themeVariables: {
+          primaryColor: '#212225',
+          primaryBorderColor: '#363a3f',
+          primaryTextColor: '#edeef0',
+          lineColor: '#696e77',
+          fontFamily: 'Satoshi, sans-serif',
+        },
+      },
+    },
     colorMode: {
       defaultMode: 'dark',
       disableSwitch: true,

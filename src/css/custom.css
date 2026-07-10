@@ -62,22 +62,44 @@
   --ifm-font-size-base: 16px;
   --ifm-line-height-base: 1.6;
 
+  /* Heading scale: tighter than the Infima default (3rem h1, 1rem h4).
+     Keeps h1 subordinate to the navbar brand and h4 above body size. */
+  --ifm-h1-font-size: 2.25rem;
+  --ifm-h2-font-size: 1.6rem;
+  --ifm-h3-font-size: 1.25rem;
+  --ifm-h4-font-size: 1.05rem;
+
   /* === Spacing & Borders === */
   --ifm-spacing-horizontal: 1.5rem;
   --ifm-global-radius: 0.65rem;
   --ifm-code-border-radius: 0.5rem;
 
-  /* === Navbar === */
-  --ifm-navbar-height: 4rem;
+  /* === Navbar ===
+     Height must match the real rendered height: Infima derives sticky
+     sidebar offsets and heading scroll-margin from this variable. */
+  --ifm-navbar-height: 70px;
   --ifm-navbar-background-color: #18191b;
   --ifm-navbar-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-
-  /* === Sidebar === */
-  --ifm-sidebar-background: #18191b;
 
   /* === Code Blocks === */
   --ifm-code-background: #212225;
   --docusaurus-highlighted-code-line-bg: rgba(41, 163, 131, 0.15);
+
+  /* === Local search (@easyops-cn/docusaurus-search-local) === */
+  --search-local-modal-background: var(--zx-surface);
+  --search-local-modal-width: 560px;
+  --search-local-modal-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 16px 48px rgba(0, 0, 0, 0.6);
+  --search-local-hit-background: var(--zx-bg);
+  --search-local-hit-color: var(--zx-text-primary);
+  --search-local-hit-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+  --search-local-highlight-color: var(--zx-primary-text);
+  --search-local-input-active-border-color: var(--zx-primary-text);
+  --search-local-muted-color: #9ba1a8;
+  --search-local-icon-stroke-width: 1.8;
+  --ifm-navbar-search-input-background-color: var(--zx-elevated);
+  --ifm-navbar-search-input-placeholder-color: var(--zx-text-tertiary);
 }
 
 /* === Dark Mode Theme === */
@@ -133,7 +155,6 @@
 
   /* Sidebar: resting items are secondary, the active item carries the
      accent, hover lifts to primary text. */
-  --ifm-sidebar-background: #18191b;
   --ifm-menu-color: var(--zx-text-secondary);
   --ifm-menu-color-active: #1fd8a4;
   --ifm-menu-color-background-active: rgba(41, 163, 131, 0.1);
@@ -168,12 +189,20 @@
    2. GLOBAL STYLES & RESETS
    ============================================================================ */
 
-/* Global Transitions */
-* {
+/* Interactive elements only: a universal * transition makes every hover
+   feel sluggish and keeps the compositor busy for nothing. */
+a,
+.menu__link,
+.navbar__link,
+.table-of-contents__link,
+.tabs__item,
+.breadcrumbs__link,
+.footer a,
+table tbody tr {
   transition:
-    background-color 0.4s var(--ease-swim),
-    color 0.4s var(--ease-swim),
-    border-color 0.4s var(--ease-swim);
+    color 0.15s var(--ease-dart),
+    background-color 0.15s var(--ease-dart),
+    border-color 0.15s var(--ease-dart);
 }
 
 /* HTML & Body */
@@ -199,11 +228,16 @@ h1, h2, h3, h4, h5, h6,
 
 /* Focus States */
 *:focus-visible {
-  outline: 2px solid var(--ifm-color-primary);
+  outline: 2px solid var(--zx-primary-text);
   outline-offset: 2px;
   transition:
     outline-color 0.2s var(--ease-dart),
     outline-offset 0.2s var(--ease-dart);
+}
+
+::selection {
+  background: rgba(31, 216, 164, 0.25);
+  color: var(--zx-text-primary);
 }
 
 /* ============================================================================
@@ -212,16 +246,8 @@ h1, h2, h3, h4, h5, h6,
 
 .navbar {
   border-bottom: 1px solid var(--ifm-toc-border-color);
-  min-height: 70px;
-  display: flex;
-  align-items: center;
   position: relative;
   z-index: 100;
-}
-
-.navbar__inner {
-  display: flex;
-  align-items: center;
 }
 
 /* Navbar Brand & Logo */
@@ -293,18 +319,6 @@ h1, h2, h3, h4, h5, h6,
   align-self: center;
 }
 
-.navbar__items .navbar__link {
-  margin-top: 12px;
-}
-
-/* Hide the light/dark mode toggle (but keep the mobile hamburger) */
-button[class*="colorModeToggle"],
-html[data-theme] button[title*="dark"],
-html[data-theme] button[title*="light"],
-.react-toggle {
-  display: none !important;
-}
-
 /* Mobile Menu */
 .navbar-sidebar {
   background-color: var(--ifm-navbar-background-color);
@@ -318,47 +332,9 @@ html[data-theme] button[title*="light"],
    4. SIDEBAR
    ============================================================================ */
 
-/* Add a small gap at the top of sidebar */
-.menu {
-  padding-top: 0.75rem !important;
-  margin-top: 0 !important;
-}
-
-.menu__list > .menu__list-item:first-child {
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-}
-
-.theme-doc-sidebar-container > * {
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-}
-
-/* Target first menu item/category specifically */
-.menu__list-item:first-of-type,
-.theme-doc-sidebar-item-category:first-child,
-.menu__list > li:first-child,
-.menu > .menu__list > .menu__list-item:first-child {
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-}
-
-/* Remove any top margin/padding from category links */
-.menu__list-item-collapsible:first-child,
-.menu__link:first-child {
-  margin-top: 0 !important;
-  padding-top: 0.5rem !important; /* Keep some padding for click area */
-}
-
-/* Ensure the entire sidebar starts at the top */
-aside[class*="sidebar"] {
-  padding-top: 0 !important;
-  margin-top: 0 !important;
-}
-
-/* Target Docusaurus specific classes */
-div[class*="sidebar"] {
-  padding-top: 0 !important;
+/* Small gap at the top of the sidebar */
+.theme-doc-sidebar-menu {
+  padding-top: 0.75rem;
 }
 
 /* Sidebar Z-Index */
@@ -403,7 +379,7 @@ a:hover {
 }
 
 .button:hover:not(:disabled) {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .button:active:not(:disabled) {
@@ -436,12 +412,14 @@ a:hover {
   border: 1px solid var(--ifm-toc-border-color);
   border-radius: var(--ifm-global-radius);
   transition:
-    transform 0.5s var(--ease-float),
-    box-shadow 0.5s var(--ease-float);
+    transform 0.2s var(--ease-float),
+    box-shadow 0.2s var(--ease-float),
+    border-color 0.2s var(--ease-float);
 }
 
 .card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
+  border-color: var(--zx-border-hover);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
@@ -506,16 +484,16 @@ table tbody tr {
    9. ADMONITIONS (CALLOUTS)
    ============================================================================ */
 
-.admonition {
+.theme-admonition {
   border-radius: var(--ifm-global-radius);
   border-left-width: 4px;
 }
 
-.admonition-icon svg {
+.theme-admonition svg {
   transition: transform 0.3s var(--ease-float);
 }
 
-.admonition:hover .admonition-icon svg {
+.theme-admonition:hover svg {
   transform: scale(1.1);
 }
 
@@ -523,7 +501,14 @@ table tbody tr {
    10. TABLE OF CONTENTS
    ============================================================================ */
 
+/* One border only: Docusaurus already draws the rule on the inner list
+   via .table-of-contents__left-border. Style that, never the container,
+   or the TOC shows two misaligned vertical lines. */
 .table-of-contents {
+  font-size: 0.8125rem;
+}
+
+.table-of-contents__left-border {
   border-left: 2px solid var(--ifm-toc-border-color);
 }
 
@@ -580,7 +565,7 @@ table tbody tr {
 }
 
 /* Announcement Bar: dark text on the jade fill, white fails contrast */
-.announcement {
+div[class*='announcementBar'] {
   background-color: var(--ifm-color-primary);
   color: #111113;
   font-weight: 500;
