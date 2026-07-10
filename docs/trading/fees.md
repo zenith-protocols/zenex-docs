@@ -34,7 +34,7 @@ In addition to the per-fill fees above, an open position carries two continuous 
 
 Borrowing interest is charged to the crowded side of the market: the side holding the larger token exposure pays, the smaller side pays nothing (a dead-even book charges both sides). The rate follows a kink model tied to how much of the vault's capacity that side reserves. See [Borrowing Interest](./borrowing-interest.md).
 
-Funding is a transfer between longs and shorts driven by the market's imbalance. It is a net cost to the crowded side and a credit to the other side, and unlike the other costs it is not deducted automatically as profit: earned funding accrues to a claimable balance you withdraw separately. See [Funding Rate](./funding-rate.md).
+Funding is a transfer between longs and shorts driven by the market's imbalance. The crowded side pays it, and the payment counts against the position like any other cost. The other side earns it, and earned funding accrues to a claimable balance you withdraw separately rather than being credited to your position. See [Funding Rate](./funding-rate.md).
 
 ## 4. Keeper Reward and Treasury Cut
 

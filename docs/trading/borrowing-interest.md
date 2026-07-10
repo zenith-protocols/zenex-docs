@@ -11,7 +11,7 @@ Borrowing interest is charged to the dominant side of the market, the side whose
 
 ## How the Rate Is Determined
 
-The borrowing rate follows a kink model driven by vault utilization. Each side of the market has its own utilization. A side's utilization is the capacity its open positions reserve, divided by that side's lending capacity: half of the vault, scaled by the share of the vault that may be committed to open positions. Utilization is clamped between 0 and 1.
+The borrowing rate follows a kink model driven by vault utilization. Each side of the market has its own utilization. A side's utilization is how much of its lending capacity its open positions currently reserve, expressed as a percentage from 0% (nothing reserved) to 100% (fully reserved). A side's lending capacity is half of the vault, scaled by the share of the vault that may be committed to open positions.
 
 For example, if a market allows up to 80% of the vault to back open positions and the vault holds 1,000,000 USDC, each side has a lending capacity of 400,000 USDC (80% of its 500,000 USDC half). If long positions currently reserve 200,000 USDC, the long side's utilization is 50%.
 
@@ -20,7 +20,7 @@ The rate has two regimes separated by a target utilization (the kink):
 - Below the target, the rate rises gently in proportion to utilization, scaled by the base borrow rate.
 - Above the target, an additional term kicks in that climbs more steeply, so that at full utilization the rate reaches the higher stressed borrow rate exactly.
 
-The base borrow rate, the stressed borrow rate, and the target utilization are all per-market parameters, set through the protocol's [parameter-change process](../governance/parameter-changes.md). The design keeps borrowing cheap while the vault has ample spare capacity and makes it climb sharply as the market approaches full utilization, protecting the vault from becoming overextended.
+The base borrow rate, the stressed borrow rate, and the target utilization are all per-market parameters, set through the protocol's [parameter-change process](../governance/parameter-changes.md). The design keeps borrowing cheap while the vault has ample spare capacity and makes it climb sharply as the market approaches full utilization, protecting the vault from becoming overextended. The exact rate formula is in the [technical reference](/technical/trading/borrowing-rate).
 
 ## How It Accrues
 
