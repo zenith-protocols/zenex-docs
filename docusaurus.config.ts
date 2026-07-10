@@ -40,10 +40,11 @@ const config: Config = {
     [
       '@easyops-cn/docusaurus-search-local',
       {
-        // Index all three docs plugin instances. The default instance is
-        // served at the site root, hence the empty-string route base.
-        docsRouteBasePath: ['/', 'technical', 'integrations'],
-        docsDir: ['docs', 'technical', 'integrations'],
+        // Index the visible docs plugin instances. The default instance is
+        // served at the site root. Integrations is temporarily hidden from
+        // the navbar, so keep it out of the search index too.
+        docsRouteBasePath: ['/', 'technical'],
+        docsDir: ['docs', 'technical'],
         indexDocs: true,
         indexBlog: false,
         indexPages: false,
@@ -185,13 +186,17 @@ const config: Config = {
           position: 'left',
           label: 'Technical',
         },
-        {
-          type: 'docSidebar',
-          sidebarId: 'integrationsSidebar',
-          docsPluginId: 'integrations',
-          position: 'left',
-          label: 'Integrations',
-        },
+        // Integrations is temporarily hidden while its docs catch up to v2.
+        // The plugin still builds the pages, so direct /integrations URLs
+        // keep working. Restore this item (and the search-local entries
+        // above) to bring it back.
+        // {
+        //   type: 'docSidebar',
+        //   sidebarId: 'integrationsSidebar',
+        //   docsPluginId: 'integrations',
+        //   position: 'left',
+        //   label: 'Integrations',
+        // },
         {
           type: 'html',
           position: 'right',
