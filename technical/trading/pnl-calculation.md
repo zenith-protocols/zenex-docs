@@ -33,7 +33,7 @@ Because only `tokens` and `notional` are stored, successive increases blend auto
 
 ## Fill Price on Events
 
-Fill events (`increase_fill`, `decrease_fill`, `liquidation`) do not carry a price field. On every receipt, `notional * SCALAR_18 / tokens` (in `price_scalar` units) gives the implied entry price of the moved size. On an `increase_fill` that is also the fill price. On `decrease_fill` and `liquidation` the moved size is prorated at the position's entry ratio, so the exit-side value is recovered from the `pnl` field instead: `(notional + pnl) * SCALAR_18 / tokens` for a long, `(notional - pnl) * SCALAR_18 / tokens` for a short. The emitted `pnl` is post-haircut and the mark rounds against the trader, so the recovered exit price is exact only up to that rounding and only when the haircut did not fire.
+Every fill receipt (`increase_fill`, `decrease_fill`, `close_fill`, `liquidation`) carries the execution price on `price`: the entry side on an increase, the exit side on a close. On the close receipts, `notional` and `tokens` are the moved size prorated at the position's entry ratio, so `notional * SCALAR_18 / tokens` (in `price_scalar` units) gives the entry price of the closed chunk. The emitted `pnl` is post-haircut and the mark rounds against the trader, so recomputing PnL from `price` reproduces the field only up to that rounding and only when the haircut did not fire.
 
 ## Equity, Payout, and Bad Debt
 

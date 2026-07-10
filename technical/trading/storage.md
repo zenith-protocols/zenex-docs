@@ -35,7 +35,7 @@ Archival loses no state. An archived position still counts in the market totals 
 
 ## Stored Types
 
-The structs behind the storage rows above, as read back by `get_order`, `get_vault_order`, `get_position`, `get_market_data`, and `get_adl_state`. The same rows appear in each transaction's ledger entry changes, which is where an indexer reads resulting state, since [events](./events.md) are receipts and do not mirror stored rows. Field comments state the units: token decimals (token-dec), base decimals (base-dec), `price_scalar`, or `SCALAR_18`.
+The structs behind the storage rows above, as read back by `get_order`, `get_vault_order`, `get_position`, `get_market_data`, and `get_adl_state`. The order rows also ride on their create [events](./events.md), while position and market state are read from the getters or from each transaction's ledger entry changes. Field comments state the units: token decimals (token-dec), base decimals (base-dec), `price_scalar`, or `SCALAR_18`.
 
 ### Order
 

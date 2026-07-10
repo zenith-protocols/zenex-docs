@@ -5,22 +5,24 @@ title: Events
 
 # Events
 
-The trading contract emits 15 events. This page lists each one with its exact Rust definition, so an indexer can decode topics and data without reading the contract source.
+The trading contract emits 17 events. This page lists each one with its exact Rust definition, so an indexer can decode topics and data without reading the contract source.
 
-Events are receipts for actions, not mirrors of contract state. The stored rows they touch (orders, positions, market data) are read back through the getters (`get_order`, `get_position`, `get_market_data`, ...) or from the transaction's ledger entry changes, which carry every stored row the transaction wrote.
+Events are receipts for actions, not mirrors of contract state. The one exception is the created order row, carried on the create events because it is immutable while pending, so the payload stays authoritative until the order's fill or cancel receipt. Resulting position and market state are read back through the getters (`get_position`, `get_market_data`, ...) or from the transaction's ledger entry changes, which carry every stored row the transaction wrote.
 
 All events use Soroban's `#[contractevent]` derive. The event-name symbol (the snake_case struct name, e.g. `create_order` for `CreateOrder`) is the first topic, then the `#[topic]` fields follow in declared order, and all remaining fields form the data map. Field comments state the units: token decimals (token-dec), base decimals (base-dec), `price_scalar`, or `SCALAR_18`. The stored types behind the rows are documented on [Storage](./storage.md#stored-types).
 
 ## Trade Orders
 
-Emitted by `create_order` and `cancel_order`. The created order's row is readable at `get_order(user, id)` and in the transaction's ledger entry changes.
+Emitted by `create_order` and `cancel_order`.
 
 ```rust
-/// Order created via `create_order`.
+/// Order created via `create_order`. The row is immutable while pending, so
+/// the payload stays authoritative until the order's fill or cancel receipt.
 #[contractevent]
 pub struct CreateOrder {
     #[topic] pub user: Address,
     #[topic] pub id: u32,
+    pub order: Order, // the stored order row, as returned by `get_order`
 }
 
 /// Pending order removed via `cancel_order`.
@@ -35,7 +37,7 @@ pub struct CancelOrder {
 
 ## Position Fills
 
-Emitted by `execute_order`, `execute_adl`, and `execute_liquidation`. The fill is the itemized receipt; the resulting position state is the stored row, readable at `get_position(user, is_long)` and in the transaction's ledger entry changes (a fully closed position's row is removed).
+Emitted by `execute_order`, `execute_adl`, and `execute_liquidation`. An increase emits `increase_fill`, a partial decrease (the position survives) emits `decrease_fill`, and a full close emits `close_fill`, with `execute_adl` emitting the decrease or close receipt under id `0`. The fill is the itemized receipt; the resulting position state is the stored row, readable at `get_position(user, is_long)` and in the transaction's ledger entry changes (a fully closed position's row is removed).
 
 ```rust
 /// A keeper fill of an increase order (the user's itemized receipt).
@@ -55,7 +57,7 @@ pub struct IncreaseFill {
     pub borrowing: i128,  // settled borrowing fee, token-dec
 }
 
-/// A keeper fill of a decrease order (the user's itemized receipt).
+/// A keeper fill of a partial decrease (the position survives the fill).
 #[contractevent]
 pub struct DecreaseFill {
     #[topic] pub user: Address,
@@ -63,16 +65,35 @@ pub struct DecreaseFill {
     #[topic] pub is_long: bool,
     pub keeper: Address,  // reward recipient named by the fill's caller
     pub price: i128,      // exit-side execution price (bid for a long, ask for a short), price_scalar units
-    pub notional: i128,   // closed size: the order's request clamped to the position, token-dec
+    pub notional: i128,   // closed size, token-dec
     pub tokens: i128,     // base size closed, base-dec
-    pub collateral: i128, // gross collateral leg: requested withdrawal (partial) or freed margin (full), token-dec
+    pub collateral: i128, // requested withdrawal, token-dec
     pub pnl: i128,        // realized PnL on the closed fraction (post-haircut), gross of settled costs, token-dec
     pub base_fee: i128,   // trade fee charged, token-dec
     pub impact_fee: i128, // impact fee charged, token-dec
     pub funding: i128,    // settled funding, token-dec; + = paid from collateral, - = credited claimable
     pub borrowing: i128,  // settled borrowing fee, token-dec
-    pub bad_debt: i128,   // fees and losses past the freed margin, absorbed by the vault, token-dec; 0 on partial closes
-    pub returned: i128,   // closed-position payout, token-dec
+    pub returned: i128,   // payout to the trader: the gross legs less the fees they cover, token-dec
+}
+
+/// A keeper fill that closes the whole position (the stored row zeroes).
+#[contractevent]
+pub struct CloseFill {
+    #[topic] pub user: Address,
+    #[topic] pub id: u32, // filled order id; 0 = forced ADL close via `execute_adl`
+    #[topic] pub is_long: bool,
+    pub keeper: Address,  // reward recipient named by the fill's caller
+    pub price: i128,      // exit-side execution price (bid for a long, ask for a short), price_scalar units
+    pub notional: i128,   // full closed size, token-dec
+    pub tokens: i128,     // base size closed, base-dec
+    pub collateral: i128, // freed margin, gross of the itemized fees, token-dec
+    pub pnl: i128,        // realized PnL on the closed size (post-haircut), gross of settled costs, token-dec
+    pub base_fee: i128,   // trade fee charged, token-dec
+    pub impact_fee: i128, // impact fee charged, token-dec
+    pub funding: i128,    // settled funding, token-dec; + = paid from collateral, - = credited claimable
+    pub borrowing: i128,  // settled borrowing fee, token-dec
+    pub bad_debt: i128,   // fees and losses past the freed margin, absorbed by the vault, token-dec
+    pub returned: i128,   // post-fee equity paid to the trader, token-dec
 }
 
 /// A keeper liquidation receipt (the full size is force-closed).
@@ -99,21 +120,24 @@ pub struct Liquidation {
 
 ### Reading the fill receipts
 
-- **`price` is the execution price** the fill settled at: the entry side (ask for a long, bid for a short) on an `increase_fill`, the exit side (bid for a long, ask for a short) on a `decrease_fill` or `liquidation`. On a close, `notional` and `tokens` are the closed fraction at entry pricing, so `notional * SCALAR_18 / tokens` is the entry price of the closed chunk while `price` is what it closed at.
-- **`collateral` and `pnl` are gross** of the itemized fees, and `pnl` is post-haircut. On a `decrease_fill`, `returned` is the actual payout: the gross legs less the fees they cover, floored at zero. A partial close pays only the profit leg while a realized loss debits the surviving margin. `bad_debt` is `0` on partial closes.
+- **`price` is the execution price** the fill settled at: the entry side (ask for a long, bid for a short) on an `increase_fill`, the exit side (bid for a long, ask for a short) on the close receipts. On a close, `notional` and `tokens` are the closed size at entry pricing, so `notional * SCALAR_18 / tokens` is the entry price of the closed chunk while `price` is what it closed at.
+- **`collateral` and `pnl` are gross** of the itemized fees, and `pnl` is post-haircut. `returned` is the actual payout: the gross legs less the fees they cover, floored at zero. On a `decrease_fill` a realized loss debits the surviving margin, never the payout, and no bad debt is possible, which is why the partial receipt has no `bad_debt` field. On a `close_fill` the payout is the post-fee equity and any shortfall past the freed margin lands on `bad_debt`.
 - **`liquidation` tier**: `liq_fee = 0` is the soft tier (post-fee remainder on `returned`, to the trader), while `liq_fee > 0` is the hard tier (remainder on `forfeit`, to the vault).
-- **The trader transfer exceeds `returned`** when the same call auto-cancels resting decrease orders: their refunded escrow is folded into the single payout transfer, itemized by the accompanying `cancel_order` events.
+- **The trader transfer exceeds `returned`** when a full closure auto-cancels resting decrease orders: their refunded escrow is folded into the single payout transfer, itemized by the accompanying `cancel_order` events.
 
 ## Vault Orders
 
-Emitted by `create_vault_order`, `cancel_vault_order`, and `execute_vault_order`. The created order's row is readable at `get_vault_order(user, id)` and in the transaction's ledger entry changes.
+Emitted by `create_vault_order`, `cancel_vault_order`, and `execute_vault_order`.
 
 ```rust
-/// Vault deposit or redeem order created via `create_vault_order`.
+/// Vault deposit or redeem order created via `create_vault_order`. The row is
+/// immutable while pending, so the payload stays authoritative until the
+/// order's fill or cancel receipt.
 #[contractevent]
 pub struct CreateVaultOrder {
     #[topic] pub user: Address,
     #[topic] pub id: u32,
+    pub order: VaultOrder, // the stored vault-order row, as returned by `get_vault_order`
 }
 
 /// Pending vault order removed via `cancel_vault_order`.

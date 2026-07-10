@@ -20,7 +20,7 @@ pub struct Config {
     pub exec_fee: i128,              // flat keeper execution fee escrowed per order at creation, token-dec
     pub fee_dom: i128,               // dominant-side trade fee (SCALAR_18)
     pub fee_non_dom: i128,           // non-dominant trade fee (SCALAR_18)
-    pub impact_divisor: i128,        // impact fee = worsening notional / impact_divisor (SCALAR_18)
+    pub impact_scalar: i128,         // impact fee = notional * min(notional / impact_scalar, MAX_IMPACT_RATE); every fill (token-dec)
 
     // --- utilization caps (SCALAR_18; util = open interest / vault) ---
     pub max_util_open: i128,     // opens blocked above this; also each side's borrow-reserve denominator (side capacity = max_util_open * vault / 2)
@@ -72,7 +72,7 @@ The constructor and `set_config` validate the whole struct and trap on the first
 |---|---|
 | `keeper_rate` | `<= MAX_KEEPER_RATE` (50%) |
 | `fee_dom`, `fee_non_dom`, `deposit_fee`, `redeem_fee` | `<= MAX_FEE_RATE` (1%) |
-| `impact_divisor` | `>= MIN_IMPACT` (10) |
+| `impact_scalar` | `> 0` |
 | `max_util_open`, `max_util_withdraw` | `<= MAX_UTIL` (1000%) |
 | `init_margin` | in `[MIN_MARGIN, MAX_MARGIN]` (0.1% to 50%, so max leverage 2x to 1000x) |
 | `liq_fee` | `<= MAX_LIQ_FEE` (25%) |

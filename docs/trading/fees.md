@@ -22,11 +22,11 @@ A trade that lands entirely on the crowded side pays the higher rate on its whol
 
 ## 2. Impact Fee
 
-The impact fee reflects the cost that a large trade would impose on pricing in a traditional order book. It is charged only on the worsening leg, the part of a trade that pushes the book further out of balance. Trades that balance the book do not pay it.
+The impact fee reflects the cost that a large trade would impose on pricing in a traditional order book. Every fill that moves size pays it on the full size of the fill, and the fee rate grows with that size: doubling the fill quadruples the fee. The rate is capped at 10% of the fill's size.
 
-The fee scales with the worsening notional: it is the worsening notional divided by the market's impact divisor, a per-market parameter, since liquidity conditions differ from one market to the next.
+How quickly the rate grows is set by the market's impact scalar, a per-market parameter tuned to the liquidity of the asset. A larger scalar means a gentler curve.
 
-For example, a market with an impact divisor of 1,000 charges an impact fee of 10 USDC on a trade whose worsening leg is 10,000 USDC. A worsening leg twice as large pays twice the fee, so larger imbalancing trades pay proportionally more, which discourages oversized one-sided positions and protects vault depositors from the risk they create.
+For example, a market with an impact scalar of 100,000 USDC charges 10 USDC on a 1,000 USDC fill (a 1% rate) and 40 USDC on a 2,000 USDC fill (a 2% rate). Larger fills pay a higher rate on a larger size, which discourages oversized trades and protects vault depositors from the risk they create, while splitting the same size across smaller fills over time pays less.
 
 ## 3. Borrowing and Funding
 

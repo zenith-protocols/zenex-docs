@@ -33,7 +33,7 @@ The vault's strongest protection is a balanced book. When longs and shorts are r
 
 **Funding rate.** The [funding rate](../trading/funding-rate.md) is a continuous payment from the dominant side to the minority side, creating a financial incentive to take the less crowded position and pushing the book toward balance.
 
-**Skew-split and impact fees.** The [trade fee](../trading/fees.md) charges the book-worsening leg more than the balancing leg, and a price impact fee falls on trades that push the book further out of balance. Both discourage the imbalance that exposes the vault.
+**Skew-split and impact fees.** The [trade fee](../trading/fees.md) charges the book-worsening leg more than the balancing leg, discouraging the imbalance that exposes the vault, and a price impact fee grows with the size of each fill, discouraging the oversized trades that concentrate its risk.
 
 **Borrowing interest.** [Borrowing interest](../trading/borrowing-interest.md) rises with the paying side's own utilization through a kink model, steepening past a target so depositors are rewarded proportionally as more of the vault's capacity is reserved.
 

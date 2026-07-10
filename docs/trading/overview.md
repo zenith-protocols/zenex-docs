@@ -71,7 +71,7 @@ Zenex charges five itemized costs. Four of them settle out of your collateral at
 
 The trade fee is charged on every fill that changes your position's size. It is split by how your trade affects the market's balance: the leg that pushes the long and short sizes further apart pays the dominant-side rate, while the leg that brings them closer pays the lower non-dominant rate. This encourages balanced markets.
 
-The impact fee is charged only on the worsening leg, the part of a trade that pushes the book further out of balance. Balancing trades do not pay it. It scales with the worsening notional and reflects the cost a large order would impose on a traditional order book.
+The impact fee is charged on every fill that moves size, at a rate that grows with the size of the fill and caps at 10%. It reflects the cost a large order would impose on a traditional order book, so bigger fills pay proportionally more.
 
 Borrowing interest accrues continuously and is paid by the larger side of the market (on an exact tie both sides pay, each at its own rate). The rate follows a kink model driven by that side's own use of its share of vault capacity: low while the side's open interest is modest against half the vault, climbing steeply as that share fills.
 

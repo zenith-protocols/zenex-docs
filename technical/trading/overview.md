@@ -91,7 +91,7 @@ Orders and vault orders, by contrast, do carry ids allocated per user, so a trad
 
 ## Operational Status
 
-The market runs through a five-state lifecycle. The full transition matrix and wind-down mechanics are on [Storage & Events](./storage.md#status-lifecycle). Short version:
+The market runs through a five-state lifecycle. The full transition matrix and wind-down mechanics are on [Storage](./storage.md#status-lifecycle). Short version:
 
 ```text
 Active   (0) : normal trading; the only status that accepts opens
@@ -116,7 +116,7 @@ The protocol constants that bound config validation, plus the fixed wind-down wi
 | `MAX_MARGIN` | `SCALAR_18 / 2` | 50% max initial margin (2x min leverage) |
 | `MIN_MARGIN` | `SCALAR_18 / 1000` | 0.1% min initial margin (1000x max leverage) |
 | `MAX_LIQ_FEE` | `SCALAR_18 / 4` | 25% cap on the liquidation fee |
-| `MIN_IMPACT` | `10 * SCALAR_18` | Impact divisor floor |
+| `MAX_IMPACT_RATE` | `SCALAR_18 / 10` | Impact fee rate ceiling (10% of a fill's notional) |
 | `MAX_UTIL` | `10 * SCALAR_18` | Utilization cap ceiling |
 | `MAX_BORROW_RATE` / `MAX_FUNDING_RATE` | `10 * SCALAR_18 / SECONDS_PER_YEAR` | ~1000% APR ceiling per second |
 | `DELIST_GRACE` | `86_400` (1 day) | Window in which a delist is revertible |

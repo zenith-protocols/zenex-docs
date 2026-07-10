@@ -14,7 +14,7 @@ The values themselves depend on the asset's liquidity and volatility, so this pa
 - **Position size bounds**: a minimum and maximum notional size for a position, and a per-side open-interest ceiling that caps how large the long or short book can grow.
 - **Order dust floors**: a minimum order notional and a minimum order collateral, below which an order is rejected so tiny fills cannot spam the book.
 - **Skew-split trade fee**: two base fee rates, one for the side that worsens the market's long/short imbalance and an equal or lower one for the side that improves it. The [trade fee](../trading/fees.md) is charged pro-rata across the size a fill moves.
-- **Impact fee divisor**: sets the [price impact fee](../trading/fees.md), charged only on the portion of a trade that pushes the book further out of balance. A larger divisor means a smaller impact fee.
+- **Impact scalar**: sets the [price impact fee](../trading/fees.md), charged on every fill at a rate that grows with the fill's size and caps at 10%. A larger scalar means a gentler curve and a smaller fee.
 - **Keeper rate**: the keeper's share of the trade fee, paid to whoever fills the order.
 - **Execution fee**: a flat fee escrowed when any order (trade or vault) is created, paid to the keeper that fills it and refunded if the order is cancelled.
 
@@ -59,7 +59,7 @@ The values themselves depend on the asset's liquidity and volatility, so this pa
 
 ### How Parameters Interact
 
-The **initial margin** and **maintenance margin** together define the leverage envelope: the initial margin caps leverage at entry, and the maintenance margin sets how far a position can deteriorate before [liquidation](../trading/liquidation.md). The **skew-split trade fee** and **impact fee** combine into the total cost of a fill, and both reward trades that balance the book over trades that unbalance it. The **borrowing** and **funding** curves work against utilization and skew respectively, compensating the vault for reserved liquidity and nudging the long/short book back toward balance.
+The **initial margin** and **maintenance margin** together define the leverage envelope: the initial margin caps leverage at entry, and the maintenance margin sets how far a position can deteriorate before [liquidation](../trading/liquidation.md). The **skew-split trade fee** and **impact fee** combine into the total cost of a fill: the trade fee rewards trades that balance the book, and the impact fee makes large fills pay a higher rate than small ones. The **borrowing** and **funding** curves work against utilization and skew respectively, compensating the vault for reserved liquidity and nudging the long/short book back toward balance.
 
 ### Current Testnet Values
 
@@ -71,7 +71,7 @@ The testnet deployment currently lists a single **XLM** market, settled in USDC,
 | Maintenance margin | 0.75% of notional |
 | Liquidation fee rate | 0.5% of notional |
 | Trade fee | 0.06% on the imbalance-worsening side, 0.04% on the improving side |
-| Impact fee divisor | 1,000 |
+| Impact scalar | 100,000 USDC (a 1,000 USDC fill pays a 1% impact fee) |
 | Keeper share of fees | 10% |
 | Position size | 20 to 1,000,000 USDC notional |
 | Per-side open interest cap | 10,000,000 USDC |

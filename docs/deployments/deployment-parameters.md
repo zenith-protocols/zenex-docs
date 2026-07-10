@@ -53,7 +53,7 @@ The `Config` struct carries the fee, sizing, risk, and vault-order parameters th
 | `exec_fee` | token-dec | at least 0, no upper bound | Flat keeper execution fee escrowed with every trade and vault order at creation, paid to the keeper on fill and refunded on cancel, including the auto-cancel of resting decrease orders when a position fully closes |
 | `fee_dom` | SCALAR_18 | 0 to `MAX_FEE_RATE` (1%), at least `fee_non_dom` | Trade fee charged to the dominant side |
 | `fee_non_dom` | SCALAR_18 | 0 to `MAX_FEE_RATE` (1%) | Trade fee charged to the non-dominant side |
-| `impact_divisor` | SCALAR_18 | at least `MIN_IMPACT` (a divisor of 10) | Sets the price-impact fee on the worsening leg of a trade. The floor caps the impact fee at 10% of notional |
+| `impact_scalar` | token-dec | greater than 0 | Sets the size-quadratic price-impact fee: a fill pays its size squared divided by the scalar, at a rate capped at 10% of the fill |
 
 ### Utilization Caps
 

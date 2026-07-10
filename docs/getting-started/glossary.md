@@ -28,7 +28,7 @@ A reference of key terms used throughout the Zenex documentation.
 | **Notional lock** | A short window during which newly added size cannot be decreased or closed. A further increase resets the lock |
 | **Liquidation** | Forced closure of a position by a keeper when equity falls below the maintenance margin. A soft liquidation returns leftover equity to the trader, a hard one forfeits it to the vault |
 | **Skew-split fee** | The base trade fee, split so the side that worsens the long/short balance pays more than the side that improves it |
-| **Impact fee** | A fee charged only on the part of a trade that pushes the book further out of balance |
+| **Impact fee** | A fee on every fill whose rate grows with the size of the fill, capped at 10%. Larger trades pay proportionally more |
 | **Execution fee** | A flat fee escrowed with every order (trade or vault) at creation and paid to the keeper that fills it. Refunded if the order is cancelled |
 | **Borrowing interest (kink model)** | Time-based interest paid to the vault by open positions on the market's larger side. The rate follows a kink curve over that side's own utilization and steepens once utilization passes a target level |
 | **Funding rate** | A continuously accruing cost between longs and shorts that anchors the perpetual price. It accelerates toward the dominant side and decays back toward balance |

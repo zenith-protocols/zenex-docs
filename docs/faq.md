@@ -35,7 +35,7 @@ Maximum leverage is a per-market parameter and equals one divided by that market
 
 ### What are the trading fees?
 
-A fill pays a **trade fee** that is split by its effect on market balance: the side that worsens the long/short imbalance pays a higher rate, and the side that improves it pays a lower one. A **price impact fee** applies to the part of a trade that pushes the book further out of balance. Each order also carries a small flat **execution fee** that pays the keeper who fills it. It is escrowed when you create the order and refunded if you cancel. Positions on the market's larger side also accrue **borrowing interest** over time, at a rate that rises with that side's use of the vault's capacity, and longs and shorts exchange a **funding rate** based on market imbalance. Fee rates are per-market parameters. For a detailed breakdown, see [Fees](./trading/fees.md).
+A fill pays a **trade fee** that is split by its effect on market balance: the side that worsens the long/short imbalance pays a higher rate, and the side that improves it pays a lower one. A **price impact fee** applies to every fill, at a rate that grows with the size of the fill, so larger trades pay proportionally more. Each order also carries a small flat **execution fee** that pays the keeper who fills it. It is escrowed when you create the order and refunded if you cancel. Positions on the market's larger side also accrue **borrowing interest** over time, at a rate that rises with that side's use of the vault's capacity, and longs and shorts exchange a **funding rate** based on market imbalance. Fee rates are per-market parameters. For a detailed breakdown, see [Fees](./trading/fees.md).
 
 ### How do I receive funding I have earned?
 

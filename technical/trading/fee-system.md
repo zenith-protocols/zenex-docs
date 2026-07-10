@@ -19,10 +19,10 @@ The base fee is split by the fill's effect on market **skew**, the imbalance bet
 ## Impact Fee
 
 $$
-\text{impact} = \left\lceil \frac{\text{worsening\_notional} \times \text{SCALAR\_18}}{\text{impact\_divisor}} \right\rceil
+\text{impact} = \min\left(\left\lceil \frac{\text{notional}^2}{\text{impact\_scalar}} \right\rceil,\ \left\lceil \text{notional} \times \text{MAX\_IMPACT\_RATE} \right\rceil\right)
 $$
 
-The impact fee is charged on the **worsening leg only**. A trade that pushes the book further out of balance pays it, while a balancing trade does not. `impact_divisor` is a `SCALAR_18` fixed-point config value floored at `MIN_IMPACT` (`10 * SCALAR_18`), and the division rounds up, toward a higher fee.
+The impact fee is **size-quadratic on the fill's full notional**, charged on every fill regardless of skew direction. The effective fee rate is `notional / impact_scalar`, growing linearly with the fill size until it meets the `MAX_IMPACT_RATE` ceiling (`SCALAR_18 / 10`, 10%), which the quadratic term reaches at `notional = impact_scalar / 10`. `impact_scalar` is a token-dec config value validated strictly positive, and all rounding moves up, toward a higher fee.
 
 The base fee and the impact fee together form the trade fee that the keeper and treasury cuts apply to.
 
