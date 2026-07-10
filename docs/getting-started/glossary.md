@@ -42,7 +42,7 @@ A reference of key terms used throughout the Zenex documentation.
 | **Utilization** | Each side's reserved liquidity measured against its half of the vault's capacity. Drives borrowing interest and caps opens and withdrawals |
 | **Terminal price** | A flat settlement price set on a delisted market once its grace window passes. The market then prices every position at it |
 | **Factory** | The contract that deploys a new trading and vault pair together for a chosen oracle feed |
-| **Smart Account** | A passkey- or social-login-controlled on-chain account created without a seed phrase or browser extension. Enables Quick Trading via session keys |
+| **Smart Account** | A passkey-controlled on-chain account created without a seed phrase or browser extension. Enables Quick Trading via session keys |
 | **Quick Trading** | A UI feature (also called session keys) that authorizes a temporary signing key on a smart account so orders can be created without a per-transaction wallet prompt |
 | **Passkey** | A WebAuthn credential stored in the user's device or password manager that signs transactions for a smart account in place of a seed phrase |
 | **Browser Wallet** | A Stellar wallet provided by a browser extension or hardware device (Freighter, xBull, Lobstr, Albedo, Hana, Ledger, Hot Wallet) that signs transactions directly |

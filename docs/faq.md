@@ -25,8 +25,7 @@ Yes. Keepers are permissionless: anyone can fill orders, run liquidations, and k
 
 Zenex supports several sign-in methods:
 
-- **Social login** (Google, X, or Discord) via Privy, which creates a smart account in one click, no extension or seed phrase required. This is the first option in the Connect dialog.
-- **Passkey-based smart wallets**: sign in with biometrics (Face ID, fingerprint, or a security key) directly from the browser, no extension needed.
+- **Passkey-based smart wallets**: sign in with biometrics (Face ID, fingerprint, or a security key) directly from the browser, no extension or seed phrase needed.
 - **Browser wallets**: **xBull**, **Freighter**, **Lobstr**, **Albedo**, **Hana**, **Ledger**, and **Hot Wallet**.
 - **Ed25519 key import** (advanced): bring your own keypair.
 
