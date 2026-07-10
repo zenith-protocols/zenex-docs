@@ -1,11 +1,11 @@
 ---
 sidebar_position: 12
-title: Storage & Events
+title: Storage & Config
 ---
 
-# Storage & Events
+# Storage & Config
 
-This page is the on-chain reference for the trading contract: its storage keys and TTL tiers, its 15 events with exact topic layouts, the status lifecycle, the `Config` fields, and the error table.
+This page is the state reference for the trading contract: its storage keys and TTL tiers, the stored types, the status lifecycle, the `Config` fields, and the error table. The events it emits are on [Events](./events.md).
 
 ## Storage
 
@@ -33,42 +33,106 @@ Three TTL tiers cover the contract's keys, at roughly 5 seconds per ledger. The 
 
 Archival loses no state. An archived position still counts in the market totals and must be restored before it can be closed or liquidated. An archived order is restored keeper-paid at fill, and an order's `expiration` (a ledger sequence) is a pure validity gate decoupled from the storage TTL. Every order removal runs through contract code, so escrow always resolves.
 
-## Events
+## Stored Types
 
-All events use Soroban's `#[contractevent]` derive. The event-name symbol is the first topic, then the `#[topic]` fields in declared order, then all remaining fields form the data map. Amounts carry units: token decimals (token-dec), base decimals (base-dec), `price_scalar`, or `SCALAR_18`.
+The structs behind the storage rows above, as read back by `get_order`, `get_vault_order`, `get_position`, `get_market_data`, and `get_adl_state`, and carried verbatim in the [events](./events.md) that reference them. Field comments state the units: token decimals (token-dec), base decimals (base-dec), `price_scalar`, or `SCALAR_18`.
 
-| Event | Topics (after the name symbol) | Data fields |
-|---|---|---|
-| `create_order` | `user`, `id` | `order` (the stored `Order` row) |
-| `cancel_order` | `user`, `id` | (none) |
-| `create_vault_order` | `user`, `id` | `order` (the stored `VaultOrder` row) |
-| `cancel_vault_order` | `user`, `id` | (none) |
-| `deposit_fill` | `user`, `id` | `assets` (gross assets deposited from escrow), `shares` (minted to the user), `fee` (vault fee charged, all cuts) |
-| `redeem_fill` | `user`, `id` | `shares` (burned from escrow), `assets` (paid to the user net of the vault fee), `fee` (vault fee charged, all cuts) |
-| `claim_funding` | `user` | `amount` |
-| `adl_update` | (none) | `long`, `short` (per-side ADL enabled flags) |
-| `status_update` | (none) | `status` (u32 discriminant) |
-| `config_update` | (none) | `config` |
-| `terminal_price_update` | (none) | `price` |
-| `increase_fill` | `user`, `id`, `is_long` | `notional`, `tokens`, `collateral`, `base_fee`, `impact_fee`, `funding`, `borrowing` |
-| `decrease_fill` | `user`, `id`, `is_long` | `notional`, `tokens`, `collateral`, `pnl`, `base_fee`, `impact_fee`, `funding`, `borrowing`, `bad_debt`, `returned` |
-| `liquidation` | `user`, `is_long` | `notional`, `tokens`, `collateral`, `pnl`, `base_fee`, `impact_fee`, `funding`, `borrowing`, `bad_debt`, `liq_fee`, `returned`, `forfeit` |
-| `position_update` | `user`, `is_long` | `position` (the stored `Position` row, zeroed = closed) |
+### Order
 
-The factory emits one further event, `Deploy { trading, vault }`, when it deploys a pair. See [Factory](../factory/overview).
+```rust
+pub struct Order {
+    pub is_long: bool,       // side this order targets
+    pub kind: u32,           // OrderKind discriminant, see below
+    pub notional: i128,      // size change magnitude (>= 0), token-dec
+    pub collateral: i128,    // margin change magnitude (>= 0), token-dec
+    pub trigger_price: i128, // crossing level for a trigger kind (price_scalar); unread for a market kind
+    pub price_bound: i128,   // fill slippage limit (price_scalar); 0 = unbounded
+    pub exec_fee: i128,      // keeper execution fee escrowed at creation, token-dec
+    pub created_at: u64,     // submission timestamp; per-fill anti-replay anchor
+    pub expiration: u32,     // ledger sequence; eligible while ledger sequence <= expiration
+}
+```
 
-### Reading the fill receipts
+`kind` crosses the ABI as the `u32` discriminant of `OrderKind`:
 
-`increase_fill`, `decrease_fill`, and `liquidation` carry the fill's itemized receipt. The resulting position state is carried by the paired `position_update`. A few conventions:
+```rust
+pub enum OrderKind {
+    MarketIncrease = 0, // grow now; trigger_price unused
+    LimitIncrease = 1,  // grow when the price crosses trigger_price favorably
+    StopIncrease = 2,   // grow when the price crosses trigger_price adversely
+    MarketDecrease = 3, // shrink now; trigger_price unused
+    LimitDecrease = 4,  // take profit: shrink on a favorable crossing
+    StopDecrease = 5,   // stop loss: shrink on an adverse crossing
+}
+```
 
-- **Fill price is implied.** On `increase_fill`, `notional * SCALAR_18 / tokens` is the fill price (in `price_scalar` units). On `decrease_fill` and `liquidation`, `notional` and `tokens` are the closed fraction at entry pricing, so that ratio is the entry price of the closed chunk. The close price derives through `pnl`: `tokens * P_close = notional + pnl` for a long, `notional - pnl` for a short. No event carries a price field.
-- **`funding` sign**: positive means funding was paid from collateral, negative means it was credited to the trader's claimable balance.
-- **`collateral` and `pnl` are gross** of the itemized fees. On a `decrease_fill`, `returned` is the actual payout (the gross legs less the fees they cover, floored at zero). A partial close pays only the profit leg while a realized loss debits the surviving margin. `bad_debt` is `0` on partial closes.
-- **`liquidation` tier**: `liq_fee = 0` is the soft tier (post-fee remainder on `returned`, to the trader), while `liq_fee > 0` is the hard tier (remainder on `forfeit`, to the vault).
-- **ADL** emits a `decrease_fill` with `id = 0`.
-- **`cancel_order` covers auto-cancels too.** When a position fully closes (decrease fill, liquidation, ADL, or delist wind-down), every pending decrease order resting on that side is auto-cancelled with one `cancel_order` event per id, and its escrow is folded into the trader's payout.
+### VaultOrder
 
-The Ownable module additionally emits its standard ownership-transfer events.
+```rust
+pub struct VaultOrder {
+    pub kind: u32,       // 0 = Deposit, 1 = Redeem
+    pub amount: i128,    // escrowed assets (deposit, token-dec) or shares (redeem, share decimals)
+    pub min_out: i128,   // minimum received at fill, net of the vault fee: shares (deposit) or assets (redeem); 0 = unset
+    pub exec_fee: i128,  // keeper execution fee escrowed at creation in the settlement token, token-dec
+    pub created_at: u64, // creation timestamp; fills need a strictly later publish_time, redeems also the redeem_lock cooldown
+}
+```
+
+Share decimals are the underlying token's decimals plus the vault's decimals offset.
+
+### Position
+
+```rust
+pub struct Position {
+    pub collateral: i128,      // posted margin, token-dec
+    pub notional: i128,        // size in quote, token-dec; 0 = no open position
+    pub tokens: i128,          // size in base, base-dec; entry price implied = notional/tokens
+    pub funding_idx: i128,     // funding index snapshot at last change (SCALAR_18)
+    pub borrowing_idx: i128,   // borrowing index snapshot at last change (SCALAR_18)
+    pub locked_notional: i128, // notional under the decrease lock, token-dec
+    pub unlocks_at: u64,       // lock deadline ts; locked_notional counts while now < unlocks_at
+    pub priced_at: u64,        // publish_time of the last fill's price; force-close anti-replay floor
+    pub decrease_orders: Vec<u32>, // pending decrease order ids on this side (max 16)
+}
+```
+
+The zeroed row is the canonical closed state, whether the storage entry exists or not. `decrease_orders` is pruned when an order fills or cancels, and cleared with escrow refunds when the position closes.
+
+### MarketData
+
+```rust
+pub struct MarketData {
+    pub notional: SidePair,      // open interest per side, token-dec
+    pub collateral: SidePair,    // posted collateral per side, token-dec
+    pub tokens: SidePair,        // base size per side = sum(notional/entry), base-dec
+    pub funding_idx: SidePair,   // cumulative funding index per side (SCALAR_18)
+    pub borrowing_idx: SidePair, // cumulative borrowing index per side (SCALAR_18)
+    pub funding_rate: i128,      // signed funding rate, + = longs pay (SCALAR_18, per second)
+    pub funding_update: u64,     // last funding accrual timestamp
+    pub borrowing_update: u64,   // last borrowing accrual timestamp (independent of funding)
+    pub funding_pool: i128,      // internal funding pool, token-dec
+    pub funding_owed: i128,      // total funding owed to traders, token-dec
+    pub last_price_time: u64,    // publish_time of the most recent consumed price (monotonic)
+}
+
+pub struct SidePair {
+    pub long: i128,
+    pub short: i128,
+}
+```
+
+The funding pool's surplus is `funding_pool - funding_owed`.
+
+### AdlState
+
+```rust
+pub struct AdlState {
+    pub long: bool,  // long-side ADL enabled: long increases blocked
+    pub short: bool, // short-side ADL enabled: short increases blocked
+}
+```
+
+`Config` is documented field by field in the [Config table](#config-fields) below, and `ClaimableFunding` is a bare `i128` (token-dec).
 
 ## Status Lifecycle {#status-lifecycle}
 

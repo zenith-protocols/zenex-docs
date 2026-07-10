@@ -91,7 +91,7 @@ Orders and vault orders, by contrast, do carry ids allocated per user, so a trad
 
 ## Operational Status
 
-The market runs through a five-state lifecycle. The full transition matrix and wind-down mechanics are on [Storage & Events](./storage-and-events.md#status-lifecycle). Short version:
+The market runs through a five-state lifecycle. The full transition matrix and wind-down mechanics are on [Storage & Events](./storage.md#status-lifecycle). Short version:
 
 ```text
 Active   (0) : normal trading; the only status that accepts opens
@@ -129,4 +129,4 @@ The protocol constants that bound config validation, plus the fixed wind-down wi
 
 The treasury rate is bounded separately: trading reads it live through `get_rate`, and the treasury contract itself holds the rate to at most 50%.
 
-Every concrete fee rate, margin, lock, cap, and threshold is a `Config` field set per market through the owner-gated `set_config`, not a protocol constant. The [Config field table](./storage-and-events.md#config-fields) lists them all.
+Every concrete fee rate, margin, lock, cap, and threshold is a `Config` field set per market through the owner-gated `set_config`, not a protocol constant. The [Config field table](./storage.md#config-fields) lists them all.
