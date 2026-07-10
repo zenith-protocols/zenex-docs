@@ -15,7 +15,24 @@
   --ease-dart: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-drift: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
-  /* === Brand Colors - Primary (Radix Jade) === */
+  /* === Zenex tokens (mirror zenex-trade/src/index.css) ===
+     The jade accent is split like the app: --zx-primary is a FILL color
+     (button backgrounds), --zx-primary-text is the brighter jade used
+     for text on dark surfaces. Never use the fill jade as text color. */
+  --zx-primary: #29a383;
+  --zx-primary-hover: #27b08b;
+  --zx-primary-text: #1fd8a4;
+  --zx-text-primary: #edeef0;
+  --zx-text-secondary: #b0b4ba;
+  --zx-text-tertiary: #696e77;
+  --zx-bg: #111113;
+  --zx-surface: #18191b;
+  --zx-elevated: #212225;
+  --zx-elevated-hover: #272a2d;
+  --zx-border: #363a3f;
+  --zx-border-hover: #43484e;
+
+  /* === Brand Colors - Primary (Radix Jade, fill scale) === */
   --ifm-color-primary: #29a383;
   --ifm-color-primary-dark: #228f73;
   --ifm-color-primary-darker: #1d7d65;
@@ -24,9 +41,13 @@
   --ifm-color-primary-lighter: #2bc294;
   --ifm-color-primary-lightest: #1fd8a4;
 
+  /* === Links (accent text jade, not the fill jade) === */
+  --ifm-link-color: var(--zx-primary-text);
+  --ifm-link-hover-color: var(--zx-primary-text);
+
   /* === Background Colors === */
-  --ifm-background-color: #111113;
-  --ifm-font-color-base: #edeef0;
+  --ifm-background-color: var(--zx-bg);
+  --ifm-font-color-base: var(--zx-text-primary);
 
   /* === Accent Colors === */
   --ifm-color-success: #10b981;
@@ -70,10 +91,14 @@
   --ifm-color-primary-lighter: #2bc294;
   --ifm-color-primary-lightest: #1fd8a4;
 
+  /* Links */
+  --ifm-link-color: var(--zx-primary-text);
+  --ifm-link-hover-color: var(--zx-primary-text);
+
   /* Background Colors */
-  --ifm-background-color: #111113;
-  --ifm-background-surface-color: #18191b;
-  --ifm-font-color-base: #edeef0;
+  --ifm-background-color: var(--zx-bg);
+  --ifm-background-surface-color: var(--zx-surface);
+  --ifm-font-color-base: var(--zx-text-primary);
 
   /* Secondary Colors */
   --ifm-color-secondary: #212225;
@@ -86,11 +111,19 @@
   --ifm-color-warning: #f59e0b;
   --ifm-color-danger: #F23645;
 
-  /* Emphasis Colors */
-  --ifm-color-emphasis-300: #b0b4ba;
-  --ifm-color-emphasis-600: #b0b4ba;
-  --ifm-color-emphasis-700: #edeef0;
-  --ifm-color-emphasis-800: #edeef0;
+  /* Emphasis scale (Radix Slate dark): low steps are surfaces and
+     borders, high steps are text. Mirrors the app's three text tiers. */
+  --ifm-color-emphasis-100: var(--zx-elevated);
+  --ifm-color-emphasis-200: var(--zx-elevated-hover);
+  --ifm-color-emphasis-300: var(--zx-border);
+  --ifm-color-emphasis-400: var(--zx-border-hover);
+  --ifm-color-emphasis-500: var(--zx-text-tertiary);
+  --ifm-color-emphasis-600: #9ba1a8;
+  --ifm-color-emphasis-700: var(--zx-text-secondary);
+  --ifm-color-emphasis-800: #d3d6da;
+  --ifm-color-emphasis-900: var(--zx-text-primary);
+  --ifm-color-content: var(--zx-text-primary);
+  --ifm-color-content-secondary: var(--zx-text-secondary);
 
   /* Navbar */
   --ifm-navbar-background-color: #18191b;
@@ -98,12 +131,16 @@
   --ifm-navbar-link-color: #edeef0;
   --ifm-navbar-link-hover-color: #1fd8a4;
 
-  /* Sidebar */
+  /* Sidebar: resting items are secondary, the active item carries the
+     accent, hover lifts to primary text. */
   --ifm-sidebar-background: #18191b;
-  --ifm-menu-color: #edeef0;
+  --ifm-menu-color: var(--zx-text-secondary);
   --ifm-menu-color-active: #1fd8a4;
   --ifm-menu-color-background-active: rgba(41, 163, 131, 0.1);
   --ifm-menu-color-background-hover: #212225;
+
+  /* Table of contents */
+  --ifm-toc-link-color: var(--zx-text-secondary);
 
   /* Cards & Containers */
   --ifm-card-background-color: #18191b;
@@ -122,8 +159,8 @@
 
   /* Footer */
   --ifm-footer-background-color: #18191b;
-  --ifm-footer-color: #edeef0;
-  --ifm-footer-link-color: #edeef0;
+  --ifm-footer-color: var(--zx-text-secondary);
+  --ifm-footer-link-color: var(--zx-text-secondary);
   --ifm-footer-link-hover-color: #1fd8a4;
 }
 
@@ -142,64 +179,6 @@
 /* HTML & Body */
 html {
   color-scheme: dark;
-}
-
-/* Force dark mode always */
-html[data-theme='light'] {
-  --ifm-color-primary: #29a383;
-  --ifm-color-primary-dark: #228f73;
-  --ifm-color-primary-darker: #1d7d65;
-  --ifm-color-primary-darkest: #186856;
-  --ifm-color-primary-light: #27b08b;
-  --ifm-color-primary-lighter: #2bc294;
-  --ifm-color-primary-lightest: #1fd8a4;
-
-  /* Force dark mode colors even in light mode */
-  --ifm-background-color: #111113;
-  --ifm-background-surface-color: #18191b;
-  --ifm-font-color-base: #edeef0;
-
-  --ifm-color-secondary: #212225;
-  --ifm-color-secondary-dark: #272a2d;
-  --ifm-color-secondary-darker: #363a3f;
-
-  --ifm-color-success: #10b981;
-  --ifm-color-info: #00a2c7;
-  --ifm-color-warning: #f59e0b;
-  --ifm-color-danger: #F23645;
-
-  --ifm-color-emphasis-300: #b0b4ba;
-  --ifm-color-emphasis-600: #b0b4ba;
-  --ifm-color-emphasis-700: #edeef0;
-  --ifm-color-emphasis-800: #edeef0;
-
-  --ifm-navbar-background-color: #18191b;
-  --ifm-navbar-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --ifm-navbar-link-color: #edeef0;
-  --ifm-navbar-link-hover-color: #1fd8a4;
-
-  --ifm-sidebar-background: #18191b;
-  --ifm-menu-color: #edeef0;
-  --ifm-menu-color-active: #1fd8a4;
-  --ifm-menu-color-background-active: rgba(41, 163, 131, 0.1);
-  --ifm-menu-color-background-hover: #212225;
-
-  --ifm-card-background-color: #18191b;
-  --ifm-toc-border-color: #363a3f;
-  --ifm-table-border-color: #363a3f;
-  --ifm-hr-border-color: #363a3f;
-
-  --ifm-code-background: #212225;
-  --docusaurus-highlighted-code-line-bg: rgba(41, 163, 131, 0.2);
-
-  --ifm-scrollbar-track-background-color: transparent;
-  --ifm-scrollbar-thumb-background-color: #363a3f;
-  --ifm-scrollbar-thumb-hover-background-color: #43484e;
-
-  --ifm-footer-background-color: #18191b;
-  --ifm-footer-color: #edeef0;
-  --ifm-footer-link-color: #edeef0;
-  --ifm-footer-link-hover-color: #1fd8a4;
 }
 
 body {
@@ -289,16 +268,6 @@ h1, h2, h3, h4, h5, h6,
   padding: 0 !important;
 }
 
-/* Navbar Title - Dark/Light Mode */
-[data-theme='dark'] .navbar__title,
-[data-theme='light'] .navbar__title {
-  color: #edeef0 !important;
-  -webkit-text-fill-color: #edeef0 !important;
-  background: none !important;
-  -webkit-background-clip: unset !important;
-  background-clip: unset !important;
-}
-
 /* Navbar Links */
 .navbar__link {
   transition:
@@ -308,11 +277,11 @@ h1, h2, h3, h4, h5, h6,
 }
 
 .navbar__link:hover {
-  color: var(--ifm-color-primary);
+  color: var(--zx-primary-text);
 }
 
 .navbar__link--active {
-  color: var(--ifm-color-primary);
+  color: var(--zx-primary-text);
   font-weight: 600;
 }
 
@@ -396,6 +365,12 @@ div[class*="sidebar"] {
 .menu {
   position: relative;
   z-index: 1;
+}
+
+/* Hovering a resting item lifts it from secondary to primary text */
+.menu__link:hover,
+.menu__list-item-collapsible:hover > .menu__link {
+  color: var(--zx-text-primary);
 }
 
 /* ============================================================================
@@ -485,10 +460,24 @@ code {
   border-radius: var(--ifm-code-border-radius);
 }
 
-/* Dark Mode Inline Code */
+/* Inline code stays neutral: the elevated background and mono font
+   already set it apart. Jade is reserved for links and active state,
+   so accent color keeps its meaning on identifier-dense pages. */
 [data-theme='dark'] code:not(.prism-code) {
-  background-color: #212225;
-  color: #1fd8a4;
+  background-color: var(--zx-elevated);
+  color: var(--zx-text-primary);
+  border: 1px solid var(--zx-border);
+}
+
+/* Inline code inside a link reads as a link */
+a code {
+  color: var(--ifm-link-color);
+}
+
+/* Fenced code blocks sit on the surface tone, matching the app panels */
+.prism-code,
+div[class*="codeBlockContainer"] pre {
+  background-color: var(--zx-surface) !important;
 }
 
 /* ============================================================================
@@ -546,8 +535,8 @@ table tbody tr {
 
 .table-of-contents__link:hover,
 .table-of-contents__link--active {
-  color: var(--ifm-color-primary);
-  border-left-color: var(--ifm-color-primary);
+  color: var(--zx-primary-text);
+  border-left-color: var(--zx-primary-text);
 }
 
 .table-of-contents__link--active {
@@ -564,7 +553,12 @@ table tbody tr {
 }
 
 .breadcrumbs__link:hover {
-  color: var(--ifm-color-primary);
+  color: var(--zx-primary-text);
+}
+
+.breadcrumbs__item--active .breadcrumbs__link {
+  color: var(--zx-primary-text);
+  background: rgba(41, 163, 131, 0.1);
 }
 
 /* Tabs */
@@ -582,13 +576,13 @@ table tbody tr {
 .tabs__item--active {
   background-color: var(--ifm-menu-color-background-active);
   color: var(--ifm-menu-color-active);
-  border-bottom-color: var(--ifm-color-primary);
+  border-bottom-color: var(--zx-primary-text);
 }
 
-/* Announcement Bar */
+/* Announcement Bar: dark text on the jade fill, white fails contrast */
 .announcement {
   background-color: var(--ifm-color-primary);
-  color: white;
+  color: #111113;
   font-weight: 500;
 }
 
@@ -647,7 +641,8 @@ blockquote {
   }
 }
 
-/* Background Logo */
+/* Background Logo. Kept faint enough that text passing over it keeps
+   its contrast: at 0.05 the watermark reads as texture, not content. */
 .main-wrapper::before {
   content: '';
   position: fixed;
@@ -656,7 +651,7 @@ blockquote {
   transform: translateY(-50%);
   width: 60rem;
   height: 60rem;
-  opacity: 0.2;
+  opacity: 0.05;
   pointer-events: none;
   z-index: -1;
   background-image: url('/static/img/Zenex\ Brand\ LogoAssets\ \(2\).svg');
@@ -666,13 +661,10 @@ blockquote {
   animation: spin 120s linear infinite;
 }
 
-/* Logo Opacity by Theme */
-[data-theme='dark'] .main-wrapper::before {
-  opacity: 0.15;
-}
-
-[data-theme='light'] .main-wrapper::before {
-  opacity: 0.25;
+@media (prefers-reduced-motion: reduce) {
+  .main-wrapper::before {
+    animation: none;
+  }
 }
 
 /* Footer Z-Index */
@@ -682,61 +674,28 @@ blockquote {
 }
 
 /* ============================================================================
-   12A. FOOTER STYLING - ALWAYS DARK MODE
+   12A. FOOTER STYLING
    ============================================================================ */
 
-/* Force footer to always use dark mode styling */
 .footer {
-  background-color: #18191b !important;
+  background-color: var(--zx-surface);
 }
 
-/* Force footer text to always be light colored */
-.footer,
-.footer__title,
+/* Titles in primary text, links and copy in secondary */
+.footer__title {
+  color: var(--zx-text-primary);
+}
+
 .footer__item,
 .footer__link-item,
 .footer a,
 .footer__copyright {
-  color: #edeef0 !important;
+  color: var(--zx-text-secondary);
 }
 
-/* Footer link hover state */
 .footer a:hover {
-  color: #1fd8a4 !important;
+  color: var(--zx-primary-text);
   text-decoration: underline;
-}
-
-/* Ensure footer sections maintain light text */
-.footer__col,
-.footer__links {
-  color: #edeef0 !important;
-}
-
-/* Override any theme-specific footer colors */
-[data-theme='light'] .footer {
-  background-color: #18191b !important;
-}
-
-[data-theme='light'] .footer,
-[data-theme='light'] .footer__title,
-[data-theme='light'] .footer__item,
-[data-theme='light'] .footer__link-item,
-[data-theme='light'] .footer a,
-[data-theme='light'] .footer__copyright {
-  color: #edeef0 !important;
-}
-
-[data-theme='dark'] .footer {
-  background-color: #18191b !important;
-}
-
-[data-theme='dark'] .footer,
-[data-theme='dark'] .footer__title,
-[data-theme='dark'] .footer__item,
-[data-theme='dark'] .footer__link-item,
-[data-theme='dark'] .footer a,
-[data-theme='dark'] .footer__copyright {
-  color: #edeef0 !important;
 }
 
 /* ============================================================================
