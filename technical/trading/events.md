@@ -1,5 +1,5 @@
 ---
-sidebar_position: 13
+sidebar_position: 14
 title: Events
 ---
 
@@ -15,6 +15,7 @@ Emitted by `create_order` and `cancel_order`.
 
 ```rust
 /// Order created via `create_order`.
+#[contractevent]
 pub struct CreateOrder {
     #[topic] pub user: Address,
     #[topic] pub id: u32,
@@ -22,6 +23,7 @@ pub struct CreateOrder {
 }
 
 /// Pending order removed via `cancel_order`.
+#[contractevent]
 pub struct CancelOrder {
     #[topic] pub user: Address,
     #[topic] pub id: u32,
@@ -36,6 +38,7 @@ Emitted by `execute_order`, `execute_adl`, and `execute_liquidation`. Every fill
 
 ```rust
 /// A keeper fill of an increase order (the user's itemized receipt).
+#[contractevent]
 pub struct IncreaseFill {
     #[topic] pub user: Address,
     #[topic] pub id: u32,
@@ -50,6 +53,7 @@ pub struct IncreaseFill {
 }
 
 /// A keeper fill of a decrease order (the user's itemized receipt).
+#[contractevent]
 pub struct DecreaseFill {
     #[topic] pub user: Address,
     #[topic] pub id: u32, // filled order id; 0 = forced ADL close via `execute_adl`
@@ -67,6 +71,7 @@ pub struct DecreaseFill {
 }
 
 /// A keeper liquidation receipt (the full size is force-closed).
+#[contractevent]
 pub struct Liquidation {
     #[topic] pub user: Address,
     #[topic] pub is_long: bool,
@@ -85,6 +90,7 @@ pub struct Liquidation {
 }
 
 /// The resulting netted position after any change (fill or liquidation).
+#[contractevent]
 pub struct PositionUpdate {
     #[topic] pub user: Address,
     #[topic] pub is_long: bool,
@@ -105,6 +111,7 @@ Emitted by `create_vault_order`, `cancel_vault_order`, and `execute_vault_order`
 
 ```rust
 /// Vault deposit or redeem order created via `create_vault_order`.
+#[contractevent]
 pub struct CreateVaultOrder {
     #[topic] pub user: Address,
     #[topic] pub id: u32,
@@ -112,12 +119,14 @@ pub struct CreateVaultOrder {
 }
 
 /// Pending vault order removed via `cancel_vault_order`.
+#[contractevent]
 pub struct CancelVaultOrder {
     #[topic] pub user: Address,
     #[topic] pub id: u32,
 }
 
 /// A keeper fill of a deposit order via `execute_vault_order` (the user's receipt).
+#[contractevent]
 pub struct DepositFill {
     #[topic] pub user: Address,
     #[topic] pub id: u32,
@@ -128,6 +137,7 @@ pub struct DepositFill {
 }
 
 /// A keeper fill of a redeem order via `execute_vault_order` (the user's receipt).
+#[contractevent]
 pub struct RedeemFill {
     #[topic] pub user: Address,
     #[topic] pub id: u32, // vault order id; 0 = retired-market instant redeem executed at creation
@@ -142,6 +152,7 @@ pub struct RedeemFill {
 
 ```rust
 /// Claimable funding balance paid out via `claim_funding`.
+#[contractevent]
 pub struct ClaimFunding {
     #[topic] pub user: Address,
     pub amount: i128, // paid claimable balance, token-dec
@@ -152,6 +163,7 @@ pub struct ClaimFunding {
 
 ```rust
 /// ADL flags recomputed via `update_adl_state`.
+#[contractevent]
 pub struct AdlUpdate {
     pub long: bool,  // long-side ADL enabled (long increases blocked)
     pub short: bool, // short-side ADL enabled (short increases blocked)
@@ -160,6 +172,7 @@ pub struct AdlUpdate {
 /// The market's post-accrual funding and borrowing state, emitted by the
 /// first call in a ledger that advances either accrual clock (a
 /// same-timestamp re-accrual emits nothing).
+#[contractevent]
 pub struct AccrualUpdate {
     pub funding_rate: i128,      // signed funding rate after the accrual, + = longs pay (SCALAR_18, per second)
     pub funding_idx: SidePair,   // cumulative funding index per side (SCALAR_18)
@@ -168,16 +181,19 @@ pub struct AccrualUpdate {
 }
 
 /// Operational status changed via `set_status`.
+#[contractevent]
 pub struct StatusUpdate {
     pub status: u32, // the new operational status (Status discriminant)
 }
 
 /// Global configuration replaced via `set_config`.
+#[contractevent]
 pub struct ConfigUpdate {
     pub config: Config, // the new global trading configuration
 }
 
 /// Flat settlement price set or refreshed via `set_terminal_price`.
+#[contractevent]
 pub struct TerminalPriceUpdate {
     pub price: i128, // flat settlement price (price_scalar units)
 }

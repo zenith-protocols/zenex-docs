@@ -129,4 +129,4 @@ The protocol constants that bound config validation, plus the fixed wind-down wi
 
 The treasury rate is bounded separately: trading reads it live through `get_rate`, and the treasury contract itself holds the rate to at most 50%.
 
-Every concrete fee rate, margin, lock, cap, and threshold is a `Config` field set per market through the owner-gated `set_config`, not a protocol constant. The [Config field table](./storage.md#config-fields) lists them all.
+Every concrete fee rate, margin, lock, cap, and threshold is a `Config` field set per market through the owner-gated `set_config`, not a protocol constant. The [Config page](./config.md) lists them all, with the validation rules they must satisfy.

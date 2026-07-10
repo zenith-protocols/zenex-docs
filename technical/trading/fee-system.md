@@ -46,7 +46,7 @@ Settlement is gross-basis. From the four itemized costs:
 - The **treasury** takes its rate (read live from the treasury contract via `get_rate`) of the trade fee, the borrowing fee, and any forfeit.
 - The **vault** banks all remainders, funds realized PnL through `strategy_withdraw`, and absorbs `bad_debt`.
 
-Vault-order fills carry their own fee leg. A fill charges the config's `vault_fee` rate (capped at `MAX_FEE_RATE`, 1%) on the deposited assets or redeemed proceeds, with floor rounding in the depositor's or redeemer's favor. From it the keeper receives `floor(vault_fee * keeper_rate)` plus the order's escrowed `exec_fee`, the treasury takes `floor(vault_fee * treasury_rate)`, and the remainder stays in the vault.
+Vault-order fills carry their own fee leg. A deposit fill charges the config's `deposit_fee` rate on the deposited assets, a redeem fill the `redeem_fee` rate on the redeemed proceeds (each capped at `MAX_FEE_RATE`, 1%), with floor rounding in the depositor's or redeemer's favor. From that vault fee the keeper receives `floor(fee * keeper_rate)` plus the order's escrowed `exec_fee`, the treasury takes `floor(fee * treasury_rate)`, and the remainder stays in the vault.
 
 Collateral is escrowed into the trading contract when the order is created, and fees are deducted from it at fill. A fill whose fees erode the collateral below the margin floors rejects with `InsufficientMargin`. A failed direct payout to a trader falls back to a pull allowance (`pay_trader`), so a third-party keeper fill never stalls on the receiver.
 

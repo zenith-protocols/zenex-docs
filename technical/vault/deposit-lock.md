@@ -18,7 +18,7 @@ LP entry and exit run through the trading contract as **vault orders**, and the 
 
 `cancel_vault_order` refunds the escrowed principal and the escrowed `exec_fee` (the return value is the principal only). A `Frozen` market halts cancels with `MarketFrozen` (704), and the escrow stays in the trading contract until the freeze lifts.
 
-`execute_vault_order(keeper, user, id, price)` fills the whole order at once and removes it. The verified price's `publish_time` must be strictly greater than the order's `created_at`, and at least the market's `last_price_time` (the publish time of the most recent consumed price). Either failing traps `StalePrice` (740). The flow is commit then execute: an atomic create-and-fill can never price a vault order. Every fill deducts the `vault_fee` cut of the moved assets, split keeper / treasury / vault, and the keeper receives the escrowed `exec_fee` on top of its `vault_fee` cut.
+`execute_vault_order(keeper, user, id, price)` fills the whole order at once and removes it. The verified price's `publish_time` must be strictly greater than the order's `created_at`, and at least the market's `last_price_time` (the publish time of the most recent consumed price). Either failing traps `StalePrice` (740). The flow is commit then execute: an atomic create-and-fill can never price a vault order. Every fill deducts the vault fee cut of the moved assets (`deposit_fee` on a deposit, `redeem_fee` on a redeem), split keeper / treasury / vault, and the keeper receives the escrowed `exec_fee` on top of its fee cut.
 
 ## Deposit Fill Gates
 

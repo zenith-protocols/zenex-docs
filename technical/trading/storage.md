@@ -1,11 +1,11 @@
 ---
 sidebar_position: 12
-title: Storage & Config
+title: Storage
 ---
 
-# Storage & Config
+# Storage
 
-This page is the state reference for the trading contract: its storage keys and TTL tiers, the stored types, the status lifecycle, the `Config` fields, and the error table. The events it emits are on [Events](./events.md).
+This page is the state reference for the trading contract: its storage keys and TTL tiers, the stored types, the status lifecycle, and the error table. The `Config` singleton has its [own page](./config.md), and the events the contract emits are on [Events](./events.md).
 
 ## Storage
 
@@ -132,7 +132,7 @@ pub struct AdlState {
 }
 ```
 
-`Config` is documented field by field in the [Config table](#config-fields) below, and `ClaimableFunding` is a bare `i128` (token-dec).
+`Config` is a stored type as well, an instance singleton documented on the [Config](./config.md) page together with its validation rules. `ClaimableFunding` is a bare `i128` (token-dec).
 
 ## Status Lifecycle {#status-lifecycle}
 
@@ -157,42 +157,6 @@ Active (0)   OnIce (1)   Frozen (2)   Delisted (3)   Retired (4)
 - **Retired** is final and reachable from any other status. The only gate is an **empty book** (all positions closed), else `MarketNotCleared` (706). Entering it sweeps the funding-pool surplus to the vault. Only `claim_funding`, a direct vault redeem (a `create_vault_order` redeem executes immediately through the vault's `strategy_redeem` at the raw share price, charges no `exec_fee`, and returns id `0`, deposits are rejected), and cancels stay live. No transition leaves `Retired`.
 
 `Active`, `OnIce`, and `Frozen` interchange freely on a live market. `Frozen`, `Delisted`, and `Retired` are each reachable from any other status except `Retired` itself. A same-status set is rejected with `InvalidStatus` (702). The switch to flat pricing is governed by terminal-price presence, not by the status value. Accrual never stops during the wind-down. Once a terminal price is stored, it keeps running with everything priced flat at the stored value.
-
-## Config Fields {#config-fields}
-
-The global `Config` is set at deployment and replaced wholesale by the owner-gated `set_config`. Every field is a per-market parameter, and the table notes the main ordering and range invariants the protocol enforces. All fractional values are `SCALAR_18`, and rate parameters are per second.
-
-| Field | Meaning |
-|---|---|
-| `keeper_rate` | Keeper share of the trade and vault fill fees |
-| `min_position_notional`, `max_position_notional` | Position size floor and ceiling (token-dec) |
-| `max_open_interest` | Per-side open-interest ceiling (token-dec), `>= max_position_notional` |
-| `min_order_notional`, `min_order_collateral` | Per-order dust floors (token-dec) |
-| `exec_fee` | Flat keeper execution fee escrowed per order at creation, refunded on cancel and on auto-cancel at position closure (token-dec), `>= 0` |
-| `fee_dom`, `fee_non_dom` | Dominant and non-dominant trade fee rates, `fee_dom >= fee_non_dom`, capped at 1% |
-| `impact_divisor` | Impact fee = worsening notional / this, floored at `MIN_IMPACT` |
-| `max_util_open` | Opens blocked above this per-side cap, and the borrow-reserve denominator (each side's capacity is half the vault balance times this) |
-| `max_util_withdraw` | Withdrawals blocked above this, `>= max_util_open` |
-| `init_margin` | Initial margin, max leverage = `1 / init_margin` |
-| `maintenance_margin` | Hard liquidation floor, `< init_margin` |
-| `liq_fee` | Liquidation fee, capped at 25% |
-| `notional_lock` | Decrease lock on newly added notional (seconds), in `[MIN_NOTIONAL_LOCK, MAX_NOTIONAL_LOCK]` |
-| `target_util` | Borrowing kink utilization, `< 1` |
-| `borrow_rate` | Borrowing slope below the kink (per second) |
-| `increased_borrow_rate` | Borrowing rate at full utilization, `>= borrow_rate`, capped at `MAX_BORROW_RATE` |
-| `funding_increase`, `funding_decrease` | Funding velocity acceleration and decay (per second squared) |
-| `threshold_stable_funding`, `threshold_decrease_funding` | Skew bands for hold vs decay, decrease `<=` stable |
-| `funding_min`, `funding_max` | Charged-rate floor and saved-rate cap (per second), capped at `MAX_FUNDING_RATE` |
-| `adl_max_pnl` | ADL trigger on side PnL over half the vault, in `[MIN_ADL_TRIGGER, max_pnl_trader]`, `< 1` |
-| `adl_clear_target` | ADL clear target, in `[MIN_ADL_CLEAR, adl_max_pnl]` |
-| `max_pnl_trader` | Realized-profit haircut threshold and the per-side profit cap in share-pricing pending PnL, `< 1` |
-| `max_pnl_withdraw` | Redeem fills blocked while either side's pending PnL exceeds this fraction of half the post-redeem vault balance, in `(0, max_pnl_trader]` |
-| `redeem_lock` | Redeem cooldown from the vault order's `created_at` (seconds), capped at `MAX_REDEEM_LOCK` (30 days) |
-| `vault_fee` | Vault fill fee rate on moved assets |
-| `min_deposit` | Minimum assets per deposit vault order, checked at creation (token-dec) |
-| `max_vault_balance` | Vault balance ceiling on deposit fills (token-dec) |
-
-Changing a borrowing parameter (`target_util`, `borrow_rate`, `increased_borrow_rate`, or `max_util_open`, the borrow-reserve denominator) requires a same-ledger `accrue`, else `set_config` reverts with `BorrowingNotAccrued` (703). Changing a funding-velocity parameter (`funding_increase`, `funding_decrease`, `threshold_stable_funding`, `threshold_decrease_funding`, `funding_min`, or `funding_max`) needs no prior call: `set_config` accrues funding to the current timestamp under the outgoing parameters before the new config applies.
 
 ## Error Codes
 

@@ -118,7 +118,8 @@ A deposit order fills as soon as a keeper submits a verified price published str
 | Field | Scale | Bounds | Description |
 |---|---|---|---|
 | `redeem_lock` | seconds | 0 to `MAX_REDEEM_LOCK` (30 days) | Cooldown from a vault order's creation before a redeem can fill |
-| `vault_fee` | SCALAR_18 | 0 to `MAX_FEE_RATE` (1%) | Fee charged on vault-order fills, taken from the assets moved |
+| `deposit_fee` | SCALAR_18 | 0 to `MAX_FEE_RATE` (1%) | Fee charged on deposit fills, taken from the assets moved |
+| `redeem_fee` | SCALAR_18 | 0 to `MAX_FEE_RATE` (1%) | Fee charged on redeem fills, taken from the proceeds |
 | `min_deposit` | token-dec | greater than 0, at most `max_vault_balance` divided by 100 | Minimum assets per deposit order, enforced at creation. Redeems have no minimum amount |
 | `max_pnl_withdraw` | SCALAR_18 | greater than 0, at most `max_pnl_trader` | Redeem fills are blocked while either side's pending PnL exceeds this fraction of half the post-redeem vault balance |
 | `max_vault_balance` | token-dec | greater than 0, at least `min_deposit` times 100 | Vault balance ceiling enforced on deposit fills |
