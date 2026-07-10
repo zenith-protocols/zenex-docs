@@ -25,7 +25,7 @@ The values themselves depend on the asset's liquidity and volatility, so this pa
 
 ### Margin and Leverage
 
-- **Initial margin**: the collateral required to open, expressed as a fraction of notional. Maximum [leverage](../trading/leverage.md) is one divided by the initial margin.
+- **Initial margin**: the collateral required to open, expressed as a fraction of notional. Maximum [leverage](../trading/margin-and-leverage.md) is one divided by the initial margin.
 - **Maintenance margin**: the hard [liquidation](../trading/liquidation.md) floor, always lower than the initial margin. The gap between the two is the safety buffer before a position becomes liquidatable.
 - **Liquidation fee**: sets the boundary between a soft liquidation and a hard one. If remaining equity covers the fee, the liquidation is soft, no fee is charged, and the equity returns to the trader. Below that line the fee is taken and the remainder is forfeited to the protocol.
 

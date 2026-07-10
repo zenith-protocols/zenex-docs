@@ -50,7 +50,7 @@ Select **Long** if you expect the price to go up, or **Short** if you expect it 
 
 ### Step 5: Set Your Collateral and Leverage
 
-Enter the amount of collateral you want to allocate (the input is labeled **Amount**, denominated in USDC) and choose a **leverage** multiplier (up to the market's maximum). Your notional position size equals collateral multiplied by leverage. For more details, see [Leverage](../trading/leverage.md) and [Collateral](../trading/collateral.md).
+Enter the amount of collateral you want to allocate (the input is labeled **Amount**, denominated in USDC) and choose a **leverage** multiplier (up to the market's maximum). Your notional position size equals collateral multiplied by leverage. For more details, see [Margin and Leverage](../trading/margin-and-leverage.md) and [Collateral](../trading/collateral.md).
 
 ### Step 6: Choose Your Order Type
 

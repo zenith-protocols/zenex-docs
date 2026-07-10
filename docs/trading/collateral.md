@@ -13,7 +13,7 @@ Creating an increase order moves the posted collateral, plus a flat execution fe
 
 If an order never fills, cancelling it returns the full escrow to your wallet. And when a position fully closes, whether by a fill, a liquidation, auto-deleveraging, or a market wind-down, any decrease orders still resting on that side are cancelled automatically and their escrow is returned with your payout.
 
-When you open or increase a position, the collateral is subject to the initial-margin floor. The fees due at the fill come out of the posted collateral first, and what remains must be at least the initial margin's share of the notional size. For example, with a 1% initial margin a 1,000 USDC position needs at least 10 USDC of collateral remaining after fees, so post slightly more than the bare minimum or the fill fails. The initial margin is set per market through the protocol's [parameter-change process](../governance/parameter-changes.md) and determines the maximum leverage, as described on the [Leverage](./leverage.md) page.
+When you open or increase a position, the collateral is subject to the initial-margin floor. The fees due at the fill come out of the posted collateral first, and what remains must be at least the initial margin's share of the notional size. For example, with a 1% initial margin a 1,000 USDC position needs at least 10 USDC of collateral remaining after fees, so post slightly more than the bare minimum or the fill fails. The initial margin is set per market through the protocol's [parameter-change process](../governance/parameter-changes.md) and determines the maximum leverage, as described on the [Margin and Leverage](./margin-and-leverage.md) page.
 
 ## Managing collateral after opening
 

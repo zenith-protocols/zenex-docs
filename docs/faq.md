@@ -32,7 +32,7 @@ Zenex supports several sign-in methods:
 
 ### What is the maximum leverage?
 
-Maximum leverage is a per-market parameter and equals one divided by that market's initial margin requirement. Higher leverage amplifies both gains and losses, so it is important to manage your risk carefully. See [Leverage](./trading/leverage.md) for more details.
+Maximum leverage is a per-market parameter and equals one divided by that market's initial margin requirement. Higher leverage amplifies both gains and losses, so it is important to manage your risk carefully. See [Margin and Leverage](./trading/margin-and-leverage.md) for more details.
 
 ### What are the trading fees?
 
