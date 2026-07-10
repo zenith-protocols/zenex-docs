@@ -29,4 +29,4 @@ Newly added notional is locked against decreases for a short per-market window. 
 
 ## Collateral token
 
-The collateral accepted by a market is the underlying token of that market's strategy vault. Which token is accepted depends solely on the vault, not on the asset you are trading. The exact settings per market can be seen [here](../markets/supported-assets.md).
+The collateral accepted by a market is the underlying token of that market's strategy vault. Which token is accepted depends solely on the vault, not on the asset you are trading. The exact settings per market can be seen in [Market Parameters](../markets/market-parameters.md#current-testnet-values).

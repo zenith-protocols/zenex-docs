@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 2
 title: Market Parameters
 ---
 
@@ -7,7 +7,7 @@ title: Market Parameters
 
 Each market on Zenex is a standalone trading contract with its own **Config**. The Config holds every tunable value that controls fees, leverage, risk limits, and the interest curves for that market. Because each market is its own contract, these are **per-market parameters** that can be adjusted over time: what you see below is configured independently for every deployed pair.
 
-The values themselves depend on the asset's liquidity and volatility, so this page describes what each group of parameters does rather than quoting specific numbers. The live values for any market can always be read from its contract, and material changes flow through the protocol's [parameter-change process](../governance/parameter-changes.md).
+The values themselves depend on the asset's liquidity and volatility, so this page describes what each group of parameters does. The live values for any market can always be read from its contract, material changes flow through the protocol's [parameter-change process](../governance/parameter-changes.md), and the [current testnet values](#current-testnet-values) are listed at the end of this page.
 
 ### Sizing and Trade Fees
 
@@ -60,3 +60,33 @@ The values themselves depend on the asset's liquidity and volatility, so this pa
 ### How Parameters Interact
 
 The **initial margin** and **maintenance margin** together define the leverage envelope: the initial margin caps leverage at entry, and the maintenance margin sets how far a position can deteriorate before [liquidation](../trading/liquidation.md). The **skew-split trade fee** and **impact fee** combine into the total cost of a fill, and both reward trades that balance the book over trades that unbalance it. The **borrowing** and **funding** curves work against utilization and skew respectively, compensating the vault for reserved liquidity and nudging the long/short book back toward balance.
+
+### Current Testnet Values
+
+The testnet deployment currently lists a single **XLM** market, settled in USDC, with the starting configuration below. Every value is a per-market parameter and can change through the [parameter-change process](../governance/parameter-changes.md), so the market's contract is always the source of truth.
+
+| Parameter | Value |
+|---|---|
+| Maximum leverage | 100x (1% initial margin) |
+| Maintenance margin | 0.75% of notional |
+| Liquidation fee rate | 0.5% of notional |
+| Trade fee | 0.06% on the imbalance-worsening side, 0.04% on the improving side |
+| Impact fee divisor | 1,000 |
+| Keeper share of fees | 10% |
+| Position size | 20 to 1,000,000 USDC notional |
+| Per-side open interest cap | 10,000,000 USDC |
+| Minimum order | 2 USDC notional and 2 USDC collateral |
+| Fresh-size decrease lock | 30 seconds |
+| Utilization caps | 80% for opens, 90% for vault withdrawals |
+| Borrowing interest | about 2.5% per year at the 50% target utilization, rising to about 15% per year at full utilization |
+| Funding rate cap | about 25% per year in either direction |
+| ADL thresholds | arms at 50% of half the vault balance, deleverages back to 40% |
+| Profit-haircut threshold | 90% on the same measure |
+| Vault fill fee | 0.1% |
+| Minimum vault deposit | 10 USDC |
+| Redeem cooldown | 60 seconds |
+| Withdraw PnL gate | 15% |
+| Vault balance cap | 10,000,000 USDC |
+| Order execution fee | flat per-order keeper fee, read from the market's contract |
+
+One fee parameter lives outside the per-market table. The treasury's share of protocol fees is a single protocol-wide rate stored on the treasury contract shared by every market deployed through the factory, and that contract is the source of truth for its current value.

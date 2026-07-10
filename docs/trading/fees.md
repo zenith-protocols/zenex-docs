@@ -9,7 +9,7 @@ An order on Zenex carries five itemized costs: the trade fee, the impact fee, bo
 
 Fees are computed at the moment of the fill from the market's current rates and deducted from the collateral escrowed with your order. If the escrowed collateral cannot cover the fees and the margin requirement, the fill is rejected and the order rests until it can fill or expires. You can cancel a resting order at any time and recover the full escrow.
 
-All rates described below are per-market parameters and may change through the protocol's [parameter-change process](../governance/parameter-changes.md). Current values for each supported market can be found [here](../markets/supported-assets.md).
+All rates described below are per-market parameters and may change through the protocol's [parameter-change process](../governance/parameter-changes.md). Current values can be found in [Market Parameters](../markets/market-parameters.md#current-testnet-values).
 
 ## 1. Trade Fee (skew-split)
 

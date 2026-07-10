@@ -5,7 +5,7 @@ title: Overview
 
 # Markets Overview
 
-A **market** on Zenex is a single leveraged trading pair, for example BTC or XLM, priced in the market's settlement token. If that token is USDC, then every position, fee, and PnL figure in the market is denominated and settled in USDC.
+A **market** on Zenex is a single leveraged trading pair, for example XLM, priced in the market's settlement token. If that token is USDC, then every position, fee, and PnL figure in the market is denominated and settled in USDC. The testnet deployment currently lists a single XLM market settled in USDC.
 
 In Zenex each market is its **own** trading contract, paired with its **own** strategy vault. To add a market, the [factory](../governance/overview.md) deploys a fresh trading contract and vault together as an isolated pair, so the contract address itself is the market rather than an identifier selecting a pair inside a shared registry. That isolation is deliberate: the risk of one market never touches the liquidity of another.
 
@@ -35,4 +35,4 @@ For how these transitions are triggered and what each one does, see [Governance 
 
 ### Adding New Markets
 
-New markets are created by deploying a new trading and vault pair through the factory. Because each market is a standalone contract with its own owner and its own configuration, the set of available markets grows by deployment rather than by editing a list inside one shared contract. See [Supported Assets](./supported-assets.md) for how markets are listed and which assets are currently available.
+New markets are created by deploying a new trading and vault pair through the factory. Whoever deploys the pair picks its oracle price feed and its settlement token, the token used as collateral and for every fee and PnL figure in that market. Because each market is a standalone contract with its own owner and its own configuration, the set of available markets grows by deploying new pairs, and deployment through the factory is permissionless. Each new market ships with its own configuration, listed in [Market Parameters](./market-parameters.md).
