@@ -74,8 +74,8 @@ Anyone may call these, passing a serialized Pyth Lazer price. The named `keeper`
 | `get_config` | Current global `Config` |
 | `get_market_data` | `MarketData` as of its last accrual |
 | `get_position` | Netted `Position` for `(user, is_long)`, zeroed if none open |
-| `get_order` | `Order` row for `(user, id)` |
-| `get_vault_order` | `VaultOrder` row for `(user, id)` |
+| `get_order` | `Option<Order>` row for `(user, id)`, `None` if absent |
+| `get_vault_order` | `Option<VaultOrder>` row for `(user, id)`, `None` if absent |
 | `get_status` | Operational status discriminant |
 | `get_adl` | `AdlState` (per-side flags) |
 | `get_claimable_funding` | Funding owed to a user |

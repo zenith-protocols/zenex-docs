@@ -101,7 +101,7 @@ The `notional_lock` floor exists so the decrease lock outlasts the price verifie
 
 `set_config` is owner-only and replaces the whole struct after validation. Two guards tie rate changes to accrual, so no parameter change can reprice an un-accrued interval:
 
-- **Funding parameters** (`funding_increase`, `funding_decrease`, `threshold_stable_funding`, `threshold_decrease_funding`, `funding_min`, `funding_max`): funding accrual is price-free, so `set_config` first accrues funding to the current timestamp under the outgoing parameters (emitting an `accrual_update` when the clock advances), then applies the new values.
+- **Funding parameters** (`funding_increase`, `funding_decrease`, `threshold_stable_funding`, `threshold_decrease_funding`, `funding_min`, `funding_max`): funding accrual is price-free, so `set_config` first accrues funding to the current timestamp under the outgoing parameters, then applies the new values.
 - **Borrowing parameters** (`target_util`, `borrow_rate`, `increased_borrow_rate`, and `max_util_open`, the borrow-reserve denominator): borrowing accrual is price-bearing and cannot run inside `set_config`, so the call requires a same-ledger `accrue`, else it traps `BorrowingNotAccrued` (703).
 
 Every successful call emits `config_update` carrying the full new configuration. See [Events](./events.md).

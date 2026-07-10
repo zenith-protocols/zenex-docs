@@ -48,7 +48,7 @@ execute(nonce: u32)
 set_status(target: Address, status: u32)
 ```
 
-*Owner only.* Immediately calls `set_status(status)` on the target contract, bypassing the timelock delay. This allows an emergency status change without waiting, for example freezing a trading market (`Frozen`) or starting its wind-down (`Delisted`). The governance contract is flow-agnostic: it forwards whatever `u32` status value the owner passes and does not interpret it, so the meaning of each value is defined by the target contract (see the trading [status lifecycle](../trading/storage-and-events.md#status-lifecycle)).
+*Owner only.* Immediately calls `set_status(status)` on the target contract, bypassing the timelock delay. This allows an emergency status change without waiting, for example freezing a trading market (`Frozen`) or starting its wind-down (`Delisted`). The governance contract is flow-agnostic: it forwards whatever `u32` status value the owner passes and does not interpret it, so the meaning of each value is defined by the target contract (see the trading [status lifecycle](../trading/storage.md#status-lifecycle)).
 
 ### set_delay
 

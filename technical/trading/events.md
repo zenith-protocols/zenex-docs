@@ -5,13 +5,15 @@ title: Events
 
 # Events
 
-The trading contract emits 16 events. This page lists each one with its exact Rust definition, so an indexer can decode topics and data without reading the contract source.
+The trading contract emits 15 events. This page lists each one with its exact Rust definition, so an indexer can decode topics and data without reading the contract source.
 
-All events use Soroban's `#[contractevent]` derive. The event-name symbol (the snake_case struct name, e.g. `create_order` for `CreateOrder`) is the first topic, then the `#[topic]` fields follow in declared order, and all remaining fields form the data map. Field comments state the units: token decimals (token-dec), base decimals (base-dec), `price_scalar`, or `SCALAR_18`. The `Order`, `VaultOrder`, and `Position` rows carried as payloads are the stored types documented on [Storage & Config](./storage.md#stored-types).
+Events are receipts for actions, not mirrors of contract state. The stored rows they touch (orders, positions, market data) are read back through the getters (`get_order`, `get_position`, `get_market_data`, ...) or from the transaction's ledger entry changes, which carry every stored row the transaction wrote.
+
+All events use Soroban's `#[contractevent]` derive. The event-name symbol (the snake_case struct name, e.g. `create_order` for `CreateOrder`) is the first topic, then the `#[topic]` fields follow in declared order, and all remaining fields form the data map. Field comments state the units: token decimals (token-dec), base decimals (base-dec), `price_scalar`, or `SCALAR_18`. The stored types behind the rows are documented on [Storage](./storage.md#stored-types).
 
 ## Trade Orders
 
-Emitted by `create_order` and `cancel_order`.
+Emitted by `create_order` and `cancel_order`. The created order's row is readable at `get_order(user, id)` and in the transaction's ledger entry changes.
 
 ```rust
 /// Order created via `create_order`.
@@ -19,7 +21,6 @@ Emitted by `create_order` and `cancel_order`.
 pub struct CreateOrder {
     #[topic] pub user: Address,
     #[topic] pub id: u32,
-    pub order: Order, // the stored order row, as returned by `get_order`
 }
 
 /// Pending order removed via `cancel_order`.
@@ -34,7 +35,7 @@ pub struct CancelOrder {
 
 ## Position Fills
 
-Emitted by `execute_order`, `execute_adl`, and `execute_liquidation`. Every fill also emits the paired `position_update` carrying the resulting position state.
+Emitted by `execute_order`, `execute_adl`, and `execute_liquidation`. The fill is the itemized receipt; the resulting position state is the stored row, readable at `get_position(user, is_long)` and in the transaction's ledger entry changes (a fully closed position's row is removed).
 
 ```rust
 /// A keeper fill of an increase order (the user's itemized receipt).
@@ -43,6 +44,8 @@ pub struct IncreaseFill {
     #[topic] pub user: Address,
     #[topic] pub id: u32,
     #[topic] pub is_long: bool,
+    pub keeper: Address,  // reward recipient named by the fill's caller
+    pub price: i128,      // entry-side execution price (ask for a long, bid for a short), price_scalar units
     pub notional: i128,   // size added, token-dec
     pub tokens: i128,     // base size bought, base-dec
     pub collateral: i128, // collateral pulled from the trader, token-dec
@@ -58,10 +61,12 @@ pub struct DecreaseFill {
     #[topic] pub user: Address,
     #[topic] pub id: u32, // filled order id; 0 = forced ADL close via `execute_adl`
     #[topic] pub is_long: bool,
+    pub keeper: Address,  // reward recipient named by the fill's caller
+    pub price: i128,      // exit-side execution price (bid for a long, ask for a short), price_scalar units
     pub notional: i128,   // closed size: the order's request clamped to the position, token-dec
     pub tokens: i128,     // base size closed, base-dec
     pub collateral: i128, // gross collateral leg: requested withdrawal (partial) or freed margin (full), token-dec
-    pub pnl: i128,        // realized PnL on the closed fraction, gross of settled costs, token-dec
+    pub pnl: i128,        // realized PnL on the closed fraction (post-haircut), gross of settled costs, token-dec
     pub base_fee: i128,   // trade fee charged, token-dec
     pub impact_fee: i128, // impact fee charged, token-dec
     pub funding: i128,    // settled funding, token-dec; + = paid from collateral, - = credited claimable
@@ -75,10 +80,12 @@ pub struct DecreaseFill {
 pub struct Liquidation {
     #[topic] pub user: Address,
     #[topic] pub is_long: bool,
+    pub keeper: Address,  // reward recipient named by the fill's caller
+    pub price: i128,      // exit-side execution price (bid for a long, ask for a short), price_scalar units
     pub notional: i128,   // force-closed size, token-dec
     pub tokens: i128,     // base size closed, base-dec
     pub collateral: i128, // freed margin, gross of the itemized fees, token-dec
-    pub pnl: i128,        // realized PnL on the closed size, gross of settled costs, token-dec
+    pub pnl: i128,        // realized PnL on the closed size (post-haircut), gross of settled costs, token-dec
     pub base_fee: i128,   // trade fee charged, token-dec
     pub impact_fee: i128, // impact fee charged, token-dec
     pub funding: i128,    // settled funding, token-dec; + = paid from collateral, - = credited claimable
@@ -88,26 +95,18 @@ pub struct Liquidation {
     pub returned: i128,   // post-fee remainder paid to the trader (soft tier), token-dec
     pub forfeit: i128,    // post-fee remainder forfeited to the vault (hard tier), token-dec
 }
-
-/// The resulting netted position after any change (fill or liquidation).
-#[contractevent]
-pub struct PositionUpdate {
-    #[topic] pub user: Address,
-    #[topic] pub is_long: bool,
-    pub position: Position, // the stored position row, as returned by `get_position`; zeroed = closed
-}
 ```
 
 ### Reading the fill receipts
 
-- **Fill price is implied.** On `increase_fill`, `notional * SCALAR_18 / tokens` is the fill price (in `price_scalar` units). On `decrease_fill` and `liquidation`, `notional` and `tokens` are the closed fraction at entry pricing, so that ratio is the entry price of the closed chunk, not the close price. The close price derives through `pnl`: `tokens * P_close = notional + pnl` for a long, `notional - pnl` for a short. No event carries a price field.
-- **`collateral` and `pnl` are gross** of the itemized fees. On a `decrease_fill`, `returned` is the actual payout: the gross legs less the fees they cover, floored at zero. A partial close pays only the profit leg while a realized loss debits the surviving margin. `bad_debt` is `0` on partial closes.
+- **`price` is the execution price** the fill settled at: the entry side (ask for a long, bid for a short) on an `increase_fill`, the exit side (bid for a long, ask for a short) on a `decrease_fill` or `liquidation`. On a close, `notional` and `tokens` are the closed fraction at entry pricing, so `notional * SCALAR_18 / tokens` is the entry price of the closed chunk while `price` is what it closed at.
+- **`collateral` and `pnl` are gross** of the itemized fees, and `pnl` is post-haircut. On a `decrease_fill`, `returned` is the actual payout: the gross legs less the fees they cover, floored at zero. A partial close pays only the profit leg while a realized loss debits the surviving margin. `bad_debt` is `0` on partial closes.
 - **`liquidation` tier**: `liq_fee = 0` is the soft tier (post-fee remainder on `returned`, to the trader), while `liq_fee > 0` is the hard tier (remainder on `forfeit`, to the vault).
 - **The trader transfer exceeds `returned`** when the same call auto-cancels resting decrease orders: their refunded escrow is folded into the single payout transfer, itemized by the accompanying `cancel_order` events.
 
 ## Vault Orders
 
-Emitted by `create_vault_order`, `cancel_vault_order`, and `execute_vault_order`.
+Emitted by `create_vault_order`, `cancel_vault_order`, and `execute_vault_order`. The created order's row is readable at `get_vault_order(user, id)` and in the transaction's ledger entry changes.
 
 ```rust
 /// Vault deposit or redeem order created via `create_vault_order`.
@@ -115,7 +114,6 @@ Emitted by `create_vault_order`, `cancel_vault_order`, and `execute_vault_order`
 pub struct CreateVaultOrder {
     #[topic] pub user: Address,
     #[topic] pub id: u32,
-    pub order: VaultOrder, // the stored vault-order row, as returned by `get_vault_order`
 }
 
 /// Pending vault order removed via `cancel_vault_order`.
@@ -130,10 +128,11 @@ pub struct CancelVaultOrder {
 pub struct DepositFill {
     #[topic] pub user: Address,
     #[topic] pub id: u32,
-    pub assets: i128,  // gross assets deposited from escrow, token-dec; the vault receives assets - fee
-    pub shares: i128,  // vault shares minted to the user
-    pub fee: i128,     // vault fee charged (keeper, treasury, and vault cuts), token-dec
-    pub net_pnl: i128, // capped net pending trader PnL the share mint priced against, signed, token-dec
+    pub keeper: Address, // reward recipient named by the fill's caller
+    pub assets: i128,    // gross assets deposited from escrow, token-dec; the vault receives assets - fee
+    pub shares: i128,    // vault shares minted to the user
+    pub fee: i128,       // vault fee charged (keeper, treasury, and vault cuts), token-dec
+    pub net_pnl: i128,   // capped net pending trader PnL the share mint priced against, signed, token-dec
 }
 
 /// A keeper fill of a redeem order via `execute_vault_order` (the user's receipt).
@@ -141,10 +140,11 @@ pub struct DepositFill {
 pub struct RedeemFill {
     #[topic] pub user: Address,
     #[topic] pub id: u32, // vault order id; 0 = retired-market instant redeem executed at creation
-    pub shares: i128,  // vault shares burned from escrow
-    pub assets: i128,  // gross assets redeemed from the vault, token-dec; the user is paid assets - fee
-    pub fee: i128,     // vault fee charged (keeper, treasury, and vault cuts), token-dec
-    pub net_pnl: i128, // capped net pending trader PnL the share burn priced against, signed, token-dec
+    pub keeper: Address,  // reward recipient named by the fill's caller; the redeeming user on a retired-market instant redeem
+    pub shares: i128,     // vault shares burned from escrow
+    pub assets: i128,     // gross assets redeemed from the vault, token-dec; the user is paid assets - fee
+    pub fee: i128,        // vault fee charged (keeper, treasury, and vault cuts), token-dec
+    pub net_pnl: i128,    // capped net pending trader PnL the share burn priced against, signed, token-dec
 }
 ```
 
@@ -169,15 +169,20 @@ pub struct AdlUpdate {
     pub short: bool, // short-side ADL enabled (short increases blocked)
 }
 
-/// The market's post-accrual funding and borrowing state, emitted by the
-/// first call in a ledger that advances either accrual clock (a
-/// same-timestamp re-accrual emits nothing).
+/// The market's post-accrual funding state, emitted by the `accrue` and
+/// `accrue_funding` entries.
 #[contractevent]
-pub struct AccrualUpdate {
-    pub funding_rate: i128,      // signed funding rate after the accrual, + = longs pay (SCALAR_18, per second)
-    pub funding_idx: SidePair,   // cumulative funding index per side (SCALAR_18)
+pub struct FundingAccrual {
+    pub funding_rate: i128,    // signed funding rate after the accrual, + = longs pay (SCALAR_18, per second)
+    pub funding_idx: SidePair, // cumulative funding index per side (SCALAR_18)
+    pub timestamp: u64,        // ledger timestamp the funding index is accrued to
+}
+
+/// The market's post-accrual borrowing state, emitted by the `accrue` entry.
+#[contractevent]
+pub struct BorrowingAccrual {
     pub borrowing_idx: SidePair, // cumulative borrowing index per side (SCALAR_18)
-    pub timestamp: u64,          // ledger timestamp the indices are accrued to
+    pub timestamp: u64,          // ledger timestamp the borrowing index is accrued to
 }
 
 /// Operational status changed via `set_status`.
@@ -199,7 +204,7 @@ pub struct TerminalPriceUpdate {
 }
 ```
 
-`accrual_update` fires on any entry point that advances the accrual clocks (fills, liquidations, ADL, `accrue`, `accrue_funding`, and `set_config`), so it is the stream to follow for live funding and borrowing indices between fills.
+The accrual events come only from the maintenance entries: `accrue` emits `funding_accrual` and `borrowing_accrual`, `accrue_funding` emits `funding_accrual` alone. Fills and `set_config` advance the same indices without emitting an accrual event, so the authoritative live indices between accrual pokes are the `MarketData` row in each transaction's ledger entry changes.
 
 ## Other Emitters
 

@@ -93,4 +93,4 @@ A position can also be closed by a keeper without the owner's order:
 - **Liquidation** force-closes the whole position once equity falls below maintenance margin. See [Liquidation](./liquidation.md).
 - **Auto-deleveraging** closes part of a winning position on an ADL-flagged side, or all of it when the requested amount covers the whole position. See [Auto-Deleveraging](./auto-deleveraging.md).
 
-Both run through the same settlement machinery as a Decrease fill and leave a zeroed (liquidation) or reduced or zeroed (ADL, when the requested amount covers the whole position) row, each paired with a `position_update` event.
+Both run through the same settlement machinery as a Decrease fill and leave a zeroed (liquidation) or reduced or zeroed (ADL, when the requested amount covers the whole position) row, visible in the transaction's ledger entry changes.

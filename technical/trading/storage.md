@@ -35,7 +35,7 @@ Archival loses no state. An archived position still counts in the market totals 
 
 ## Stored Types
 
-The structs behind the storage rows above, as read back by `get_order`, `get_vault_order`, `get_position`, `get_market_data`, and `get_adl_state`, and carried verbatim in the [events](./events.md) that reference them. Field comments state the units: token decimals (token-dec), base decimals (base-dec), `price_scalar`, or `SCALAR_18`.
+The structs behind the storage rows above, as read back by `get_order`, `get_vault_order`, `get_position`, `get_market_data`, and `get_adl_state`. The same rows appear in each transaction's ledger entry changes, which is where an indexer reads resulting state, since [events](./events.md) are receipts and do not mirror stored rows. Field comments state the units: token decimals (token-dec), base decimals (base-dec), `price_scalar`, or `SCALAR_18`.
 
 ### Order
 
@@ -185,7 +185,7 @@ All errors are hard panics that abort the transaction. Trading errors occupy the
 | 732 | `InvalidOrder` | Disallowed delta pair, a moved value below a dust floor, a trigger kind with `trigger_price == 0`, or a non-positive `execute_adl` amount |
 | 733 | `TooManyOrders` | The side already holds `MAX_ORDERS_PER_SIDE` (16) pending decrease orders |
 | 734 | `UnknownKind` | Order or vault-order `kind` discriminant is not a known variant |
-| 740 | `StalePrice` | Verified price predates the position or order (anti-replay) |
+| 740 | `StalePrice` | Verified price predates the position, the order, or the market's newest consumed price (anti-replay) |
 | 741 | `PriceBoundExceeded` | Fill price is worse than the order's `price_bound` |
 | 742 | `TriggerNotMet` | The order's `trigger_price` was not crossed |
 | 750 | `VaultOrderNotFound` | No vault order for `(user, id)` |
