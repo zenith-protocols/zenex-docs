@@ -17,22 +17,22 @@ Without keepers, orders would never fill, take-profit and stop-loss triggers wou
 
 Every fill carries a serialized **Pyth Lazer** price update supplied by the keeper. The trading contract verifies it against the market's immutable feed anchors through the price-verifier contract before using it, so a keeper cannot fill at a price the protocol has not validated. Execution uses the verified bid and ask: an increase enters at the ask (long) or bid (short), and a decrease exits at the bid (long) or ask (short).
 
-### Entry Points
+### The Keeper Roles
 
-Keepers call the trading contract directly. Each fill entry point takes a `keeper` argument that is only the reward recipient. `update_adl_state` and the maintenance pokes carry no keeper and pay no reward.
+A keeper can take on five distinct roles, each mapping to an entry point on the trading contract. Each fill entry point takes a `keeper` argument that is only the reward recipient, and a keeper is free to run any subset of the roles.
 
-- **`execute_order`**: fill a trader's resting order (market, limit, or stop entries, and market, take-profit, or stop-loss exits) once its trigger and slippage bound are satisfied at the verified price.
-- **`execute_liquidation`**: force-close a position whose equity has fallen below the maintenance margin, or any remaining position on a wound-down market past its deadline.
-- **`update_adl_state`** then **`execute_adl`**: recompute the per-side auto-deleveraging flags, then deleverage a winning position on a flagged side back toward the clear target.
-- **`execute_vault_order`**: fill a liquidity provider's deposit or redeem, minting or burning shares net of the vault fill fee.
-- **`accrue`** and **`accrue_funding`**: maintenance pokes. `accrue` carries a price and advances both the borrowing and funding indices, `accrue_funding` is price-free and advances only funding.
+- **Filling trade orders** (`execute_order`): fill a trader's resting order (market, limit, or stop entries, and market, take-profit, or stop-loss exits) once its trigger and slippage bound are satisfied at the verified price. Pays the keeper share of the fill's trade fee plus the order's escrowed execution fee.
+- **Filling vault orders** (`execute_vault_order`): fill a liquidity provider's deposit or redeem, minting or burning shares net of the vault fill fee. Pays the keeper share of the vault fill fee plus the order's escrowed execution fee.
+- **Liquidating** (`execute_liquidation`): force-close a position whose equity has fallen below the maintenance margin, or any remaining position on a wound-down market past its deadline. There is no order and no execution fee here, so it pays only the keeper share of the close's trade fee.
+- **Auto-deleveraging** (`update_adl_state`, then `execute_adl`): recompute the per-side ADL flags, then deleverage a winning position on a flagged side back toward the clear target. The flag poke carries no keeper and pays nothing. The deleveraging close pays the keeper share of its trade fee.
+- **Advancing the accrual indices** (`accrue` and `accrue_funding`): maintenance pokes that bring the market's borrowing and funding indices up to the current moment between fills. `accrue` carries a price and advances both indices, `accrue_funding` is price-free and advances only funding. Neither takes a keeper argument or pays a reward, so this is a small role run for the health of the market rather than for income.
+
+### The Liquidator Is the Base
+
+Every role above runs on the same foundation: a live picture of the market's positions and orders, marked against the current oracle price. That is exactly the state a liquidation bot maintains, which makes the liquidator the natural base of a keeper. The per-position equity it computes is what signals a liquidation. Those same marks aggregate into each side's pending PnL, which tells an ADL keeper when a side is close to being flagged and how much to close, and tells a vault-order keeper what share price a deposit or redeem will fill at, and with it whether the fill clears the order's minimum-received bound and the redeem gates. And the per-position health tells an order-filling keeper whether a fill will clear the margin checks before it spends a transaction finding out. A keeper can also simply run the base alone, liquidating and nothing else, and layer the other roles on top of the same state later.
 
 ### Rewards
 
-Keepers earn the `keeper_rate` cut (a per-market parameter, see [parameter changes](../governance/parameter-changes.md)) of the fees on the fills they execute. Every order, trade or vault, also escrows a flat **execution fee** at creation, and the keeper who fills the order collects it on top of the fee cut. The execution fee is refunded to the order's owner if the order is cancelled.
-
-- On a trade order fill, the keeper takes its share of that fill's **trade fee** (the base fee plus the price impact fee) plus the order's escrowed execution fee.
-- On a vault order fill, the keeper takes its share of the **vault fill fee** on the moved assets plus the order's escrowed execution fee.
-- On a liquidation or ADL close there is no order and no escrowed execution fee, so the keeper takes only its share of the trade fee.
+Keepers earn the `keeper_rate` cut (a per-market parameter, see [parameter changes](../governance/parameter-changes.md)) of the fees on the fills they execute, split per role as listed above. Every order, trade or vault, also escrows a flat **execution fee** at creation, and the keeper who fills the order collects it on top of the fee cut. The execution fee is refunded to the order's owner if the order is cancelled.
 
 The reward is paid to whatever address the keeper named. Because the role is permissionless and competitive, faster and more reliable keepers capture more of these rewards. See [Running a Keeper](./running-a-keeper.md) for the operational details.

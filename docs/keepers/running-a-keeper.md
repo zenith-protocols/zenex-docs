@@ -53,3 +53,5 @@ Three timing rules shape when a fill is valid.
 ## Getting Started
 
 The `zenex-keeper` reference implementation, written in Rust, and the Zenex TypeScript SDK are the natural starting points for building a keeper. Before relying on either, check that the version you pull matches the deployed contract interface, since the order and price wire formats evolve with the protocol. Start by watching a single market to understand the flow before scaling up.
+
+A sensible build order follows the [role structure](./overview.md#the-liquidator-is-the-base): stand up the liquidator base first, tracking every position and marking it at the live price, and run it as a pure liquidation keeper. The other roles are consumers of that same state, so order filling, vault-order filling, and ADL can each be layered on once the base is solid.
