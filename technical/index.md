@@ -68,8 +68,10 @@ flowchart TB
     Trading -->|"strategy_withdraw / strategy_deposit / strategy_redeem"| Vault
     Trading -->|"get_rate"| Treasury
 
-    Lazer ~~~ Executor
     Executor -->|"update_trusted_signer / upgrade"| Lazer
+    Treasury ~~~ Executor
+    Vault ~~~ Executor
+    PV ~~~ Executor
 
     style Trading fill:#0f2e24,stroke:#29a383,stroke-width:2px
     style Vault fill:#0f2e24,stroke:#29a383
@@ -96,15 +98,16 @@ All collateral flows through a single SEP-41 token (e.g., USDC). The trading con
 | Flow | Direction | When |
 |---|---|---|
 | Trader to Trading | Escrowed collateral plus exec fee (increase) or exec fee only (decrease) | `create_order` |
-| Trader to Trading | Escrowed deposit assets or redeem shares, plus exec fee | `create_vault_order` |
+| LP Depositor to Trading | Escrowed deposit assets or redeem shares, plus exec fee | `create_vault_order` |
 | Trading to Vault | LP share of fees, trader losses, forfeits, and deposit-fill principal (`strategy_deposit`) | Fills, liquidations, deposit fills |
 | Trading to Treasury | Protocol share of trade, borrowing, and vault fill fees and forfeits | Fills, liquidations, vault-order fills |
 | Trading to Keeper | Keeper reward: a cut of the trade or vault fill fee, plus the order's escrowed exec fee on order and vault-order fills (liquidation and ADL pay the fee cut only) | Order, liquidation, ADL, and vault-order fills |
 | Vault to Trading | Trader profit payout, bad-debt coverage (`strategy_withdraw`), and redeem-fill assets (`strategy_redeem`) | Profitable or underwater closes, redeem fills |
-| Trading to Trader | Withdrawal, realized profit, funding claim, redeem payout, liquidation remainder, or escrow refund | Decrease fills, redeem fills, `claim_funding`, soft-tier liquidations, `cancel_order`, `cancel_vault_order` |
+| Trading to Trader | Withdrawal, realized profit, funding claim, liquidation remainder, or trade-order escrow refund | Decrease fills, `claim_funding`, soft-tier liquidations, `cancel_order` |
+| Trading to LP Depositor | Redeem payout or vault-order escrow refund | Redeem fills, `cancel_vault_order` |
 | Treasury to Recipient | Protocol revenue withdrawal (destination chosen by owner) | `withdraw` (owner-only) |
 
-Every order escrows at creation: an increase order transfers `collateral + exec_fee` from the trader to the trading contract when `create_order` runs, a decrease order transfers `exec_fee`, and a vault order transfers its deposit assets (or redeem shares) plus `exec_fee`. Cancelling refunds the escrow. Fees are deducted from the escrowed collateral at fill and the resulting margin must still meet the initial-margin requirement, so a fee change between creation and fill at worst makes the fill revert instead of leaving the position under-margined.
+Every order escrows at creation: an increase order transfers `collateral + exec_fee` from the trader to the trading contract when `create_order` runs, a decrease order transfers `exec_fee`, and a vault order transfers the LP depositor's assets (or redeem shares) plus `exec_fee`. Cancelling refunds the escrow. Fees are deducted from the escrowed collateral at fill and the resulting margin must still meet the initial-margin requirement, so a fee change between creation and fill at worst makes the fill revert instead of leaving the position under-margined.
 
 ## Deployment Model
 
