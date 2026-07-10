@@ -68,6 +68,7 @@ flowchart TB
     Trading -->|"strategy_withdraw / strategy_deposit / strategy_redeem"| Vault
     Trading -->|"get_rate"| Treasury
 
+    Lazer ~~~ Executor
     Executor -->|"update_trusted_signer / upgrade"| Lazer
 
     style Trading fill:#0f2e24,stroke:#29a383,stroke-width:2px
