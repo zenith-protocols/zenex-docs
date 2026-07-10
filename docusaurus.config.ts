@@ -50,6 +50,7 @@ const config: Config = {
         searchResultLimits: 8,
         language: ['en'],
         removeDefaultStopWordFilter: true,
+        searchBarPosition: 'left',
       },
     ],
   ],
@@ -115,9 +116,9 @@ const config: Config = {
       },
     ],
     [
-      // Copy page as Markdown + open in Claude/ChatGPT/Perplexity/Gemini.
-      // One entry covers all three docs instances; generateMarkdownRoutes
-      // emits a .md twin next to every built page for clean AI ingestion.
+      // Copy page as Markdown + open in Claude/ChatGPT/Perplexity/Gemini,
+      // pinned to the TOC rail. generateMarkdownRoutes emits a .md twin
+      // next to every built page for clean AI ingestion.
       'docusaurus-plugin-copy-page-button',
       {
         placement: 'toc',

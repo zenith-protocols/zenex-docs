@@ -528,6 +528,36 @@ table tbody tr {
   font-weight: 600;
 }
 
+/* Copy-page button (docusaurus-plugin-copy-page-button) in the TOC rail.
+   The plugin absolutely positions its container 60px above the TOC and
+   reserves 56px of height, which collides with the navbar offset in this
+   layout. Keep it in normal flow and scale it to the rail. */
+#copy-page-button-container:not([data-fallback]) {
+  position: static !important;
+  min-height: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+#copy-page-button-container button[class*='copyPageButton'] {
+  font-size: 0.8125rem;
+  padding: 5px 10px;
+  margin-bottom: 0.75rem;
+  background: var(--zx-elevated);
+  border: 1px solid var(--zx-border);
+  color: var(--zx-text-primary);
+}
+
+#copy-page-button-container button[class*='copyPageButton']:hover {
+  background: var(--zx-elevated-hover);
+  border-color: var(--zx-border-hover);
+}
+
+div[class*='copyPageDropdown'] {
+  background: var(--zx-surface);
+  border: 1px solid var(--zx-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
 /* ============================================================================
    11. MISCELLANEOUS COMPONENTS
    ============================================================================ */
