@@ -48,19 +48,14 @@ flowchart TB
         Admin["Owner"]
     end
 
-    subgraph Zenex["Zenex Contracts"]
+    subgraph Contracts["On-Chain Contracts (Zenex in green, Pyth in blue)"]
         Trading["Trading"]
         Vault["Strategy Vault"]
         PV["Price Verifier"]
         Treasury["Treasury"]
-    end
-
-    subgraph Pyth["Pyth Contracts (Pyth-governed)"]
         Lazer["Pyth Lazer"]
         Executor["Wormhole Executor"]
     end
-
-    Guardians["Wormhole Guardians"]
 
     Trader -->|"create_order / cancel_order / claim_funding"| Trading
     LP -->|"create_vault_order / cancel_vault_order"| Trading
@@ -73,15 +68,14 @@ flowchart TB
     Trading -->|"strategy_withdraw / strategy_deposit / strategy_redeem"| Vault
     Trading -->|"get_rate"| Treasury
 
-    Guardians -.->|"signed governance VAA"| Executor
     Executor -->|"update_trusted_signer / upgrade"| Lazer
 
     style Trading fill:#0f2e24,stroke:#29a383,stroke-width:2px
     style Vault fill:#0f2e24,stroke:#29a383
     style PV fill:#0f2e24,stroke:#29a383
     style Treasury fill:#0f2e24,stroke:#29a383
-    style Lazer fill:#26232b,stroke:#8b8d98
-    style Executor fill:#26232b,stroke:#8b8d98
+    style Lazer fill:#0d2847,stroke:#3b82f6
+    style Executor fill:#0d2847,stroke:#3b82f6
 ```
 
 The trading contract is the only contract directly admin-controlled in the diagram. The price verifier and treasury both have their own owners that can update configuration (`update_max_staleness`, `update_max_confidence_bps`, `update_lazer` on the price verifier, `set_rate` and `withdraw` on the treasury). Those owners may be the same account, separate accounts, or a governance contract per deployment. See the dedicated [Governance](./governance/overview), [Treasury](./treasury/overview), and [Price Verifier](./price-verifier/overview) pages for the full owner-only surface on each contract.
