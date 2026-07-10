@@ -25,15 +25,14 @@ Users interact with the perp engine through any Stellar wallet. The optional [`s
 
 ## Roles
 
-Five roles interact with a trading contract.
+Four roles interact with a trading contract.
 
 | Role | Authorization | What it does |
 |---|---|---|
 | **Admin** (owner) | `#[only_owner]` | `set_config`, `set_status`, `set_terminal_price`, and the Ownable transfer surface |
 | **Trader** | The user's own signature | Creates and cancels price-free trade orders, claims funding |
 | **LP Depositor** | The user's own signature | Creates and cancels vault orders (deposit and redeem) |
-| **Keeper** | Permissionless | Fills orders, liquidations, vault orders, and ADL at a verified price for a reward |
-| **Maintenance** | Permissionless | Advances accrual indices (`accrue`, `accrue_funding`) and refreshes the per-side ADL flags (`update_adl_state`) |
+| **Keeper** | Permissionless | Fills orders, liquidations, vault orders, and ADL at a verified price for a reward, and runs the unrewarded maintenance pokes (`accrue`, `accrue_funding`, `update_adl_state`) |
 
 A trader only ever creates and cancels intents. A permissionless keeper is what actually fills an order against a verified Pyth Lazer price. The keeper is not authenticated: it is simply the reward recipient the caller names, and the trader consented to the fill through the collateral and execution fee escrowed at order creation.
 
@@ -46,7 +45,6 @@ flowchart TB
         Trader["Trader"]
         LP["LP Depositor"]
         Keeper["Keeper Bot"]
-        Maint["Maintenance"]
         Admin["Owner"]
     end
 
@@ -62,7 +60,7 @@ flowchart TB
     Trader -->|"create_order / cancel_order / claim_funding"| Trading
     LP -->|"create_vault_order / cancel_vault_order"| Trading
     Keeper -->|"execute_order / execute_liquidation / execute_vault_order / execute_adl"| Trading
-    Maint -->|"accrue / accrue_funding / update_adl_state"| Trading
+    Keeper -->|"accrue / accrue_funding / update_adl_state (unrewarded)"| Trading
     Admin -->|"set_config / set_status / set_terminal_price"| Trading
 
     Trading -->|"verify_price"| PV
