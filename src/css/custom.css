@@ -177,12 +177,6 @@
   --ifm-scrollbar-track-background-color: transparent;
   --ifm-scrollbar-thumb-background-color: #363a3f;
   --ifm-scrollbar-thumb-hover-background-color: #43484e;
-
-  /* Footer */
-  --ifm-footer-background-color: #18191b;
-  --ifm-footer-color: var(--zx-text-secondary);
-  --ifm-footer-link-color: var(--zx-text-secondary);
-  --ifm-footer-link-hover-color: #1fd8a4;
 }
 
 /* ============================================================================
@@ -197,7 +191,7 @@ a,
 .table-of-contents__link,
 .tabs__item,
 .breadcrumbs__link,
-.footer a,
+.navbar-social,
 table tbody tr {
   transition:
     color 0.15s var(--ease-dart),
@@ -244,10 +238,10 @@ h1, h2, h3, h4, h5, h6,
    3. NAVBAR
    ============================================================================ */
 
+/* No position override here: Infima's .navbar--fixed-top makes the bar
+   sticky, so the content scrolls under it. */
 .navbar {
   border-bottom: 1px solid var(--ifm-toc-border-color);
-  position: relative;
-  z-index: 100;
 }
 
 /* Navbar Brand & Logo */
@@ -335,6 +329,11 @@ h1, h2, h3, h4, h5, h6,
 /* Small gap at the top of the sidebar */
 .theme-doc-sidebar-menu {
   padding-top: 0.75rem;
+}
+
+/* Sidebar type size: 16px reads chunky next to 13px TOC and 16px body */
+.menu {
+  font-size: 0.875rem;
 }
 
 /* Sidebar Z-Index */
@@ -640,10 +639,12 @@ blockquote {
    12. BACKGROUND SPINNING LOGO
    ============================================================================ */
 
-/* Main Wrapper Setup */
+/* Main Wrapper Setup. Never give this overflow: hidden; that makes it a
+   scroll container and the sticky sidebars anchor to it instead of the
+   window, offsetting both by one navbar height. The watermark is
+   position: fixed and needs no clipping. */
 .main-wrapper {
   position: relative;
-  overflow: hidden;
 }
 
 /* Spinning Logo Animation */
@@ -682,35 +683,29 @@ blockquote {
   }
 }
 
-/* Footer Z-Index */
-.footer {
-  position: relative;
-  z-index: 10;
-}
-
 /* ============================================================================
-   12A. FOOTER STYLING
+   12A. NAVBAR SOCIAL ICONS
    ============================================================================ */
 
-.footer {
-  background-color: var(--zx-surface);
-}
-
-/* Titles in primary text, links and copy in secondary */
-.footer__title {
-  color: var(--zx-text-primary);
-}
-
-.footer__item,
-.footer__link-item,
-.footer a,
-.footer__copyright {
+.navbar-social {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-left: 0.25rem;
+  border-radius: 0.5rem;
   color: var(--zx-text-secondary);
 }
 
-.footer a:hover {
-  color: var(--zx-primary-text);
-  text-decoration: underline;
+.navbar-social:hover {
+  color: var(--zx-text-primary);
+  background-color: var(--zx-elevated);
+}
+
+.navbar-social svg {
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
 /* ============================================================================
