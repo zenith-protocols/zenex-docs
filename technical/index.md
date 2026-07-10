@@ -25,12 +25,13 @@ Users interact with the perp engine through any Stellar wallet. The optional [`s
 
 ## Roles
 
-Four roles interact with a trading contract.
+Five roles interact with a trading contract.
 
 | Role | Authorization | What it does |
 |---|---|---|
 | **Admin** (owner) | `#[only_owner]` | `set_config`, `set_status`, `set_terminal_price`, and the Ownable transfer surface |
-| **Trader** | The user's own signature | Creates and cancels price-free orders and vault orders, claims funding |
+| **Trader** | The user's own signature | Creates and cancels price-free trade orders, claims funding |
+| **LP Depositor** | The user's own signature | Creates and cancels vault orders (deposit and redeem) |
 | **Keeper** | Permissionless | Fills orders, liquidations, vault orders, and ADL at a verified price for a reward |
 | **Maintenance** | Permissionless | Advances accrual indices (`accrue`, `accrue_funding`) and refreshes the per-side ADL flags (`update_adl_state`) |
 
@@ -43,8 +44,9 @@ flowchart TB
     subgraph Actors["External Actors"]
         direction LR
         Trader["Trader"]
-        Keeper["Keeper Bot"]
         LP["LP Depositor"]
+        Keeper["Keeper Bot"]
+        Maint["Maintenance"]
         Admin["Owner"]
     end
 
@@ -55,12 +57,16 @@ flowchart TB
         Treasury["Treasury"]
     end
 
-    Trader -->|"create_order / cancel_order / create_vault_order / claim_funding"| Trading
-    LP -->|"create_vault_order (deposit / redeem)"| Trading
-    Keeper -->|"execute_order / execute_liquidation / execute_vault_order / execute_adl / update_adl_state / accrue"| Trading
+    Lazer["Pyth Lazer (Pyth-operated)"]
+
+    Trader -->|"create_order / cancel_order / claim_funding"| Trading
+    LP -->|"create_vault_order / cancel_vault_order"| Trading
+    Keeper -->|"execute_order / execute_liquidation / execute_vault_order / execute_adl"| Trading
+    Maint -->|"accrue / accrue_funding / update_adl_state"| Trading
     Admin -->|"set_config / set_status / set_terminal_price"| Trading
 
     Trading -->|"verify_price"| PV
+    PV -->|"verify_update"| Lazer
     Trading -->|"strategy_withdraw / strategy_deposit / strategy_redeem"| Vault
     Trading -->|"get_rate"| Treasury
 
@@ -74,6 +80,8 @@ The trading contract is the only contract directly admin-controlled in the diagr
 LP deposits and redeems flow through the trading contract as vault orders, not by calling the vault directly. The vault's only mutations are the strategy-gated `strategy_deposit`, `strategy_redeem`, and `strategy_withdraw`, authorized to the registered strategy (the trading contract), so the trading engine is the single writer of vault share supply. The trading contract calls the vault through a minimal interface (`strategy_deposit`, `strategy_redeem`, `preview_redeem`, `strategy_withdraw`, `total_assets`, and the share token's `balance` and `transfer` for redeem escrow). The dependency is one-directional, which keeps the call graph and storage ownership easy to reason about.
 
 Every price-bearing call verifies its price through the same `verify_price` cross-contract call, which validates the submitted Pyth Lazer bytes against the market's immutable `(feed_id, exponent)` anchors. The exception is a delisted market with a stored terminal price, which prices flat and skips verification. Price-free maintenance (`accrue_funding`) and trader intents (`create_order`) carry no price at all.
+
+The signature trust behind `verify_price` roots outside Zenex. The price verifier delegates the ECDSA check to Pyth's own Lazer contract on Stellar via `verify_update`, and that contract's trusted-signer set is governed by Pyth through Wormhole-signed governance messages. How those signers are managed is described on the [Price Verifier](./price-verifier/overview) page.
 
 The governance contract is an independent, optional contract. It is not deployed by the factory and is not bound to any specific target. It can be set as the owner of any admin-controlled contract (trading, treasury, price verifier, or even a separate governance instance) and adds a configurable timelock delay to parameter changes on whatever it owns. Owner-only calls flow through `queue` then `execute`, where `execute` is itself permissionless once the delay has elapsed. The one bypass is `set_status`, which lets the governance owner immediately set the status of a target trading contract without going through the queue, so a market can be frozen in an emergency without waiting for the delay.
 

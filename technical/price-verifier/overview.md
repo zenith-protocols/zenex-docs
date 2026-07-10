@@ -44,6 +44,12 @@ Any violation raises `InvalidPrice` (781).
 
 **Staleness.** The publish time must not be in the future (`publish_time <= now`) and must be no older than `max_staleness` seconds, else `PriceStale` (782). A future publish time indicates a malformed payload (the oracle publishes before transaction inclusion), and rejecting it also keeps the age subtraction from underflowing.
 
+## Upstream Signer Management
+
+The Lazer contract the verifier delegates to is Pyth's own Stellar deployment from [pyth-lazer-public](https://github.com/pyth-network/pyth-lazer-public/tree/main/contracts/stellar). Its trusted-signer set is managed by Pyth governance, not by Zenex. Wormhole guardians sign a governance VAA, a Wormhole executor contract on Stellar verifies the VAA's guardian signatures and parses the governance payload, and the executor then calls into the Lazer contract (`update_trusted_signer`, and `upgrade` for the contract itself) by cross-contract call. Signer entries carry an expiry, so a key lapses on schedule without an explicit removal.
+
+`verify_update` checks an update's ECDSA envelope against that signer set and returns the verified inner payload bytes to the caller. The one Zenex-controlled lever in this chain is the verifier's owner-only `update_lazer`, which repoints the delegation target to a different Lazer contract address.
+
 ## Access Control
 
 The price verifier implements OZ Ownable. For standard Ownable behavior, refer to [OpenZeppelin Stellar Contracts](https://github.com/OpenZeppelin/stellar-contracts).
