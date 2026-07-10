@@ -50,3 +50,7 @@ The vault's strongest protection is a balanced book. When longs and shorts are r
 **Liquidations.** Positions whose equity falls below the maintenance floor are [liquidated](../trading/liquidation.md) before they accumulate bad debt.
 
 Any bad debt that still occurs is absorbed by the vault, which is the residual risk depositors take on in exchange for the fees, interest, and net trader losses they earn.
+
+### Emergency Freeze
+
+Governance can freeze a market instantly in an emergency. A freeze is a full stop: order fills, new orders, liquidations, funding claims, and vault-order cancels all halt, for traders and depositors alike. Escrowed assets and shares stay exactly where they are, no balance is touched, and everything resumes once the freeze is lifted. For depositors this means a resting deposit or redeem can neither fill nor be cancelled while a freeze lasts. The freeze is part of the market lifecycle described in the [markets documentation](../markets/overview.md).

@@ -13,19 +13,19 @@ To provide liquidity you create a **deposit vault order** for an amount of the u
 
 For example, say you deposit 10,000 USDC and the vault fee on this fill is 0.1%. The fee comes to 10 USDC, leaving 9,990 USDC to convert. At a fill-time share value of 1.00 USDC per share, you receive 9,990 shares. If share value were instead 1.08 USDC per share, you would receive 9,990 / 1.08 = 9,250 shares.
 
-A deposit must be at least the market's minimum size (`min_deposit`, a per-market parameter), checked when you create the order. Redeems have no minimum beyond a positive number of shares. The vault also enforces a maximum balance cap, so a fill that would push the vault above `max_vault_balance` is rejected until capacity frees up.
+A deposit must be at least the market's minimum size (`min_deposit`, a per-market parameter), checked when you create the order. The vault also enforces a maximum balance cap, so a fill that would push the vault above `max_vault_balance` is rejected until capacity frees up.
 
 ### Redeeming
 
-To exit, you create a **redeem vault order** for a number of shares. Those shares are escrowed at creation, along with the same flat execution fee in the settlement token. When a keeper fills the order, the vault burns the shares and pays you the underlying assets net of the vault fill fee, valued at the fill-time share value with pending PnL marked against you.
+To exit, you create a **redeem vault order** for a number of shares. There is no minimum beyond a positive number of shares. The shares are escrowed at creation, along with the same flat execution fee in the settlement token. When a keeper fills the order, the vault burns the shares and pays you the underlying assets net of the vault fill fee, valued at the fill-time share value with pending PnL marked against you.
 
-You can cancel a resting vault order at any time before it fills, unless the market is frozen. While a market is frozen, vault-order cancels are halted along with fills, and the escrow stays in place until the freeze lifts. Cancelling refunds the escrowed assets (for a deposit) or shares (for a redeem) in full, along with the escrowed execution fee.
+You can cancel a resting vault order at any time before it fills, and cancelling refunds the escrowed assets (for a deposit) or shares (for a redeem) in full, along with the escrowed execution fee. The one exception is an [emergency freeze](./risks-and-rewards.md#emergency-freeze), which halts cancels along with everything else.
 
 ### Redeem Cooldown
 
 Deposits have no cooldown. A deposit order becomes fillable as soon as a keeper holds a verified price published after the order was created.
 
-A redeem order must wait out `redeem_lock` seconds before a keeper can fill it. The cooldown runs from the order's creation time, and the lock length is a per-market parameter read at fill time, so a [parameter change](../governance/parameter-changes.md) to `redeem_lock` also moves the deadline of orders already in the queue, in either direction. The lock applies to the order only: shares you still hold outside the order remain freely transferable.
+A redeem order must wait out `redeem_lock` seconds before a keeper can fill it. The cooldown runs from the order's creation time, and the lock length is a per-market parameter read at fill time, so a [parameter change](../governance/parameter-changes.md) to `redeem_lock` also moves the deadline of orders already in the queue, in either direction.
 
 ### Per-Order Minimum Received
 
