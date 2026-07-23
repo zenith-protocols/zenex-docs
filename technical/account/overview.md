@@ -9,6 +9,8 @@ The Zenex smart account is an **optional** stack of contracts that lets traders 
 
 This page is a directory of what lives in that repo and why each piece exists. It is not a full integration guide.
 
+For an automated integration using a normal Stellar Ed25519 account, see [Agent wallet](../../integrations/agent-wallet). Relay-subsidized account creation is passkey-only.
+
 ## The Five Contracts
 
 | Contract | Role |

@@ -55,3 +55,4 @@ Every state change emits a typed event. The 14 trading events split fill receipt
 - [SDK](./sdk) is the flat reference for every builder, parser, loader, and decoder an integrator touches.
 - [Price feed](./price-feed) covers serving Pyth Lazer price updates to the keepers that fill orders.
 - [Indexing](./indexing) documents the event stream and the indexing path.
+- [Agent wallet](./agent-wallet) defines the supported key and account boundary for automated integrators.
