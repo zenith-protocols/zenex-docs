@@ -58,7 +58,8 @@ const config: Config = {
     ],
   ],
 
-  onBrokenLinks: 'warn',
+  onBrokenLinks: 'throw',
+  onBrokenAnchors: 'throw',
   trailingSlash: false,
 
   // Even if you don't use internationalization, you can use this field to set
@@ -147,8 +148,7 @@ const config: Config = {
   ],
 
   themeConfig: {
-    // Replace with your project's social card
-    image: 'img/zenex-social-card.jpg',
+    image: 'img/zenex-social-card.png',
     mermaid: {
       theme: { light: 'neutral', dark: 'dark' },
       options: {

@@ -1,41 +1,31 @@
-# Website
+# zenex-docs
 
-This website is built using [Docusaurus](https://docusaurus.io/), a modern static website generator.
+Public documentation for the Zenex perpetuals protocol on Stellar Soroban,
+served at https://docs.zenex.trade. Built with Docusaurus.
 
-## Installation
+Three doc trees, each with its own sidebar and reader:
+
+| Tree | Reader | Route |
+| --- | --- | --- |
+| `docs/` | Traders and liquidity providers | `/` |
+| `technical/` | Auditors and integrators | `/technical` |
+| `integrations/` | SDK, keeper, and indexer authors | `/integrations` |
+
+Every claim in `technical/` and `integrations/` is checked against the
+contract source in `zenex-contracts`. Writing rules are in `CLAUDE.md`.
+
+## Develop
 
 ```bash
-yarn
+npm install
+npm start
 ```
-
-## Local Development
-
-```bash
-yarn start
-```
-
-This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
 
 ## Build
 
 ```bash
-yarn build
+npm run build
 ```
 
-This command generates static content into the `build` directory and can be served using any static contents hosting service.
-
-## Deployment
-
-Using SSH:
-
-```bash
-USE_SSH=true yarn deploy
-```
-
-Not using SSH:
-
-```bash
-GIT_USER=<Your GitHub username> yarn deploy
-```
-
-If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+The build fails on a broken internal link or anchor. Output goes to `build/`
+and is a static site any host can serve.
