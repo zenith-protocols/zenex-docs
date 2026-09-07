@@ -5,9 +5,9 @@ title: Liquidation
 
 # Liquidation
 
-Liquidation protects the protocol from bad debt when a position no longer has enough equity to cover its risk. If your equity falls below the maintenance margin, a keeper can close the position to restore solvency. Depending on how far equity has fallen, you may keep the remainder or forfeit it, so it is vital to monitor your PnL and top up collateral during volatility to keep a position healthy.
+Liquidation protects the protocol from bad debt when a position no longer has enough equity to cover its risk. If your equity falls below the maintenance margin, a keeper can close the position to restore solvency. Whatever equity survives the close's costs and the liquidation fee is returned to you, so it is vital to monitor your PnL and top up collateral during volatility to keep a position healthy.
 
-Liquidations are permissionless. Anyone can run a keeper, submit a verified oracle price, and close an eligible position. The keeper that does so receives a cut of the close's trade fee as its reward.
+Liquidations are permissionless. Anyone can run a keeper, submit a verified oracle price, and close an eligible position. The keeper that does so receives a cut of the close's fees, the liquidation fee included, as its reward.
 
 ## When a Position Is Liquidatable
 
@@ -21,18 +21,15 @@ The gap between the initial margin (checked when you open) and the maintenance m
 
 The same rule can be read as a price level. Take a long of 10,000 USDC notional opened at 20x leverage, so 500 USDC of collateral, on that market with a 1% maintenance margin. The position becomes liquidatable once equity falls below 100 USDC, which takes a 400 USDC loss. That is a 4% adverse move: entered at 2.50, the liquidation price starts near 2.40. The mirror short entered at 2.50 starts near 2.60.
 
-Treat it as a moving line, not a fixed one. Borrowing interest and any funding you pay accrue against your equity, and the close itself carries a trade fee, so the level creeps toward your entry price over time. Adding collateral pushes it away, and lower leverage starts it further away in the first place. At 5x in the same example the collateral is 2,000 USDC and the liquidation price starts near a 19% adverse move rather than 4%. The one exception is a market being wound down: once a delisted market's force-close deadline passes, keepers may close any remaining position regardless of health. A healthy position closed this way falls in the soft tier, so its remaining equity after fees is returned. See the market lifecycle in [Markets](../markets/overview.md).
+Treat it as a moving line, not a fixed one. Borrowing interest and any funding you pay accrue against your equity, and the close itself carries a trade fee, so the level creeps toward your entry price over time. Adding collateral pushes it away, and lower leverage starts it further away in the first place. At 5x in the same example the collateral is 2,000 USDC and the liquidation price starts near a 19% adverse move rather than 4%. The one exception is a market being wound down: once a delisted market's force-close deadline passes, keepers may close any remaining position regardless of health. A healthy position closed this way keeps whatever equity is left after its costs and the liquidation fee. See the market lifecycle in [Markets](../markets/overview.md).
 
-## Two Tiers: Soft and Hard
+## The Liquidation Fee
 
-When a position is liquidated, the outcome depends on how much equity is left, compared against a liquidation margin equal to the market's liquidation fee rate (a per-market parameter) applied to the notional. On that same 10,000 USDC position, a 0.5% liquidation fee rate puts the liquidation margin at 50 USDC.
+Every liquidation charges a liquidation fee, a per-market rate applied to the closed notional. On that same 10,000 USDC position a 0.5% rate makes the fee 50 USDC. The fee is capped at the equity remaining after the close's other costs, so it can never create bad debt, and it is shared between the keeper, the treasury, and the vault in the same proportions as a trade fee. There is no separate insurance fund.
 
-- **Soft liquidation**: equity still covers the liquidation margin (between 50 and 100 USDC in this example). The remaining equity after fees is returned to you. You are closed out, but you keep what is left.
-- **Hard liquidation**: equity has fallen below the liquidation margin. All remaining equity is forfeited to the protocol. Nothing is returned to you.
+What is left after the costs and the fee is returned to you. A position caught early, while it still holds meaningful equity, therefore keeps most of that remainder, while one that has deteriorated to nothing pays a fee of zero and receives nothing back.
 
-In both tiers, any take-profit or stop-loss orders still resting on the position are cancelled when it closes, and their escrowed execution fees are refunded to you. That refund is the one amount that comes back even from a hard liquidation.
-
-The two tiers mean a position caught early, while it still holds meaningful equity, is treated far more gently than one that has deteriorated close to insolvency.
+Any take-profit or stop-loss orders still resting on the position are cancelled when it closes, and their escrowed execution fees are refunded to you along with the remainder.
 
 ## Bad Debt
 

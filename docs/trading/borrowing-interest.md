@@ -20,7 +20,7 @@ The rate has two regimes separated by a target utilization (the kink):
 - Below the target, the rate rises gently in proportion to utilization, scaled by the base borrow rate.
 - Above the target, an additional term kicks in that climbs more steeply, so that at full utilization the rate reaches the higher stressed borrow rate exactly.
 
-The base borrow rate, the stressed borrow rate, and the target utilization are all per-market parameters, set through the protocol's [parameter-change process](../governance/parameter-changes.md). The design keeps borrowing cheap while the vault has ample spare capacity and makes it climb sharply as the market approaches full utilization, protecting the vault from becoming overextended. The exact rate formula is in the [technical reference](/technical/trading/borrowing-rate).
+The base borrow rate, the stressed borrow rate, and the target utilization are all per-market parameters, set through the protocol's [parameter-change process](../governance/parameter-changes.md). The design keeps borrowing cheap while the vault has ample spare capacity and makes it climb sharply as the market approaches full utilization, protecting the vault from becoming overextended. The exact rate formula is in the [technical reference](/technical/market/borrowing-rate).
 
 ## How It Accrues
 

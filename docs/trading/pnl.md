@@ -17,7 +17,7 @@ Because it is computed from the current prices each time, PnL always reflects th
 
 ## Realizing PnL on a decrease
 
-Unrealized PnL only becomes cash when you reduce the position. A partial decrease realizes PnL pro-rata: closing half the size realizes half the position's PnL, and the implied entry of the remaining size is preserved. A full close realizes all of it. On a partial losing close the loss is charged against the margin that stays with the position, while the withdrawal you requested is paid out minus fees. On a full close the loss simply reduces the equity returned. A partial close never runs past the margin, so a partial reduction cannot create bad debt.
+Unrealized PnL only becomes cash when you reduce the position. A partial decrease realizes PnL pro-rata: closing half the size realizes half the position's PnL, and the implied entry of the remaining size is preserved. A full close realizes all of it. On a partial losing close the loss is charged against the margin that stays with the position, while the withdrawal you requested is paid out minus fees. On a full close the loss simply reduces the equity returned. If the loss and the fees on a partial close run past the margin that stays with the position, the shortfall is bad debt the vault absorbs.
 
 ## The realized-profit haircut
 

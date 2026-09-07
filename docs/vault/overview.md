@@ -7,7 +7,7 @@ title: Overview
 
 The Zenex **strategy vault** is the liquidity pool that acts as the counterparty to every trade in its market. Liquidity providers deposit the market's collateral token (e.g., USDC), and traders take leveraged positions against that liquidity. In return, depositors earn yield from [trading fees](../trading/fees.md), [borrowing interest](../trading/borrowing-interest.md), and net trader losses.
 
-Each market has exactly one vault. The factory deploys the vault together with its trading contract as an isolated pair, and the trading contract is registered as the vault's immutable strategy. Your deposit therefore backs exactly one market and is exposed only to that market's traders.
+Each market has exactly one vault. The factory deploys the vault together with its market contract as an isolated pair, and the market contract is registered as the vault's immutable strategy. Your deposit therefore backs exactly one market and is exposed only to that market's traders.
 
 ### How It Works
 
@@ -23,9 +23,9 @@ If the vault earns fees and interest over time, share value rises and each share
 
 ### Deposits and Redeems Are Orders
 
-Deposits and redeems on Zenex happen through **vault orders**. When you deposit, your assets are escrowed inside the trading contract at creation. When you redeem, your shares are escrowed instead. Along with the deposit assets or redeem shares, a small flat execution fee in the settlement token is escrowed to pay the keeper that fills the order, and cancelling the order refunds everything. A permissionless [keeper](../keepers/overview.md) then fills the order, with the vault fill fee taken from the deposit amount or the redeem proceeds.
+Deposits and redeems on Zenex happen through **vault orders**. When you deposit, your assets are escrowed inside the market contract at creation. When you redeem, your shares are escrowed instead. Along with the deposit assets or redeem shares, a small flat execution fee in the settlement token is escrowed to pay the keeper that fills the order, and cancelling the order refunds everything. A permissionless [keeper](../keepers/overview.md) then fills the order, with the vault fill fee taken from the deposit amount or the redeem proceeds.
 
-Routing through the trading contract lets the protocol measure the market's pending trader PnL at the same verified price the market trades at and price it directly into the share conversion: the measurement marks the backing up for a deposit and down for a redeem, always in the direction that protects existing depositors. Redeems additionally observe a cooldown and cannot leave the vault too exposed to open positions. See [Depositing & Withdrawing](./depositing.md) for the full flow.
+Routing through the market contract lets the protocol measure the market's pending trader PnL at the same verified price the market trades at and price it directly into the share conversion: the measurement marks the backing up for a deposit and down for a redeem, always in the direction that protects existing depositors. Redeems additionally observe a cooldown and cannot leave the vault too exposed to open positions. See [Depositing & Withdrawing](./depositing.md) for the full flow.
 
 ### Risks
 

@@ -7,7 +7,7 @@ title: Trading Overview
 
 Trading on Zenex means opening leveraged positions on asset prices. You never buy or sell the underlying asset. Instead, you take a directional bet using the vault's collateral token as margin, and your profit or loss is determined by how the price moves from your entry point. This page covers the core concepts you need to understand before placing your first trade.
 
-Every trade happens in two steps. You create an order and sign it with your own key, and a keeper fills it against a verified oracle price. Your collateral is escrowed into the trading contract when you create the order, and nobody, including the keeper, can change the terms you signed or move anything beyond them.
+Every trade happens in two steps. You create an order and sign it with your own key, and a keeper fills it against a verified oracle price. Your collateral is escrowed into the market contract when you create the order, and nobody, including the keeper, can change the terms you signed or move anything beyond them.
 
 ## Position Basics
 
@@ -17,7 +17,7 @@ Higher leverage means greater sensitivity to price movements. A 1% price move tr
 
 ## One Market Per Contract
 
-Each Zenex market is its own isolated trading contract paired with its own strategy vault. The contract address you interact with is the market itself, and each market's risk and liquidity stay fully contained within its own pair. The trading contract is immutable, so a logic change ships as a fresh contract and vault pair.
+Each Zenex market is its own isolated market contract paired with its own strategy vault. The contract address you interact with is the market itself, and each market's risk and liquidity stay fully contained within its own pair. The market contract is upgradeable only by its owner (optionally behind a timelock), while the vault holding depositor collateral has no upgrade path at all.
 
 Within a single market your exposure is netted per side. You hold at most one long position and at most one short position, addressed as your long or your short. Every fill folds into the matching side: an increase blends into the open position, a decrease realizes against it. A side is open while it carries size and closed once its size returns to zero.
 
@@ -27,7 +27,7 @@ Zenex splits trading into two steps: you create an order, and a keeper fills it.
 
 When you create an order you sign it with your own key, but you never name an execution price. You describe what you want (a direction, a size, some collateral, an optional trigger, a slippage bound, and an expiration) and the order rests on-chain until it can be filled. A keeper then fills the order against a verified oracle price: the fill price always comes from that verified update, and your trigger and slippage bound only constrain which prices are acceptable. Keepers are open bots that anyone can run: the keeper is only the party that submits the price and collects the keeper reward, it is never able to change the terms you signed.
 
-When you create an order that grows your position, your collateral plus a flat keeper execution fee move into the trading contract as escrow right away. An order that shrinks your position escrows only the execution fee, with fees and proceeds settled out of the position at the fill. Cancelling an order returns the full escrow. At the fill the escrowed collateral becomes your margin (minus fees), the execution fee pays the keeper, and nothing beyond the terms you signed can move: an increase fill draws only on its escrow, a decrease fill settles fees and proceeds only out of the position it closes.
+When you create an order that grows your position, your collateral plus a flat keeper execution fee move into the market contract as escrow right away. An order that shrinks your position escrows only the execution fee, with fees and proceeds settled out of the position at the fill. Cancelling an order returns the full escrow. At the fill the escrowed collateral becomes your margin (minus fees), the execution fee pays the keeper, and nothing beyond the terms you signed can move: an increase fill draws only on its escrow, a decrease fill settles fees and proceeds only out of the position it closes.
 
 ## Order Types
 
@@ -39,7 +39,7 @@ A limit order is an increase that carries a trigger price. It stays resting unti
 
 A stop entry is an increase whose trigger fires on the opposite crossing: it fills when the price rises through your level for a long and falls through it for a short. This is the classic breakout entry, adding exposure once the market pushes through a level instead of waiting for a pullback to it.
 
-Take-profit and stop-loss are ordinary decrease orders that carry a trigger, resting on-chain like any other order rather than existing as a separate object attached to a position. A take-profit fires on the profitable side of your entry, a stop-loss on the losing side. You can size them to close the whole position or only part of it, and a keeper fills them when the trigger is crossed. A side can carry a limited number of resting decrease orders at a time (16 on current parameters), and when the position fully closes, any take-profit or stop-loss still resting on it is cancelled automatically and its escrow returned to you.
+Take-profit and stop-loss are ordinary decrease orders that carry a trigger, resting on-chain like any other order rather than existing as a separate object attached to a position. A take-profit fires on the profitable side of your entry, a stop-loss on the losing side. You can size them to close the whole position or only part of it, and a keeper fills them when the trigger is crossed. A side can carry up to eight resting decrease orders at a time, and when the position fully closes, any take-profit or stop-loss still resting on it is cancelled automatically and its escrow returned to you.
 
 ## Slippage and Expiration
 

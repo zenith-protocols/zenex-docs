@@ -29,22 +29,22 @@ The saved rate is hard-capped at `+/- funding_max`. An empty market resets it to
 
 ## Settlement and the Internal Pool
 
-Funding is settled through an internal pool with per-user claimable balances, tracked on `MarketData` as `funding_pool` and `funding_owed`. Two steps happen at two different times.
+Funding is settled through an internal credit pool with per-user claimable balances, tracked on `MarketData` as `credit_pool` and `credit_owed`. The same pool and ledger also carry any payout whose direct token transfer failed, which the market parks as claimable credit instead of trapping the fill. Two steps happen at two different times.
 
 At **accrual**, the indices move for whole sides at once: the paying side's `funding_idx` rises by the charged rate times the elapsed seconds, and the receiving side's `funding_idx` falls by the paid total spread over the receiver's notional (floored, with the remainder left in the pool). When one side has no opposing side to receive its payment, the paid funding accumulates as pool surplus instead.
 
-When a **position settles**, the cash leg runs: the position's accrued delta, `ceil(notional * idx_delta / SCALAR_18)`, is debited from its collateral and banked into `funding_pool` if the position is on the paying side, or credited to the user's `ClaimableFunding` balance and to `funding_owed` if it is on the receiving side. The position then re-snapshots its side's index.
+When a **position settles**, the cash leg runs: the position's accrued delta, `ceil(notional * idx_delta / SCALAR_18)`, is debited from its margin and banked into `credit_pool` if the position is on the paying side, or credited to the user's `ClaimableCredit` balance and to `credit_owed` if it is on the receiving side. The position then re-snapshots its side's index.
 
 ## Claiming
 
-A trader redeems their earned funding with `claim_funding`. It pays the claimable balance from the pool, capped at the pool's holdings (any remainder stays claimable), and shrinks both `funding_pool` and `funding_owed`. `NothingToClaim` (760) if the balance is empty or the pool currently holds nothing to pay it with. `claim_funding` is blocked while the market is `Frozen` (`MarketFrozen` 704) but remains available in every other status, including `Retired`.
+A trader redeems their claimable credit with `claim_credit`. It pays the claimable balance from the pool, capped at the pool's holdings (any remainder stays claimable), and shrinks both `credit_pool` and `credit_owed`. `NothingToClaim` (760) if the balance is empty or the pool currently holds nothing to pay it with. `claim_credit` is blocked while the market is `Frozen` (`MarketFrozen` 704) but remains available in every other status, including `Retired`.
 
 The pool surplus sweeps to the vault a single time, when the market enters `Retired`.
 
 ## Accrual
 
-Every fill, liquidation, ADL execution, and vault-order execution accrues funding to the current timestamp before touching a position. Two maintenance calls advance the indices without a position operation: `accrue_funding` is price-free and advances only funding, while the price-bearing `accrue` advances both funding and borrowing. Both are blocked with `MarketFrozen` (704) while the market is `Frozen` or `Retired`. Funding accrues continuously per second, so there is no periodic settlement moment to trade around.
+Funding and borrowing share one clock, `MarketData.accrued_at`. Every price-bearing entry point (order fills, liquidations, ADL calls, vault-order fills, and the permissionless `accrue` poke) computes `elapsed = ledger_timestamp - accrued_at` once, advances borrowing and then funding over that one window, and stamps `accrued_at` once, all before any position is touched. The window is measured on the ledger timestamp, never on the price payload's `publish_time`, but a verified price is still needed to reach the accrual at all, so no price-free call advances funding, `claim_credit` included. Nothing accrues while the market is `Frozen` or `Retired` (`MarketFrozen` 704), so the first accrual after an unfreeze prices the whole gap in one window. Funding accrues continuously per second, so there is no periodic settlement moment to trade around.
 
 Each accrual first evolves the saved rate over the full elapsed window, then charges the whole window at that single end-of-window rate: `max(|funding_rate|, funding_min) * elapsed` is added to the payer index. The ramp is not integrated, so the amount charged across a ramp or decay depends on how often accrual runs (frequent accrual approximates the integrated ramp, one lump accrual at the end charges the final rate over the whole window). The parked decay value is independent of how elapsed time is chopped into windows.
 
-A config change that touches any funding-velocity parameter (`funding_increase`, `funding_decrease`, `threshold_stable_funding`, `threshold_decrease_funding`, `funding_min`, `funding_max`) first accrues funding to now under the outgoing parameters, so no window is ever charged under parameters that were not live during it.
+A config change that touches any funding parameter (`funding_increase`, `funding_decrease`, `threshold_stable_funding`, `threshold_decrease_funding`, `funding_min`, `funding_max`) is rejected with `MarketNotAccrued` (703) unless `accrued_at` already equals the current ledger timestamp, so no window is ever charged under parameters that were not live during it. The guard is waived while the market is `Frozen`, where nothing accrues anyway.

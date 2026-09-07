@@ -5,7 +5,7 @@ title: Vault Orders
 
 # Vault Orders and Fill Gates
 
-LP entry and exit run through the trading contract as **vault orders**, and the gates that protect the pool are enforced there, on the fill, not on the vault. This page covers the vault-order lifecycle and the fill gates: the per-order `min_out` slippage floor, the redeem cooldown, the redeem-side pending-PnL gate, the utilization buffer, and the balance cap. Apart from the per-order `min_out`, all the parameters named here are per-market fields on the trading contract's `Config`.
+LP entry and exit run through the market contract as **vault orders**, and the gates that protect the pool are enforced there, on the fill, not on the vault. This page covers the vault-order lifecycle and the fill gates: the per-order `min_out` slippage floor, the redeem cooldown, the redeem-side pending-PnL gate, the utilization buffer, and the balance cap. Apart from the per-order `min_out`, all the parameters named here are per-market fields on the market contract's `Config`.
 
 ## The Vault Order
 
@@ -14,11 +14,11 @@ LP entry and exit run through the trading contract as **vault orders**, and the 
 - A **deposit** escrows `amount` plus the `exec_fee` in the settlement token. A **redeem** escrows `amount` vault shares plus the `exec_fee` in the settlement token.
 - A deposit's gross `amount` must clear `min_deposit`, else `InvalidOrder` (732). A redeem requires only a positive share amount.
 - `min_out` is the LP's slippage floor on the amount received at fill net of the vault fee: minted shares for a deposit, paid assets for a redeem. `0` leaves the bound unset, and a negative value traps `NegativeValueNotAllowed` (710).
-- Market status gates creation. A `Frozen` market rejects the call with `MarketFrozen` (704). On a `Retired` market a deposit traps `InvalidStatus` (702), and a redeem executes immediately at creation: the shares transfer in, `strategy_redeem` runs with `net_pnl = 0`, no `exec_fee` is charged, and the call returns the reserved id `0`. Deposits stay open on `OnIce` and `Delisted` markets, so a wind-down vault keeps taking liquidity to fund remaining payouts.
+- Market status gates creation. A `Frozen` market rejects the call with `MarketFrozen` (704). On a `Retired` market a deposit traps `InvalidStatus` (702), and a redeem executes immediately at creation: the shares transfer in, `strategy_redeem` runs with `net_pnl = 0`, no `exec_fee` is charged, `min_out` is not applied, and the call returns the reserved id `0`. Deposits stay open on `OnIce` and `Delisted` markets, so a wind-down vault keeps taking liquidity to fund remaining payouts.
 
-`cancel_vault_order` refunds the escrowed principal and the escrowed `exec_fee` (the return value is the principal only). A `Frozen` market halts cancels with `MarketFrozen` (704), and the escrow stays in the trading contract until the freeze lifts.
+`cancel_vault_order` refunds the escrowed principal and the escrowed `exec_fee` (the return value is the principal only). A `Frozen` market halts cancels with `MarketFrozen` (704), and the escrow stays in the market contract until the freeze lifts.
 
-`execute_vault_order(keeper, user, id, price)` fills the whole order at once and removes it. The verified price's `publish_time` must be strictly greater than the order's `created_at`, and at least the market's `last_price_time` (the publish time of the most recent consumed price). Either failing traps `StalePrice` (740). The flow is commit then execute: an atomic create-and-fill can never price a vault order. Every fill deducts the vault fee cut of the moved assets (`deposit_fee` on a deposit, `redeem_fee` on a redeem), split keeper / treasury / vault, and the keeper receives the escrowed `exec_fee` on top of its fee cut.
+`execute_vault_order(keeper, user, id, price)` fills the whole order at once and removes it. Two independent checks each trap `StalePrice` (740): the effective price's `publish_time` may not predate the order's `created_at` (equality passes), and the fill must land in a strictly later ledger timestamp than `created_at`. The ledger check is what makes an atomic create-and-fill impossible for a vault order. Every fill deducts the vault fee cut of the moved assets (`deposit_fee` on a deposit, `redeem_fee` on a redeem), split keeper / treasury / vault, and the keeper receives the escrowed `exec_fee` on top of its fee cut.
 
 ## Deposit Fill Gates
 

@@ -38,11 +38,11 @@ Click each banner action as it appears. Once your account holds USDC, you are re
 
 When using a smart account, each action normally requires a passkey prompt (biometric confirmation). To streamline this, Zenex offers **Quick Trading** (a session key under the hood): a temporary signing key that lets you create orders with a single click for up to **4 hours**, without repeated passkey prompts.
 
-To enable it, click the **Quick Trading** (fish icon) button in the top bar after connecting your smart account, then click **Enable**. An ephemeral key is generated and authorized on your account. When the session expires, simply re-enable it. Quick Trading keys can only be used for trading actions and can be revoked at any time.
+To enable it, click the **Quick Trading** (fish icon) button in the top bar after connecting your smart account, then click **Enable**. An ephemeral key is generated and authorized on your account under a scoped on-chain session policy: it can only call the market contracts and the router, and it can only move your USDC into the market, nowhere else. When the session expires, simply re-enable it. Quick Trading keys can be revoked at any time.
 
 ### Step 3: Select a Market
 
-Choose the asset you want to trade: XLM, BTC, or ETH. Each market is its own contract with its own vault. All markets settle in USDC on testnet.
+Choose the market you want to trade. The testnet deployment currently lists a single XLM market; each market is its own contract with its own vault, and all markets settle in USDC on testnet.
 
 ### Step 4: Choose Your Direction
 
@@ -67,6 +67,8 @@ Add **stop-loss** and **take-profit** orders to automate your risk management. E
 
 Review your order details: direction, collateral, leverage, order type and price, price bound, expiration, and any triggers. When everything looks correct, click **LONG/BUY** or **SHORT/SELL** (the action button matches the direction you chose), confirm in the order dialog, and sign the transaction. When you submit, your collateral and the execution fee are escrowed with the order, and cancelling refunds them in full. Your order is now live for a keeper to fill.
 
+How the transaction reaches the chain depends on your account type. A **smart account** submits through Zenex's relay: the relay sponsors the transaction's XLM gas and charges a small network fee in USDC instead, capped at a maximum you sign (and can adjust in settings), and a market order is filled in the same transaction when possible. A **browser wallet** signs and submits a classic Stellar transaction: you pay the network fee in XLM yourself, and your order rests briefly until a keeper fills it. See [Fees](../trading/fees.md) for the full cost breakdown.
+
 ### Managing Your Position
 
 Each position on Zenex is netted: you hold at most one long and one short per market, and every order adjusts that single position. Once your position is open you can:
@@ -74,6 +76,6 @@ Each position on Zenex is netted: you hold at most one long and one short per ma
 - **Add or remove [collateral](../trading/collateral.md)** with a collateral-only order.
 - **Reduce** the position with a partial closing order, or **close it fully** with a full-close order (the app submits a close for your entire size).
 - **Update your stop-loss and take-profit** by cancelling the old trigger order and placing a new one. Trigger orders accumulate rather than replace each other, so an uncancelled old trigger stays live. When your position fully closes, any remaining trigger orders are cancelled automatically and their escrowed fees refunded.
-- **Claim funding** you have earned. Funding you are owed accrues into a claimable balance that you can claim whenever you like.
+- **Claim credit** you have earned. Funding you are owed (and any payout the token could not deliver directly) accrues into a claimable credit balance that you can claim whenever you like.
 
 See [PnL Calculations](../trading/pnl.md) for how profit and loss are computed, and [Fees](../trading/fees.md) for the applicable trading costs.

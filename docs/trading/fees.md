@@ -40,8 +40,16 @@ Funding is a transfer between longs and shorts driven by the market's imbalance.
 
 The fees you pay are shared among the parties that keep the market running.
 
-The keeper that submits the price and executes your fill receives a cut of the trade fee (base plus impact) at a per-market rate, plus the flat execution fee that was escrowed with your order. The execution fee is a per-market amount, held alongside your collateral from the moment you create the order rather than deducted from your collateral at the fill, and refunded in full if you cancel. Together these two pieces are what pay permissionless keepers to fill orders. Liquidations and auto-deleveraging involve no order and carry no execution fee, so the keeper that performs them earns only the trade-fee cut.
+The keeper that submits the price and executes your fill receives a cut of the trade fee (base plus impact) at a per-market rate, plus the flat execution fee that was escrowed with your order. The execution fee is a per-market amount, held alongside your collateral from the moment you create the order rather than deducted from your collateral at the fill, and refunded in full if you cancel. Together these two pieces are what pay permissionless keepers to fill orders. Liquidations and auto-deleveraging involve no order and carry no execution fee, so the keeper that performs them earns only the fee cut, which on a liquidation also covers a share of the liquidation fee.
 
-The treasury takes its own cut of the trade fee and of the borrowing fee (and of any forfeited remainder on a hard liquidation). The treasury rate is read from the treasury contract and bounded by the protocol.
+The treasury takes its own cut of the trade fee, of the borrowing fee, and of the liquidation fee. The treasury rate is read from the treasury contract and bounded by the protocol.
 
 Whatever remains after the keeper and treasury cuts is retained by the vault as yield for liquidity providers, and the vault is also what funds realized profit and absorbs any bad debt.
+
+## 5. Network Fee
+
+The costs above are protocol fees. Getting the transaction on-chain has its own cost, and how you pay it depends on how you sign in.
+
+With a **smart account**, transactions ride Zenex's relay: the relay pays the XLM gas and collects a small fee in USDC instead, sized to the transaction's actual resource cost. The fee is bounded by a maximum you sign with each action, defaulting to a few cents and adjustable in settings, and a transaction whose computed fee would exceed your signed cap is refused rather than charged. In practice, Stellar's low gas costs make this fee a small fraction of a cent.
+
+With a **browser wallet**, you sign and submit a classic Stellar transaction and pay the network fee in XLM from your own account, typically fractions of a cent. No USDC fee applies on this path.

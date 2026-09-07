@@ -31,4 +31,4 @@ Leverage amplifies both directions. Take a position with a notional size of \$10
 
 Higher leverage also means a smaller buffer above the maintenance margin: the same price move consumes a larger share of a thinly collateralized position's equity, so a highly leveraged position becomes liquidatable after a smaller adverse move. And a position's effective leverage drifts after opening, as accrued fees and unrealized losses eat into its margin, which is why it pays to monitor leveraged positions and top up collateral when needed.
 
-The exact margin checks and formulas are in the [technical reference](/technical/trading/margin-and-leverage).
+The exact margin checks and formulas are in the [technical reference](/technical/market/margin-and-leverage).

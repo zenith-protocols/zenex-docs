@@ -9,7 +9,7 @@ Collateral is the margin that backs your position and protects the vault if the 
 
 ## Collateral moves at order creation
 
-Creating an increase order moves the posted collateral, plus a flat execution fee, from your wallet into the trading contract right away. It sits there in escrow until a keeper fills the order against a verified price, at which point the escrowed collateral becomes the position's margin, less the fees due at the fill. The execution fee pays the keeper who fills the order. A decrease order escrows only the execution fee at creation. When a decrease fills, any collateral you withdraw and the fees due are settled out of the position.
+Creating an increase order moves the posted collateral, plus a flat execution fee, from your wallet into the market contract right away. It sits there in escrow until a keeper fills the order against a verified price, at which point the escrowed collateral becomes the position's margin, less the fees due at the fill. The execution fee pays the keeper who fills the order. A decrease order escrows only the execution fee at creation. When a decrease fills, any collateral you withdraw and the fees due are settled out of the position.
 
 If an order never fills, cancelling it returns the full escrow to your wallet. And when a position fully closes, whether by a fill, a liquidation, auto-deleveraging, or a market wind-down, any decrease orders still resting on that side are cancelled automatically and their escrow is returned with your payout.
 

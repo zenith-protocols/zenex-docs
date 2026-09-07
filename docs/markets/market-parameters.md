@@ -5,14 +5,14 @@ title: Market Parameters
 
 # Market Parameters
 
-Each market on Zenex is a standalone trading contract with its own **Config**. The Config holds every tunable value that controls fees, leverage, risk limits, and the interest curves for that market. Because each market is its own contract, these are **per-market parameters** that can be adjusted over time: what you see below is configured independently for every deployed pair.
+Each market on Zenex is a standalone market contract with its own **Config**. The Config holds every tunable value that controls fees, leverage, risk limits, and the interest curves for that market. Because each market is its own contract, these are **per-market parameters** that can be adjusted over time: what you see below is configured independently for every deployed pair.
 
 The values themselves depend on the asset's liquidity and volatility, so this page describes what each group of parameters does. The live values for any market can always be read from its contract, material changes flow through the protocol's [parameter-change process](../governance/parameter-changes.md), and the [current testnet values](#current-testnet-values) are listed at the end of this page.
 
 ### Sizing and Trade Fees
 
 - **Position size bounds**: a minimum and maximum notional size for a position, and a per-side open-interest ceiling that caps how large the long or short book can grow.
-- **Order dust floors**: a minimum order notional and a minimum order collateral, below which an order is rejected so tiny fills cannot spam the book.
+- **Order dust floors**: a minimum order notional and a minimum order margin, below which an order is rejected so tiny fills cannot spam the book.
 - **Skew-split trade fee**: two base fee rates, one for the side that worsens the market's long/short imbalance and an equal or lower one for the side that improves it. The [trade fee](../trading/fees.md) is charged pro-rata across the size a fill moves.
 - **Impact scalar**: sets the [price impact fee](../trading/fees.md), charged on every fill at a rate that grows with the fill's size and caps at 10%. A larger scalar means a gentler curve and a smaller fee.
 - **Keeper rate**: the keeper's share of the trade fee, paid to whoever fills the order.
@@ -27,7 +27,7 @@ The values themselves depend on the asset's liquidity and volatility, so this pa
 
 - **Initial margin**: the collateral required to open, expressed as a fraction of notional. Maximum [leverage](../trading/margin-and-leverage.md) is one divided by the initial margin.
 - **Maintenance margin**: the hard [liquidation](../trading/liquidation.md) floor, always lower than the initial margin. The gap between the two is the safety buffer before a position becomes liquidatable.
-- **Liquidation fee**: sets the boundary between a soft liquidation and a hard one. If remaining equity covers the fee, the liquidation is soft, no fee is charged, and the equity returns to the trader. Below that line the fee is taken and the remainder is forfeited to the protocol.
+- **Liquidation fee**: a rate applied to the notional of a liquidated position. It is charged on every liquidation, capped at the equity left after the close's other costs, and shared between keeper, treasury, and vault like a trade fee. Whatever remains after it is returned to the trader.
 
 ### Position Lifecycle Lock
 
@@ -52,7 +52,7 @@ The values themselves depend on the asset's liquidity and volatility, so this pa
 
 ### Vault-Order Parameters
 
-- **Vault fee**: the fee taken on each deposit or redeem fill, split between keeper, treasury, and vault.
+- **Vault fees**: separate deposit and redeem rates, each taken on the assets a fill moves and split between keeper, treasury, and vault.
 - **Redeem cooldown**: a minimum wait period, measured from when the redeem order was created, before a queued redeem can fill. Deposits have no cooldown and fill as soon as a fresh price is available.
 - **Withdraw PnL gate**: blocks a redeem while either side's pending trader profit exceeds a set fraction of half the remaining vault balance, so a redeem cannot drain liquidity that open winners are owed. Deposits carry no equivalent gate because every deposit and redeem is priced against pending trader PnL at fill.
 - **Minimum deposit** and **maximum vault balance**: the smallest deposit a vault order may queue, and the ceiling on total vault balance checked when a deposit fills. Redeems have no minimum, and a vault order always fills in full.
@@ -67,26 +67,26 @@ The testnet deployment currently lists a single **XLM** market, settled in USDC,
 
 | Parameter | Value |
 |---|---|
-| Maximum leverage | 100x (1% initial margin) |
-| Maintenance margin | 0.75% of notional |
+| Maximum leverage | 20x (5% initial margin) |
+| Maintenance margin | 2% of notional |
 | Liquidation fee rate | 0.5% of notional |
 | Trade fee | 0.06% on the imbalance-worsening side, 0.04% on the improving side |
-| Impact scalar | 100,000 USDC (a 1,000 USDC fill pays a 1% impact fee) |
+| Impact scalar | 10,000,000 USDC (a 10,000 USDC fill pays a 0.1% impact fee) |
 | Keeper share of fees | 10% |
-| Position size | 20 to 1,000,000 USDC notional |
-| Per-side open interest cap | 10,000,000 USDC |
-| Minimum order | 2 USDC notional and 2 USDC collateral |
+| Order execution fee | 0.01 USDC flat per order |
+| Position size | 1 to 25,000 USDC notional |
+| Per-side open interest cap | 50,000 USDC |
+| Minimum order | 1 USDC notional and 1 USDC margin |
 | Fresh-size decrease lock | 30 seconds |
 | Utilization caps | 80% for opens, 90% for vault withdrawals |
-| Borrowing interest | about 2.5% per year at the 50% target utilization, rising to about 15% per year at full utilization |
-| Funding rate cap | about 25% per year in either direction |
-| ADL thresholds | arms at 50% of half the vault balance, deleverages back to 40% |
+| Borrowing interest | rises linearly with the paying side's utilization, reaching about 50% per year at full utilization |
+| Funding rate | capped at about 20% per year in either direction, with a floor of about 1% per year on the charged rate; the rate holds steady while the skew stays within 4% |
+| ADL thresholds | arms at 55% of half the vault balance, deleverages back to 40% |
 | Profit-haircut threshold | 90% on the same measure |
-| Vault fill fee | 0.1% |
-| Minimum vault deposit | 10 USDC |
-| Redeem cooldown | 60 seconds |
+| Vault fill fee | 0.1% on deposits, 0.25% on redeems |
+| Minimum vault deposit | 1 USDC |
+| Redeem cooldown | 1 hour |
 | Withdraw PnL gate | 15% |
-| Vault balance cap | 10,000,000 USDC |
-| Order execution fee | flat per-order keeper fee, read from the market's contract |
+| Vault balance cap | 100,000 USDC |
 
-One fee parameter lives outside the per-market table. The treasury's share of protocol fees is a single protocol-wide rate stored on the treasury contract shared by every market deployed through the factory, and that contract is the source of truth for its current value.
+One fee parameter lives outside the per-market table. The treasury's share of protocol fees is a single protocol-wide rate stored on the treasury contract shared by every market deployed through the factory, and that contract is the source of truth for its current value (30% on the current testnet deployment).

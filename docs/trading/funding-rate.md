@@ -21,13 +21,13 @@ For example, a market with 3,000 XLM of long exposure and 1,000 XLM of short exp
 
 The rate returns fully to zero in only two ways: the market empties out (which resets it), or the dominant side flips and the momentum ramps the rate through zero toward the other side.
 
-The acceleration and decay speeds, the skew thresholds that separate the bands, and the minimum funding charge are all per-market parameters. The saved rate is hard-capped in both directions. The exact rate mechanics are in the [technical reference](/technical/trading/funding-rate).
+The acceleration and decay speeds, the skew thresholds that separate the bands, and the minimum funding charge are all per-market parameters. The saved rate is hard-capped in both directions. The exact rate mechanics are in the [technical reference](/technical/market/funding-rate).
 
 Because the rate carries momentum, a persistently one-sided market builds a strong funding rate that makes the crowded side increasingly expensive to hold and the other side increasingly attractive. This is what nudges traders back toward balance and reduces the vault's directional risk.
 
 ## Funding Accrues to a Claimable Balance
 
-Funding runs through an internal funding pool rather than flowing directly onto your position's PnL.
+Funding runs through an internal credit pool rather than flowing directly onto your position's PnL.
 
 When a position settles at a fill, the funding it owes is banked into the pool, and the funding it has earned is added to that user's claimable balance. To collect it you submit a separate claim, which pays out your claimable balance from the pool rather than topping up your collateral automatically. If the pool cannot cover the full amount at that moment, it pays what it can and the remainder stays claimable for later.
 

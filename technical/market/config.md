@@ -16,7 +16,7 @@ pub struct Config {
     pub max_position_notional: i128, // maximum position notional, token-dec
     pub max_open_interest: i128,     // per-side open-interest ceiling, token-dec; >= max_position_notional
     pub min_order_notional: i128,    // minimum |notional| per order, token-dec (dust floor); <= min_position_notional
-    pub min_order_collateral: i128,  // minimum |collateral| per order, token-dec (dust floor)
+    pub min_order_margin: i128,      // minimum posted margin per order, token-dec (dust floor)
     pub exec_fee: i128,              // flat keeper execution fee escrowed per order at creation, token-dec
     pub fee_dom: i128,               // dominant-side trade fee (SCALAR_18)
     pub fee_non_dom: i128,           // non-dominant trade fee (SCALAR_18)
@@ -28,7 +28,7 @@ pub struct Config {
 
     // --- margin ---
     pub init_margin: i128,        // initial margin; max leverage = 1/init_margin (SCALAR_18)
-    pub maintenance_margin: i128, // hard liquidation floor, < init_margin (SCALAR_18)
+    pub maintenance_margin: i128, // liquidation floor, < init_margin (SCALAR_18)
     pub liq_fee: i128,            // liquidation fee (SCALAR_18)
 
     // --- position lifecycle ---
@@ -72,7 +72,7 @@ The constructor and `set_config` validate the whole struct and trap on the first
 |---|---|
 | `keeper_rate` | `<= MAX_KEEPER_RATE` (50%) |
 | `fee_dom`, `fee_non_dom`, `deposit_fee`, `redeem_fee` | `<= MAX_FEE_RATE` (1%) |
-| `impact_scalar` | `> 0` |
+| `impact_scalar` | `> 0` and `>= min_position_notional * (SCALAR_18 / MIN_CHUNK_IMPACT_CAP)`, i.e. 1000x the minimum position notional |
 | `max_util_open`, `max_util_withdraw` | `<= MAX_UTIL` (1000%) |
 | `init_margin` | in `[MIN_MARGIN, MAX_MARGIN]` (0.1% to 50%, so max leverage 2x to 1000x) |
 | `liq_fee` | `<= MAX_LIQ_FEE` (25%) |
@@ -83,25 +83,29 @@ The constructor and `set_config` validate the whole struct and trap on the first
 | `funding_max`, `funding_increase`, `funding_decrease` | `<= MAX_FUNDING_RATE` (1000% per year, expressed per second) |
 | `threshold_stable_funding` | `<= SCALAR_18` (skew is a fraction) |
 
-The `notional_lock` floor exists so the decrease lock outlasts the price verifier's staleness window, otherwise an accepted stale price could open and close the same size. The shared funding bound keeps `funding_increase * elapsed` and `funding_decrease * elapsed` far from overflow, and a full-skew step of `MAX_FUNDING_RATE` per second already reaches any valid cap in one second.
+The `notional_lock` floor exists so the decrease lock outlasts the oracle's trade staleness ceiling, otherwise an accepted stale price could open and close the same size. The shared funding bound keeps `funding_increase * elapsed` and `funding_decrease * elapsed` far from overflow, and a full-skew step of `MAX_FUNDING_RATE` per second already reaches any valid cap in one second.
 
 **Ordering and shape.**
 
 - Sizing: `0 < min_position_notional < max_position_notional <= max_open_interest`, so the per-side ceiling admits at least one maximum-size position.
-- Dust floors: `min_order_notional > 0`, `min_order_collateral > 0`, and `min_order_notional <= min_position_notional`, else a minimum-size position could not be closed in one order.
+- Dust floors: `min_order_notional > 0`, `min_order_margin > 0`, and `min_order_notional <= min_position_notional`, else a minimum-size position could not be closed in one order.
+- Execution fee: `exec_fee <= min_order_margin`, so the flat keeper fee can never exceed the smallest margin an order may post.
 - Trade fees: `fee_dom >= fee_non_dom`, the dominant side pays at least as much as the non-dominant side.
 - Utilization: `0 < max_util_open <= max_util_withdraw`. The band between the two caps is withdrawal-only headroom that keeps a minimum of liquidity behind open positions.
 - Margin ladder: `0 <= liq_fee < maintenance_margin < init_margin`. `liq_fee = 0` is a valid no-penalty configuration.
+- Born-liquidatable rail: `init_margin > maintenance_margin + fee_non_dom + MIN_CHUNK_IMPACT_CAP`, so a minimum-size open at the initial-margin floor still clears maintenance margin after its own fees.
 - Borrowing curve: `borrow_rate <= increased_borrow_rate`, the kink can only steepen.
 - Funding: `threshold_decrease_funding <= threshold_stable_funding` (the decay band sits inside the stable band) and `funding_min <= funding_max`.
-- Solvency ladder: `MIN_ADL_CLEAR` (40%) `<= adl_clear_target <= adl_max_pnl`, `MIN_ADL_TRIGGER` (45%) `<= adl_max_pnl <= max_pnl_trader < 100%`, and `0 < max_pnl_withdraw <= max_pnl_trader`. Every rung is a side-pending-PnL factor of half the vault balance. The clear target sits below the trigger for hysteresis, the trigger at or below the haircut threshold so ADL de-risks before the haircut engages, and the band floors keep a config change from arming ADL against modest open winners.
+- Solvency ladder: `MIN_ADL_CLEAR` (40%) `<= adl_clear_target <= adl_max_pnl`, `MIN_ADL_TRIGGER` (45%) `<= adl_max_pnl <= max_pnl_trader < 100%`, and `0 < max_pnl_withdraw <= adl_max_pnl`. Every rung is a side-pending-PnL factor of half the vault balance. The clear target sits below the trigger for hysteresis, the trigger at or below the haircut threshold so ADL de-risks before the haircut engages, and the band floors keep a config change from arming ADL against modest open winners.
 - Vault sizing: `min_deposit > 0`, `max_vault_balance > 0`, and `min_deposit * MIN_DEPOSIT_DIVISOR (100) <= max_vault_balance`, so raising the deposit floor can never block every fill.
 
 ## Applying Changes
 
-`set_config` is owner-only and replaces the whole struct after validation. Two guards tie rate changes to accrual, so no parameter change can reprice an un-accrued interval:
+`set_config` is owner-only and replaces the whole struct after validation. A rate change is tied to accrual by a guard that keeps a new parameter from repricing an un-accrued interval. Changing any of these fields requires that `accrue` has already run in the same ledger, else the call traps `MarketNotAccrued` (703):
 
-- **Funding parameters** (`funding_increase`, `funding_decrease`, `threshold_stable_funding`, `threshold_decrease_funding`, `funding_min`, `funding_max`): funding accrual is price-free, so `set_config` first accrues funding to the current timestamp under the outgoing parameters, then applies the new values.
-- **Borrowing parameters** (`target_util`, `borrow_rate`, `increased_borrow_rate`, and `max_util_open`, the borrow-reserve denominator): borrowing accrual is price-bearing and cannot run inside `set_config`, so the call requires a same-ledger `accrue`, else it traps `BorrowingNotAccrued` (703).
+- **Funding parameters**: `funding_increase`, `funding_decrease`, `threshold_stable_funding`, `threshold_decrease_funding`, `funding_min`, `funding_max`.
+- **Borrowing parameters**: `target_util`, `borrow_rate`, `increased_borrow_rate`, and `max_util_open`, the borrow-reserve denominator.
+
+The guard is waived while the market is `Frozen`, where accrual itself is blocked.
 
 Every successful call emits `config_update` carrying the full new configuration. See [Events](./events.md).

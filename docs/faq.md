@@ -15,11 +15,11 @@ Zenex is built on **Stellar Soroban**, Stellar's smart contract platform. Soroba
 
 ### How does a trade get executed?
 
-You **create an order** signed by you, and a permissionless **keeper** fills it at a price it verifies against the market's oracle feed. Your order is price-free but sets the bounds a keeper must respect: a size, a slippage price bound, an expiration, and, for limit and stop orders, a trigger price. Your collateral, plus a small flat execution fee for the keeper, is escrowed into the trading contract when you create the order. Cancelling the order refunds the full escrow. A market order is one you expect a keeper to fill right away. A limit or stop order rests until its trigger price is crossed. See [Start Trading](./getting-started/start-trading.md).
+You **create an order** signed by you, and a permissionless **keeper** fills it at a price it verifies against the market's oracle feed. Your order is price-free but sets the bounds a keeper must respect: a size, a slippage price bound, an expiration, and, for limit and stop orders, a trigger price. Your collateral, plus a small flat execution fee for the keeper, is escrowed into the market contract when you create the order. Cancelling the order refunds the full escrow. A market order is one you expect a keeper to fill right away. A limit or stop order rests until its trigger price is crossed. See [Start Trading](./getting-started/start-trading.md).
 
 ### Can anyone run a keeper?
 
-Yes. Keepers are permissionless: anyone can fill orders, run liquidations, and keep a market's accounting current, and they earn a fee for doing so. A keeper can only act within the limits your signed order allows and at a price verified against the oracle, so it cannot trade against you on its own terms. You can even fill your own order, in which case the keeper reward routes back to you.
+Yes. Keepers are permissionless: anyone can fill orders, run liquidations, and keep a market's accounting current, and they earn a fee for doing so. A keeper can only act within the limits your signed order allows and at a price verified against the oracle, so it cannot trade against you on its own terms. You can even fill your own order, in which case the keeper reward routes back to you. See [Why Permissionless](./keepers/why-permissionless.md) for why execution is kept open.
 
 ### What wallets are supported?
 
@@ -37,17 +37,21 @@ Maximum leverage is a per-market parameter and equals one divided by that market
 
 A fill pays a **trade fee** that is split by its effect on market balance: the side that worsens the long/short imbalance pays a higher rate, and the side that improves it pays a lower one. A **price impact fee** applies to every fill, at a rate that grows with the size of the fill, so larger trades pay proportionally more. Each order also carries a small flat **execution fee** that pays the keeper who fills it. It is escrowed when you create the order and refunded if you cancel. Positions on the market's larger side also accrue **borrowing interest** over time, at a rate that rises with that side's use of the vault's capacity, and longs and shorts exchange a **funding rate** based on market imbalance. Fee rates are per-market parameters. For a detailed breakdown, see [Fees](./trading/fees.md).
 
+### How do I pay for gas?
+
+It depends on your sign-in method. Smart-account transactions are submitted through Zenex's relay, which pays the XLM gas and charges a small fee in **USDC** instead, capped at a maximum you sign and can adjust in settings, so a smart account never needs to hold XLM. Browser wallets submit classic Stellar transactions and pay their own network fee in XLM, typically fractions of a cent. See [Fees](./trading/fees.md).
+
 ### How do I receive funding I have earned?
 
 Funding is held in an internal pool with a per-user claimable balance. When you are on the side that earns funding, it accrues to your claimable balance and you **claim** it when you want it.
 
 ### How does the vault work?
 
-Each market has its own strategy vault, a liquidity pool that backs that market's trades and stands as the counterparty to every position. Depositors earn yield from trading fees, borrowing interest, and net trader losses. Deposits and redeems are routed through the trading contract as vault orders: they escrow first and a keeper fills them, minting or burning shares net of the vault fee. See [Vault Overview](./vault/overview.md) for more details.
+Each market has its own strategy vault, a liquidity pool that backs that market's trades and stands as the counterparty to every position. Depositors earn yield from trading fees, borrowing interest, and net trader losses. Deposits and redeems are routed through the market contract as vault orders: they escrow first and a keeper fills them, minting or burning shares net of the vault fee. See [Vault Overview](./vault/overview.md) for more details.
 
 ### Can I get liquidated?
 
-Yes. A position becomes liquidatable when its **equity falls below the maintenance margin**, a per-market parameter. A keeper then closes the whole position. If your remaining equity still covers the liquidation fee, no fee is charged and the equity is returned to you (a soft liquidation). If it does not, all remaining equity is forfeited to the vault (a hard liquidation). You can monitor your position health and add collateral to avoid liquidation. See [Liquidation](./trading/liquidation.md) for the full mechanics.
+Yes. A position becomes liquidatable when its **equity falls below the maintenance margin**, a per-market parameter. A keeper then closes the whole position. The close charges a liquidation fee, a per-market rate on the notional capped at the equity that remains, and whatever is left after that fee is returned to you. You can monitor your position health and add collateral to avoid liquidation. See [Liquidation](./trading/liquidation.md) for the full mechanics.
 
 ### What is the collateral token?
 
@@ -65,11 +69,11 @@ A resting order fills only when every condition holds at once: the market must h
 
 ### Why didn't my stop-loss or take-profit fire?
 
-Triggers are judged against the verified oracle price on the side of the spread your close would execute at, not against the last trade you saw on a chart. An order can also only fill against a price published at or after the moment it was created, so a spike that happened before you placed it does not count. If the market gaps past your trigger, the order becomes eligible but your slippage bound still applies: a bound tighter than the gapped price rejects the fill until the price comes back within it. Keepers also need a fresh signed price (at most 15 seconds old), so fills land at the next verified update rather than the instant the chart touches your level.
+Triggers are judged against the verified oracle price on the side of the spread your close would execute at, not against the last trade you saw on a chart. An order can also only fill against a price published at or after the moment it was created, so a spike that happened before you placed it does not count. If the market gaps past your trigger, the order becomes eligible but your slippage bound still applies: a bound tighter than the gapped price rejects the fill until the price comes back within it. Keepers also need a fresh signed price (10 seconds on the current testnet deployment, at most 15), so fills land at the next verified update rather than the instant the chart touches your level.
 
 ### Why can't I close or reduce my position?
 
-Newly added size is locked against decreases for a short period (30 seconds on testnet), and a full close is blocked while any locked notional remains. A partial close must also leave the remainder above the initial-margin floor, so a reduction that would leave too little collateral behind is rejected. Add collateral or close in full once the lock has lapsed. If the market is frozen, fills and liquidations, new orders, funding claims, and vault-order cancels are halted until the market is unfrozen. You can still cancel a resting trade order and recover its escrow.
+Newly added size is locked against decreases for a short period (30 seconds on testnet), and a full close is blocked while any locked notional remains. A partial close must also leave the remainder above the initial-margin floor, so a reduction that would leave too little collateral behind is rejected. Add collateral or close in full once the lock has lapsed. If the market is frozen, fills and liquidations, new orders, funding claims, and cancels are all halted until the market is unfrozen, and your escrow stays untouched in the meantime.
 
 ### Why is my vault deposit or redeem still pending?
 

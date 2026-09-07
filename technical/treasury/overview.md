@@ -21,11 +21,11 @@ Sets the Ownable owner and the initial fee rate. The rate must be in `[0, SCALAR
 
 All three entry points (`get_rate`, `set_rate`, `withdraw`) extend the treasury's instance storage TTL (threshold 30 days, bump 31 days), so routine settlements that read the rate keep the contract instance alive.
 
-The trading contract reads `get_rate` on every settlement and applies the returned rate directly, relying on the treasury's own `[0, SCALAR_18/2]` bound. The treasury then receives its share of the fees the protocol keeps: the trade fee (base plus impact), the borrowing fee, any liquidation forfeit, and the vault fill fee on vault-order deposits and redeems. Each component's treasury share is floored separately and computed on the gross fee, before the keeper cut, so the keeper rate cannot dilute the treasury's take. Funding carries no treasury cut, since it is a peer-to-peer transfer between traders. Reading the rate live means the treasury owner can retune the protocol's revenue share without redeploying or reconfiguring the trading contract.
+The market contract reads `get_rate` on every settlement and applies the returned rate directly, relying on the treasury's own `[0, SCALAR_18/2]` bound. The treasury then receives its share of the fees the protocol keeps: the trade fee (base plus impact), the borrowing fee, the liquidation fee, and the vault fill fee on vault-order deposits and redeems. Each component's treasury share is floored separately and computed on the gross fee, before the keeper cut, so the keeper rate cannot dilute the treasury's take. Funding carries no treasury cut, since it is a peer-to-peer transfer between traders. Reading the rate live means the treasury owner can retune the protocol's revenue share without redeploying or reconfiguring the market contract.
 
 ## Fee Collection
 
-The treasury is a passive receiver. The trading contract pushes fees to it via standard SEP-41 token transfers, and the treasury simply holds whatever balance of each token accumulates from those transfers.
+The treasury is a passive receiver. The market contract pushes fees to it via standard SEP-41 token transfers, and the treasury simply holds whatever balance of each token accumulates from those transfers.
 
 ## Withdrawal
 
@@ -33,6 +33,6 @@ The treasury is a passive receiver. The trading contract pushes fees to it via s
 
 The treasury emits no events of its own. Rate changes and withdrawals surface only through transaction effects, governance `Executed` events when routed through governance, and the token contract's transfer events.
 
-## Immutability in Trading
+## Immutability in the Market Contract
 
-The treasury address is set once, in the trading contract's constructor (threaded through from the factory's `FactoryInitMeta`), and stays fixed for the life of the pair. A trading contract always sends protocol fees to the same treasury. Changing the treasury means deploying a fresh trading + vault pair.
+The treasury address is set once, in the market contract's constructor (threaded through from the factory's `FactoryInitMeta`), and stays fixed for the life of the pair. A market contract always sends protocol fees to the same treasury. Changing the treasury means deploying a fresh market + vault pair.

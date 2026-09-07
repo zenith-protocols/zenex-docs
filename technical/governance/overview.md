@@ -14,7 +14,7 @@ __constructor(owner: Address, delay: u64)
 ```
 
 - `owner`: Admin address authorized to queue/cancel calls and set status.
-- `delay`: Mandatory waiting period in seconds before queued calls can execute. Must be in the range `[1, 5_184_000]` (1 second to 60 days). Panics with `InvalidDelay` (772) if zero or above the 60-day cap.
+- `delay`: Mandatory waiting period in seconds before queued calls can execute. Must be in the range `[1, 5_184_000]` (1 second to 60 days). Panics with `InvalidDelay` (812) if zero or above the 60-day cap.
 
 ## Entry Points
 
@@ -32,7 +32,7 @@ queue(target: Address, fn_name: Symbol, args: Vec<Val>) -> u32
 cancel(nonce: u32)
 ```
 
-*Owner only.* Cancels a queued call before it is executed. Panics with `NotQueued` (770) if the nonce is not found or has expired.
+*Owner only.* Cancels a queued call before it is executed. Panics with `NotQueued` (810) if the nonce is not found.
 
 ### execute
 
@@ -40,7 +40,7 @@ cancel(nonce: u32)
 execute(nonce: u32)
 ```
 
-*Permissionless.* Executes a queued call after the delay has passed. The queued entry is removed from storage before the external call, so a queued call can execute at most once. The governance contract itself is the invoker of the queued call, so target contracts whose admin functions require owner auth must have the governance contract set as their owner for the call to succeed. Panics with `NotQueued` (770) if not found, or `NotUnlocked` (771) if the delay has not yet passed.
+*Permissionless.* Executes a queued call after the delay has passed. The queued entry is removed from storage before the external call, so a queued call can execute at most once. The governance contract itself is the invoker of the queued call, so target contracts whose admin functions require owner auth must have the governance contract set as their owner for the call to succeed. Panics with `NotQueued` (810) if not found, or `NotUnlocked` (811) if the delay has not yet passed.
 
 ### set_status
 
@@ -48,7 +48,7 @@ execute(nonce: u32)
 set_status(target: Address, status: u32)
 ```
 
-*Owner only.* Immediately calls `set_status(status)` on the target contract, bypassing the timelock delay. This allows an emergency status change without waiting, for example freezing a trading market (`Frozen`) or starting its wind-down (`Delisted`). The governance contract is flow-agnostic: it forwards whatever `u32` status value the owner passes and does not interpret it, so the meaning of each value is defined by the target contract (see the trading [status lifecycle](../trading/storage.md#status-lifecycle)).
+*Owner only.* Immediately calls `set_status(status)` on the target contract, bypassing the timelock delay. This allows an emergency status change without waiting, for example freezing a market (`Frozen`) or starting its wind-down (`Delisted`). The governance contract is flow-agnostic: it forwards whatever `u32` status value the owner passes and does not interpret it, so the meaning of each value is defined by the target contract (see the market contract's [status lifecycle](../market/storage.md#status-lifecycle)).
 
 ### set_delay
 
@@ -56,7 +56,7 @@ set_status(target: Address, status: u32)
 set_delay(new_delay: u64)
 ```
 
-*Owner only.* Queues a delay change. The new delay must be in `[1, 5_184_000]` seconds (60-day cap). The change is subject to the *current* delay before it can take effect, preventing instant delay reduction attacks. Panics with `InvalidDelay` (772) if the value is out of range.
+*Owner only.* Queues a delay change. The new delay must be in `[1, 5_184_000]` seconds (60-day cap). The change is subject to the *current* delay before it can take effect, preventing instant delay reduction attacks. Panics with `InvalidDelay` (812) if the value is out of range.
 
 ### apply_delay
 
@@ -64,7 +64,7 @@ set_delay(new_delay: u64)
 apply_delay()
 ```
 
-*Permissionless.* Applies a pending delay change after the current delay has passed. Panics with `NotQueued` (770) if no pending delay change exists, or `NotUnlocked` (771) if the current delay has not yet passed.
+*Permissionless.* Applies a pending delay change after the current delay has passed. Panics with `NotQueued` (810) if no pending delay change exists, or `NotUnlocked` (811) if the current delay has not yet passed.
 
 ### get_delay
 
@@ -80,7 +80,7 @@ get_delay() -> u64
 get_queued(nonce: u32) -> QueuedCall
 ```
 
-*Permissionless.* Returns the queued call for a given nonce. Panics with `NotQueued` (770) if not found or expired.
+*Permissionless.* Returns the queued call for a given nonce. Panics with `NotQueued` (810) if not found.
 
 ### Ownership functions
 
@@ -116,7 +116,7 @@ The contract implements OZ `Ownable` only, and is permanently pinned to its depl
 
 ## Two-Step Delay Change
 
-The delay itself cannot be changed instantly. `set_delay` stores a `PendingDelay { new_delay, unlock_time }` in temporary storage, where `unlock_time = now + current_delay`. Only one pending delay change exists at a time: a subsequent `set_delay` overwrites it with a fresh unlock time. Only after the current delay elapses can anyone call `apply_delay` to activate the new value. This prevents an attacker who gains owner access from instantly shortening the delay and bypassing the timelock.
+The delay itself cannot be changed instantly. `set_delay` stores a `PendingDelay { new_delay, unlock_time }` in persistent storage, where `unlock_time = now + current_delay`. Only one pending delay change exists at a time: a subsequent `set_delay` overwrites it with a fresh unlock time. Only after the current delay elapses can anyone call `apply_delay` to activate the new value. This prevents an attacker who gains owner access from instantly shortening the delay and bypassing the timelock.
 
 ## Storage
 
@@ -124,29 +124,21 @@ The delay itself cannot be changed instantly. `set_delay` stores a `PendingDelay
 |---|---|---|
 | Instance | `Delay` | Current delay in seconds (`u64`) |
 | Instance | `Nonce` | Monotonically incrementing counter (`u32`) |
-| Temporary | `Queued(nonce)` | `QueuedCall { target, fn_name, args, unlock_time }` |
-| Temporary | `PendingDelay` | `PendingDelay { new_delay, unlock_time }` |
+| Persistent | `Queued(nonce)` | `QueuedCall { target, fn_name, args, unlock_time }` |
+| Persistent | `PendingDelay` | `PendingDelay { new_delay, unlock_time }` |
 
 ### TTL Calculation
 
-Queued entries and pending delay changes use Soroban temporary storage. The TTL is derived from the delay:
-
-```
-delay_ledgers = delay_seconds / 5
-threshold     = max(2 * delay_ledgers, 1_day_ledgers)
-bump          = threshold + 1_day_ledgers
-```
-
-Where `1_day_ledgers = 17280` (assuming 5-second ledger close time). The 2x multiplier ensures the entry survives long enough to be executed after the delay, with a minimum floor of 1 day. If the TTL expires before execution, the entry is silently pruned with no event or notification.
+Queued entries and pending delay changes live in Soroban persistent storage on one flat tier. Every access extends an entry when its remaining TTL drops below 100 days, bumping it back to 120 days (`ONE_DAY_LEDGERS = 17280`, assuming 5-second ledger close time). An entry whose TTL still lapses is archived, not deleted, and can be restored, so a queued call does not vanish. Each entry point also extends the contract instance to 31 days when its remaining TTL drops below 30, and a timelock longer than that lease relies on an operational TTL sweep (the instance is likewise restorable).
 
 ## Error Codes
 
 | Code | Name | Description |
 |---|---|---|
 | 1 | `Unauthorized` | Declared in the error enum but never raised by code (see below) |
-| 770 | `NotQueued` | Queue entry not found or expired |
-| 771 | `NotUnlocked` | Timelock delay not yet passed |
-| 772 | `InvalidDelay` | Delay value is zero or exceeds the 60-day cap |
+| 810 | `NotQueued` | Queue entry not found |
+| 811 | `NotUnlocked` | Timelock delay not yet passed |
+| 812 | `InvalidDelay` | Delay value is zero or exceeds the 60-day cap |
 
 Owner-only functions are gated by `require_auth` on the owner address, so an unauthorized call fails with a Soroban host auth error, not with contract error code 1. Integrators should not match on `Unauthorized` for auth failures.
 
