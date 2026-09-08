@@ -140,7 +140,7 @@ One instance is one market. The class mirrors the contract trait 1:1; the higher
 | `executeVaultOrder(keeper, user, id, price)` | Fill a pending vault deposit or redeem in full. |
 | `accrue(price)` | Advance both the borrowing and funding indices to now under one clock. |
 
-The `keeper` argument is only the reward recipient. It is not authenticated, and anyone may call these paths ([why](/keepers/why-permissionless)). Every one of them takes a price report: `executeOrder` and `executeVaultOrder` are verified against the oracle's strict fill window, the other four against its wider gap-closing window. The market contract picks the window per route, so a caller never selects it.
+The `keeper` argument is only the reward recipient. It is not authenticated, and anyone may call these paths ([why](/keepers)). Every one of them takes a price report: `executeOrder` and `executeVaultOrder` are verified against the oracle's strict fill window, the other four against its wider gap-closing window. The market contract picks the window per route, so a caller never selects it.
 
 ### Admin (owner only)
 

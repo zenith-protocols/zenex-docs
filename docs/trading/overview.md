@@ -1,82 +1,21 @@
 ---
+title: Trading
 sidebar_position: 1
-title: Trading Overview
 ---
 
-# Trading Overview
+# Trading
 
-Trading on Zenex means opening leveraged positions on asset prices. You never buy or sell the underlying asset. Instead, you take a directional bet using the vault's collateral token as margin, and your profit or loss is determined by how the price moves from your entry point. This page covers the core concepts you need to understand before placing your first trade.
+A trade on Zenex starts with an order that you sign with your own key. You escrow the margin and the keeper's fee with the order, so your own funds cover the keeper's reward. A keeper fills that order against a price that the oracle checks. On a fill that opens or adds to a position, the escrow covers the costs and the remainder posts as margin. On a fill that reduces a position, the costs come out of the margin and the profit already on it. Your position runs until you close it, or until a keeper closes part of it or all of it for you. The pages below cover each part of a trade.
 
-Every trade happens in two steps. You create an order and sign it with your own key, and a keeper fills it against a verified oracle price. Your collateral is escrowed into the market contract when you create the order, and nobody, including the keeper, can change the terms you signed or move anything beyond them.
-
-## Position Basics
-
-Every position on Zenex has a direction, a size, and collateral backing it. When you go long, you profit if the asset price rises. When you go short, you profit if the price falls. The collateral you post is your margin, and the notional value is the total size of your exposure. Leverage is the ratio between your notional and your collateral. For example, posting 500 in collateral for a 5,000 notional position gives you 10x leverage.
-
-Higher leverage means greater sensitivity to price movements. A 1% price move translates to a 10% change in equity at 10x leverage, a 20% change at 20x, and so on. The maximum leverage available depends on the market's initial margin, a per-market parameter. A market with a 1% initial margin allows up to 100x leverage, while a 5% initial margin caps leverage at 20x.
-
-## One Market Per Contract
-
-Each Zenex market is its own isolated market contract paired with its own strategy vault. The contract address you interact with is the market itself, and each market's risk and liquidity stay fully contained within its own pair. The market contract is upgradeable only by its owner (optionally behind a timelock), while the vault holding depositor collateral has no upgrade path at all.
-
-Within a single market your exposure is netted per side. You hold at most one long position and at most one short position, addressed as your long or your short. Every fill folds into the matching side: an increase blends into the open position, a decrease realizes against it. A side is open while it carries size and closed once its size returns to zero.
-
-## Orders and Keeper Fills
-
-Zenex splits trading into two steps: you create an order, and a keeper fills it.
-
-When you create an order you sign it with your own key, but you never name an execution price. You describe what you want (a direction, a size, some collateral, an optional trigger, a slippage bound, and an expiration) and the order rests on-chain until it can be filled. A keeper then fills the order against a verified oracle price: the fill price always comes from that verified update, and your trigger and slippage bound only constrain which prices are acceptable. Keepers are open bots that anyone can run: the keeper is only the party that submits the price and collects the keeper reward, it is never able to change the terms you signed.
-
-When you create an order that grows your position, your collateral plus a flat keeper execution fee move into the market contract as escrow right away. An order that shrinks your position escrows only the execution fee, with fees and proceeds settled out of the position at the fill. Cancelling an order returns the full escrow. At the fill the escrowed collateral becomes your margin (minus fees), the execution fee pays the keeper, and nothing beyond the terms you signed can move: an increase fill draws only on its escrow, a decrease fill settles fees and proceeds only out of the position it closes.
-
-## Order Types
-
-Every order belongs to one of two families: an increase (grow the position and add collateral) or a decrease (shrink size or withdraw collateral). Each family comes in market, limit, and stop variants, six order kinds in total. The familiar trading actions map onto these as follows.
-
-A market order is an increase with no trigger. It fills at the next verified price the keeper submits, as long as that price sits within the slippage bound you set. This is the simplest way to enter, and it can even be created and filled in the same ledger as a single atomic step.
-
-A limit order is an increase that carries a trigger price. It stays resting until the market reaches your trigger, at which point a keeper may fill it. The direction the trigger fires is implied by the order type and your side rather than being something you choose separately: a limit entry fills when the price falls to your level for a long and rises to it for a short. The trigger and the slippage bound are both judged against the price your fill actually touches.
-
-A stop entry is an increase whose trigger fires on the opposite crossing: it fills when the price rises through your level for a long and falls through it for a short. This is the classic breakout entry, adding exposure once the market pushes through a level instead of waiting for a pullback to it.
-
-Take-profit and stop-loss are ordinary decrease orders that carry a trigger, resting on-chain like any other order rather than existing as a separate object attached to a position. A take-profit fires on the profitable side of your entry, a stop-loss on the losing side. You can size them to close the whole position or only part of it, and a keeper fills them when the trigger is crossed. A side can carry up to eight resting decrease orders at a time, and when the position fully closes, any take-profit or stop-loss still resting on it is cancelled automatically and its escrow returned to you.
-
-## Slippage and Expiration
-
-Two safeguards travel with every order.
-
-The price bound is a one-sided slippage limit. A buy leg caps the price it will accept and rejects a fill above it, a sell leg floors the price and rejects a fill below it. If the verified price is worse than your bound, the fill is rejected rather than executed at a bad price. Leaving the bound unset means the fill is unbounded.
-
-The expiration is a ledger sequence, not a wall-clock time. Your order is fillable while the current ledger is at or below the expiration you set. An expiration already behind the current ledger is rejected at creation, and any future ledger sequence is accepted.
-
-## Position Lifecycle
-
-A position follows a clear lifecycle from the first fill to the close.
-
-The side opens when a keeper fills your first increase. At that point the protocol records your implied entry price (notional divided by the base tokens bought), your posted collateral, and a snapshot of the funding and borrowing indices so that continuous costs can be measured from that moment. Every later increase on the same side blends into the same position and re-blends the implied entry.
-
-While the side is open you manage it by creating more orders. An increase with fresh collateral lowers your effective leverage and pushes your liquidation price away. A collateral-only decrease raises leverage, as long as you stay inside the margin limits. A resting take-profit or stop-loss lets a keeper close for you when a trigger is crossed.
-
-The side closes when a decrease reduces it to zero, either through a full-close order you create or through a triggered take-profit or stop-loss a keeper fills. It can also be closed for you by a liquidation if your equity falls below the maintenance margin, or by auto-deleveraging if your winning side grows too large for the vault to safely back. A partial decrease realizes profit or loss on the portion closed and leaves the rest of the position intact.
-
-## The Decrease Lock
-
-Freshly added notional is locked against decreases for a short window, a per-market parameter. When you increase a position, the newly added size cannot be closed or withdrawn until its lock elapses, and a further increase folds into the live lock and resets its deadline. A partial decrease can only touch the unlocked fraction, and a full close is blocked while any locked notional remains.
-
-This lock, together with the oracle anti-replay rule (an order can only fill against a price published at or after the order was created, with the single exception of a market order filled in its creation ledger), ensures every position carries real market risk. It prevents a trader from opening and immediately closing across a single oracle update to extract a risk-free difference. Liquidations are exempt: if your equity falls below the maintenance margin, keepers can close the position regardless of the lock.
-
-## Fee Overview
-
-Zenex charges five itemized costs. Four of them settle out of your collateral at the fill, and the fifth, the execution fee, is escrowed up front when you create the order.
-
-The trade fee is charged on every fill that changes your position's size. It is split by how your trade affects the market's balance: the leg that pushes the long and short sizes further apart pays the dominant-side rate, while the leg that brings them closer pays the lower non-dominant rate. This encourages balanced markets.
-
-The impact fee is charged on every fill that moves size, at a rate that grows with the size of the fill and caps at 10%. It reflects the cost a large order would impose on a traditional order book, so bigger fills pay proportionally more.
-
-Borrowing interest accrues continuously and is paid by the larger side of the market (on an exact tie both sides pay, each at its own rate). The rate follows a kink model driven by that side's own use of its share of vault capacity: low while the side's open interest is modest against half the vault, climbing steeply as that share fills.
-
-Funding is a continuous transfer between longs and shorts driven by the market's imbalance. Its sign follows the crowded side (a positive rate means longs pay shorts). Earned funding accrues to a claimable balance that you withdraw with a separate claim, rather than being credited to your position automatically.
-
-The execution fee is a flat per-order fee, a per-market parameter, escrowed when you create the order and paid to the keeper that fills it. It is refunded in full if you cancel the order, and a resting take-profit or stop-loss that never fills before your position closes has its fee returned automatically.
-
-For a detailed breakdown of how each cost works, see the [Fees](./fees.md), [Borrowing Interest](./borrowing-interest.md), and [Funding Rate](./funding-rate.md) pages.
+| Page | What it covers |
+| --- | --- |
+| [Positions](./positions.md) | What a position is, how a fill changes it, and what a close returns to you. |
+| [Orders](./orders.md) | The order kinds, the terms you sign, the escrow each kind takes, and how you cancel. |
+| [Margin and leverage](./margin-and-leverage.md) | The collateral behind a position, the leverage the market allows, and the two margin lines. |
+| [Fees](./fees.md) | The charges a fill pays, what sets each one, and where each one goes. |
+| [Funding rate](./funding-rate.md) | The transfer between the two sides of a market, and how the rate moves. |
+| [Borrowing interest](./borrowing-interest.md) | The cost of the vault liquidity a side reserves, and the rate that sets it. |
+| [Claimable credit](./claimable-credit.md) | The balance the market holds in your name, how it fills up, and what a claim pays. |
+| [Profit and loss](./pnl.md) | How your gain or loss is marked while a position is open, and when it becomes cash. |
+| [Liquidation](./liquidation.md) | When a keeper can close your position, what the close costs, and what returns to you. |
+| [Auto-deleveraging](./adl.md) | When a keeper closes a winning position, in part or in full, to protect the vault. |

@@ -1,35 +1,38 @@
 ---
-sidebar_position: 1
-title: Governance Overview
+title: Governance
+sidebar_position: 6
 ---
 
-# Governance Overview
+# Governance
 
-Zenex is a protocol primitive. Anyone can deploy a market contract and its strategy vault through the factory, and each deployment has its own owner who controls its parameters. There is no single "Zenex exchange" with a fixed governance structure. Because each market is a standalone market contract, governance is per market: how a given market is run depends entirely on who owns that contract and the trust model they choose.
+Every market has one owner, set at deployment. The owner is an account or a contract, and it holds the parameters, the state, and the code of the market. One owner can hold several markets, so one owner can hold the rules of every market you have a position in. The owner of a market is part of what you trust when you trade in it or supply liquidity to it. **Before you commit funds to a market, find out who owns it and what limits that owner accepts.**
 
-## Ownership
+## What an owner can change
 
-Every market contract has an owner, set at deployment time. The owner can update that market's configuration, change its operational status, set a terminal settlement price when winding the market down, and upgrade the contract's code in place. Ownership can be held by a single address, a multisig, a governance contract, or any other on-chain entity, and it can be transferred through a two-step transfer-and-accept process. Because each market is its own standalone contract, an owner governs one market at a time.
+An owner replaces the whole parameter set of a market in one call. Every fee, every margin line, the leverage ceiling, the size limits, and the borrowing and funding curves move together in that call. Read [Market parameters](./markets/market-parameters.md) for what the set covers.
 
-## What the Owner Controls
+An owner also sets the state of the market. The owner can stop every fill that opens a position or adds size to one, freeze the market, or delist it for wind-down. Retirement is a state of its own, and no state follows it. The owner can retire a market only after every position is closed and every margin balance is out of it. One day after a delist, the owner can fix a flat settlement price. From then on, the market prices every close, every liquidation, and every vault fill at that price. Until the owner sets it, those fills take the price from the feed. The owner can replace the flat settlement price while the market stays delisted. Read [Market status](./markets/status.md) for what each state does to your position.
 
-The owner acts through four entry points on the market contract:
+## The code of a market can be replaced
 
-- **Configuration** (`set_config`): replaces the market's [Config](../markets/market-parameters.md), the full set of fees, margins, leverage cap, utilization caps, and interest curves. A change to a borrowing or funding rate parameter must be paired with an accrual in the same ledger, so the switch to new rates never skips or double-counts what has already accrued.
-- **Status** (`set_status`): moves the market through its [lifecycle](../markets/overview.md) states (Active, OnIce, Frozen, Delisted, Retired). Retiring a market sweeps its funding-pool surplus into the vault and requires that all positions are already closed.
-- **Terminal price** (`set_terminal_price`): sets or refreshes the flat settlement price of a delisted market, used to wind down any remaining positions after the delist grace window.
-- **Upgrade** (`upgrade`): replaces the market contract's code in place, preserving all storage. This is the heaviest power an owner holds, and placing the ownership behind the timelock makes every upgrade wait out the delay like any other queued change.
+An owner replaces the code of a market in place. The stored state survives the replacement, so your position, your margin, and your orders stay as they were. The rules that act on them are then the new rules. **This is the widest power an owner holds.** It repairs a defect in a live market. It also rewrites the rules you accepted when you opened your position.
 
-## Optional Timelock
+## A market owned by a timelock
 
-Zenex provides an optional governance contract that adds a timelock to owner actions. When used, any change (a new configuration, a terminal price, an ownership transfer) must be queued on-chain and a mandatory delay must pass before it can be executed. This is covered in detail on the [Parameter Changes](./parameter-changes.md) page. Using the timelock is optional: the choice of governance model is up to whoever owns the market.
+An owner can pass a market to a timelock contract. The timelock has an owner of its own, and that owner cannot reach the market directly. Each parameter change and each code replacement goes into a public queue and waits.
 
-## Emergency Status
+The timelock fixes the unlock time of a change at the moment it records the change, and publishes that time on chain. Anyone can read the whole queued change and its unlock time from the timelock. The wait is one fixed length for that timelock. It can be as short as one second and as long as 60 days. Read the wait of a market's timelock before you treat it as protection.
 
-Status changes never wait on the timelock. The owner (or the governance contract owner) can pause new position openings, freeze all trading activity, or restore normal operations immediately, within the market's lifecycle rules: a retired market is final, and a delisted market can only return to normal operation during its grace window. This emergency power is deliberately narrow: it applies only to the status, not to fee rates, margin requirements, or any other financial parameter.
+Once the wait ends, any account can apply the change. Until the moment it runs, the owner of the timelock can cancel it. The cancel window stays open past the unlock time, so a queued change can sit unlocked and never land.
 
-## Immutable Addresses
+A change to the wait itself sits outside the queue. The owner records the change, and it then waits the length in force at that moment. A second change to the wait replaces the one on record. An owner that cuts a one-day wait to one minute waits a full day before the one-minute wait applies.
 
-Certain core addresses are set at construction and cannot be changed by anyone after deployment. The vault, the oracle contract, the treasury, and the market's price feed are fixed for the lifetime of the market contract: no owner entry point exists to rewire them, so where liquidity is held, how prices are verified, where fees flow, and which asset the market prices cannot be altered after the fact. What the owner *can* change is the code itself, through the owner-gated `upgrade` — which is why who owns a market, and whether that ownership sits behind the timelock, is the first thing to check when evaluating one. The vault holding depositor collateral has no upgrade path at all.
+A change of state is the exception. The owner of the timelock forwards a new state to the market at once, with no queue and no wait. A freeze therefore lands in a single transaction under either kind of owner. Every other call the owner makes, a change to the flat settlement price included, goes into the queue and waits.
 
-One nuance on fees: the treasury is its own contract with its own owner. That owner sets the protocol's share of fees (bounded between 0% and 50%) and withdraws whatever the treasury has collected. The market contract reads the rate live at every settlement, so a rate change applies immediately unless the treasury itself is owned by a timelocked governance contract. The address a market pays into is fixed at deployment, but the rate it reads from that address is not.
+## Where ownership ends
+
+An owner can hand a market to a new owner. The transfer completes only when the new owner accepts it, and the current owner keeps every power until then.
+
+An owner can also give up ownership. That is permanent, and no later call restores it. The parameters, the code, and the state of the market are then fixed for its life. Trades go on under the rules in force at that moment, as far as the state allows.
+
+**A market given up while it is frozen stays frozen.** Every position and every deposit in it stays out of reach, because no fill, no cancel, and no claim runs in a frozen market. On a market given up in wind-down, no account can set or replace the flat settlement price again.

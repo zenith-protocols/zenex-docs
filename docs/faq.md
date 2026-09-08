@@ -1,84 +1,80 @@
 ---
-sidebar_position: 9
 title: FAQ
+sidebar_position: 10
 ---
 
-# Frequently Asked Questions
+# FAQ
 
-### What is Zenex?
+Short answers to the questions a reader asks first. Each answer names the page that carries the full version.
 
-Zenex is a decentralized perpetual futures exchange built on Stellar Soroban. It lets traders open long and short leveraged positions on assets without intermediaries, expiry dates, or centralized custody of funds.
+## What is Zenex?
 
-### What blockchain is Zenex built on?
+Zenex is a perpetual futures exchange on Stellar Soroban. You post collateral and hold a leveraged long or short position on the price of an asset. The position has no expiry date, so you decide when it ends. For the parts a market is made of, see [What is Zenex](./getting-started/what-is-zenex.md).
 
-Zenex is built on **Stellar Soroban**, Stellar's smart contract platform. Soroban provides fast finality, low transaction costs, and a robust execution environment for DeFi applications. The current deployment runs on **Stellar testnet**: trading uses test tokens, and the app guides new users through Stellar friendbot funding plus a built-in USDC faucet.
+## What do I need to start?
 
-### How does a trade get executed?
+You need a wallet you can sign with, and a balance of the market's settlement token. That token is your collateral. The market pays every fee and every payout in it. For the trade form field by field, see [Start trading](./getting-started/start-trading.md).
 
-You **create an order** signed by you, and a permissionless **keeper** fills it at a price it verifies against the market's oracle feed. Your order is price-free but sets the bounds a keeper must respect: a size, a slippage price bound, an expiration, and, for limit and stop orders, a trigger price. Your collateral, plus a small flat execution fee for the keeper, is escrowed into the market contract when you create the order. Cancelling the order refunds the full escrow. A market order is one you expect a keeper to fill right away. A limit or stop order rests until its trigger price is crossed. See [Start Trading](./getting-started/start-trading.md).
+## Who fills my order?
 
-### Can anyone run a keeper?
+Any account can. You sign an order that names no execution price, and the account that fills it is the keeper. The keeper submits a signed price report and names which order to fill. The keeper sets nothing inside the order. The size, the margin, the trigger, the price bound, and the expiry stay as you signed them. For the work a keeper runs and the reward on each call, see [Keepers](./keepers.md).
 
-Yes. Keepers are permissionless: anyone can fill orders, run liquidations, and keep a market's accounting current, and they earn a fee for doing so. A keeper can only act within the limits your signed order allows and at a price verified against the oracle, so it cannot trade against you on its own terms. You can even fill your own order, in which case the keeper reward routes back to you. See [Why Permissionless](./keepers/why-permissionless.md) for why execution is kept open.
+## Where does the price come from?
 
-### What wallets are supported?
+Every fill, every liquidation, and every interest charge runs on a signed report from the one price stream the market is bound to. The market checks every report it acts on. A fill of your own order runs at the report the keeper submits with it, so that report sets your trigger and your bound. The owner of a delisted market can fix one flat settlement price. Every close then prices at that value, and the market reads no report. For the checks and the age limits, see [Prices](./markets/prices.md).
 
-Zenex supports several sign-in methods:
+## What does a trade cost?
 
-- **Passkey-based smart wallets**: sign in with biometrics (Face ID, fingerprint, or a security key) directly from the browser, no extension or seed phrase needed.
-- **Browser wallets**: **xBull**, **Freighter**, **Lobstr**, **Albedo**, **Hana**, **Ledger**, and **Hot Wallet**.
-- **Ed25519 key import** (advanced): bring your own keypair.
+A fill pays a trade fee and an impact fee on the size it moves. Each order also carries one flat execution fee that pays the keeper. Borrowing interest falls on the crowded side of the market, and the thin side pays none. Funding passes between longs and shorts. For each charge and where it goes, see [Fees](./trading/fees.md).
 
-### What is the maximum leverage?
+## Which token pays the network fee?
 
-Maximum leverage is a per-market parameter and equals one divided by that market's initial margin requirement. Higher leverage amplifies both gains and losses, so it is important to manage your risk carefully. See [Margin and Leverage](./trading/margin-and-leverage.md) for more details.
+The token you trade with. Zenex charges the network fee of your transaction in that token, so one balance covers your whole trade. You sign a ceiling on the amount, and a relayer sends the transaction and takes the fee inside that ceiling. For that ceiling and what a failed transaction costs, see [Fees](./trading/fees.md).
 
-### What are the trading fees?
+## What is the highest leverage I can use?
 
-A fill pays a **trade fee** that is split by its effect on market balance: the side that worsens the long/short imbalance pays a higher rate, and the side that improves it pays a lower one. A **price impact fee** applies to every fill, at a rate that grows with the size of the fill, so larger trades pay proportionally more. Each order also carries a small flat **execution fee** that pays the keeper who fills it. It is escrowed when you create the order and refunded if you cancel. Positions on the market's larger side also accrue **borrowing interest** over time, at a rate that rises with that side's use of the vault's capacity, and longs and shorts exchange a **funding rate** based on market imbalance. Fee rates are per-market parameters. For a detailed breakdown, see [Fees](./trading/fees.md).
+Each market sets its own ceiling. The less collateral a market asks for up front, the more leverage it allows. Your fill takes its costs out of the collateral you post, so an order at the exact ceiling is refused. Pick leverage below the ceiling. For the two margin lines, see [Margin and leverage](./trading/margin-and-leverage.md).
 
-### How do I pay for gas?
+## Can I hold a long and a short in the same market?
 
-It depends on your sign-in method. Smart-account transactions are submitted through Zenex's relay, which pays the XLM gas and charges a small fee in **USDC** instead, capped at a maximum you sign and can adjust in settings, so a smart account never needs to hold XLM. Browser wallets submit classic Stellar transactions and pay their own network fee in XLM, typically fractions of a cent. See [Fees](./trading/fees.md).
+Yes. You hold at most one long and at most one short in a market. Each side carries its own collateral, its own costs, and its own liquidation price. For how a later fill folds into the position you already hold, see [Positions](./trading/positions.md).
 
-### How do I receive funding I have earned?
+## How much can I lose?
 
-Funding is held in an internal pool with a per-user claimable balance. When you are on the side that earns funding, it accrues to your claimable balance and you **claim** it when you want it.
+A position can lose the margin behind it and never more. If the loss and the costs run past that margin, the vault absorbs the shortfall. A depositor carries a different exposure. One share can come to be worth less than you paid, because the vault pays out what traders win. For everything that can take your money, see [Risks](./risks.md).
 
-### How does the vault work?
+## What can close my position without me?
 
-Each market has its own strategy vault, a liquidity pool that backs that market's trades and stands as the counterparty to every position. Depositors earn yield from trading fees, borrowing interest, and net trader losses. Deposits and redeems are routed through the market contract as vault orders: they escrow first and a keeper fills them, minting or burning shares net of the vault fee. See [Vault Overview](./vault/overview.md) for more details.
+A liquidation or an auto-deleveraging close. A liquidation closes the whole position once its equity falls under the maintenance margin's share of its size. It charges a liquidation fee out of the equity that survives the close, and the remainder reaches you. Seven days after a delist, a liquidation can close a healthy position as well, and it charges that same fee. Auto-deleveraging closes part or all of a winning position once that side's pending profit passes a share of the vault balance. For each trigger and what it costs, see [Liquidation](./trading/liquidation.md) and [Auto-deleveraging](./trading/adl.md).
 
-### Can I get liquidated?
+## Which side pays funding?
 
-Yes. A position becomes liquidatable when its **equity falls below the maintenance margin**, a per-market parameter. A keeper then closes the whole position. The close charges a liquidation fee, a per-market rate on the notional capped at the equity that remains, and whatever is left after that fee is returned to you. You can monitor your position health and add collateral to avoid liquidation. See [Liquidation](./trading/liquidation.md) for the full mechanics.
+The side the rate points at pays, and the other side earns. The rate builds toward the crowded side, so a crowded book ends with the crowd paying. If the crowd flips to the other side, the rate still points the old way. The thin side keeps paying until the rate crosses over. The market charges funding against the collateral behind your position. No part of it pays a keeper or the treasury. What no trader receives stays with the market. For the rate and its cap, see [Funding rate](./trading/funding-rate.md). For where that money goes at the end of a market's life, see [Market status](./markets/status.md).
 
-### What is the collateral token?
+## Where does the funding I earn go?
 
-Each market has its own **settlement token**, chosen at deployment. All positions in a market are collateralized, denominated, and settled in that token. The initial Zenex markets settle in USDC, but the protocol supports any Stellar token as a market's settlement token.
+It goes to a claimable balance in your name, and not onto your position. A claim is a call you sign yourself. It pays the smaller of your balance and what the market's credit pool holds, and the rest stays claimable. For how that balance fills and pays out, see [Claimable credit](./trading/claimable-credit.md).
 
-### Is Zenex audited?
+## Who is on the other side of my trade?
 
-Zenex is committed to security and transparency. For information on audit status and reports, see the [Audits](./audits.md) page.
+The market's vault. The depositors in that vault are together the counterparty to every position in the market. A vault serves one market alone, so a loss in one market cannot reach the depositors of another. For what the vault holds and what it pays, see [Vault](./vault/overview.md).
 
-## Troubleshooting
+## How does a liquidity provider earn?
 
-### Why hasn't my order filled?
+You deposit the market's settlement token and receive shares in that market's vault. The vault keeps part of the fees and the borrowing interest that traders pay, and it keeps what traders lose. It pays out what traders win. Your gain or your loss arrives as a change in what one share is worth. For what sets that value, see [Share value](./vault/share-value.md).
 
-A resting order fills only when every condition holds at once: the market must have crossed your trigger price on the side of the spread the fill executes at, the verified price must sit within your slippage bound, and the order must not have expired. If those hold and it still rests, the usual causes are on the account or market side. A fill whose fees and initial margin your escrowed collateral cannot cover is rejected, and the order keeps resting. And a size-growing order is halted while openings are paused, while the side is flagged for [auto-deleveraging](./trading/adl.md), or while the fill would breach the market's utilization or open-interest caps.
+## Can I take my deposit out at any time?
 
-### Why didn't my stop-loss or take-profit fire?
+You leave when you create a redeem order, and a keeper fills it. A redeem waits out a cooldown first. The market can also hold the fill back while the open positions need the liquidity, or while pending trader profit is high. For every gate on a fill, see [Deposits and redeems](./vault/depositing.md).
 
-Triggers are judged against the verified oracle price on the side of the spread your close would execute at, not against the last trade you saw on a chart. An order can also only fill against a price published at or after the moment it was created, so a spike that happened before you placed it does not count. If the market gaps past your trigger, the order becomes eligible but your slippage bound still applies: a bound tighter than the gapped price rejects the fill until the price comes back within it. Keepers also need a fresh signed price (10 seconds on the current testnet deployment, at most 15), so fills land at the next verified update rather than the instant the chart touches your level.
+## Who can change a market's parameters?
 
-### Why can't I close or reduce my position?
+The owner of that market, one market at a time. An owner is a key or a timelock contract. An owner replaces the whole parameter set in one call, and an owner can also replace the market's code. A timelock owner queues each change in public and waits out a fixed delay. Read the length of that delay before you treat it as protection. A change of the market's state lands at once under an owner of either kind. For every power an owner holds, see [Governance](./governance.md).
 
-Newly added size is locked against decreases for a short period (30 seconds on testnet), and a full close is blocked while any locked notional remains. A partial close must also leave the remainder above the initial-margin floor, so a reduction that would leave too little collateral behind is rejected. Add collateral or close in full once the lock has lapsed. If the market is frozen, fills and liquidations, new orders, funding claims, and cancels are all halted until the market is unfrozen, and your escrow stays untouched in the meantime.
+## What happens when a market is frozen?
 
-### Why is my vault deposit or redeem still pending?
+A freeze stops every action in that market, for you and for the keepers. Your position, your margin, and your escrow stay where they are until the owner lifts the freeze. The freeze does not hold the price still. Borrowing interest and funding keep accruing for as long as it lasts. The first fill after the freeze settles that whole window, and a liquidation can follow at once. For the five states a market can be in, see [Market status](./markets/status.md).
 
-A redeem waits out a short cooldown from the moment you created the order before it can fill, and it is also blocked while either side's pending trader profit is too large relative to what would remain in the vault. A redeem is also held back while the market's open positions are using too much of the vault, since a fill may not leave open interest under-reserved. A deposit has no cooldown and no pending-PnL gate. The share price you deposit or redeem at already accounts for pending trader PnL. A deposit is blocked while it would push the vault past its balance cap, and one below the market's minimum deposit is rejected when you create it, so it never rests as pending. Every vault order fills in full at once and needs a verified price published after the order's creation, so a keeper must wait for the next price update. If you set a minimum-received bound on the order, a fill that would return less than it is rejected until the share price moves back in your favor. A resting vault order can be cancelled to recover its escrow at any time except while the market is frozen. See [Depositing](./vault/depositing.md).
+## Is Zenex audited?
 
-### Why did I receive less profit than I expected?
-
-A close settles net of costs: the trade fee on the closed size, accrued borrowing interest, and any funding your side owed. While the winning side's pending profit overhangs the vault, a [profit haircut](./trading/adl.md) also scales down realized gains. Funding you earned is never in the close payout at all. It accrues to a claimable balance that you claim separately.
+An independent security firm reviews the contracts, and Zenex publishes the report from each completed audit. An audit covers the code as it stood on the date of its report. **Audited code can still hold a defect.** For the reports available now, see [Audits](./audits.md).

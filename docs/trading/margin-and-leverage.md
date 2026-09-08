@@ -1,34 +1,55 @@
 ---
-sidebar_position: 3
-title: Margin and Leverage
+title: Margin and leverage
+sidebar_position: 4
 ---
 
-# Margin and Leverage
+# Margin and leverage
 
-Margin is the collateral that backs a position, and leverage is how large the position is relative to its margin. A position with 10 USDC of margin behind 100 USDC of notional size runs at 10x leverage. Because the vault backs the exposure your margin does not cover, every position is held to two margin floors: an initial margin you must meet whenever you change the position yourself, and a lower maintenance margin that marks the liquidation line.
+Margin is the collateral that backs one position. Leverage is the size of that position measured against its margin. A position with 10 USDC of margin behind 100 USDC of size runs at 10x. The vault backs the exposure your margin does not cover, so every position must clear two margin lines.
 
-## Isolated margin
+## The two lines
 
-Margin on Zenex is isolated per position. Each position is backed only by its own collateral, and a loss on one position never draws on the margin of another. Within a single market you can hold a long and a short at the same time, each margined separately. You add or withdraw margin by creating orders against the position, as described on the [Collateral](./collateral.md) page.
+| Line | What it reads | What it does |
+| --- | --- | --- |
+| Initial margin | The collateral you posted, without unrealized profit or loss | Sets the floor for every change you make, and the leverage ceiling |
+| Maintenance margin | Your equity, which counts profit and loss | Marks liquidation, and blocks a close or a withdrawal |
 
-## Initial margin and maximum leverage
+The initial margin is the higher of the two.
 
-The initial margin is the floor checked whenever you change a position yourself. Opening, increasing, partially closing, and withdrawing collateral all require the remaining collateral to cover the initial margin's share of the remaining notional size. The check measures collateral on its own, before any unrealized profit or loss, so a favorable price move cannot stand in for posted margin.
+## The initial margin
 
-The initial margin also sets the maximum leverage, which is one divided by the initial margin. A market with a 1% initial margin requires at least 10 USDC of collateral behind a 1,000 USDC position, so the most leverage available is 100x. A market with a 5% initial margin requires at least 50 USDC behind that same position, capping leverage at 20x. The initial margin is a per-market parameter set through the protocol's [parameter-change process](../governance/parameter-changes.md), so the leverage ceiling varies by market. Fees due at a fill come out of the posted collateral before the check runs, so post slightly more than the bare minimum.
+The initial margin is the floor the position must meet after a change you make. It applies when you open, when you increase, when you close a part of the position, and when you withdraw collateral. A full close leaves no position behind, so only the maintenance line gates it. You make each of those changes through an order, and the [Orders](./orders.md) page gives the kinds. The check measures the collateral you posted. A realized loss and any collateral a decrease paid out both reduce that figure. **An unrealized gain cannot stand in for posted collateral.**
 
-## Maintenance margin
+When you open or increase, the fees due at the fill come out of your posted collateral before the check runs. Collateral posted at exactly the requirement on a new position therefore falls short, and the open is refused. When you close a part of the position, the fees come out of your realized profit first, and only the uncovered part reduces your margin.
 
-The maintenance margin is a lower floor checked against your live equity, meaning collateral plus unrealized profit or loss. It is the hard line for liquidation and is always set below the initial margin. A position whose equity falls below the maintenance margin's share of its notional size can be liquidated, as described on the [Liquidation](./liquidation.md) page.
+One forced path is the exception. **A position that auto-deleveraging has reduced may sit under the initial margin.** The [Auto-deleveraging](./adl.md) page gives that path.
+
+## Maximum leverage
+
+The initial margin sets the leverage ceiling, which is one divided by the initial margin. A market with a 5% initial margin holds at least 50 USDC of margin behind a 1,000 USDC position, so the ceiling is 20x. A market with a 1% initial margin holds 10 USDC behind the same position, and the ceiling is 100x. Each market sets its own initial margin through the [parameter-change process](../governance.md), so the ceiling differs by market. No market may set an initial margin under 0.1% or over 50%, so every market allows at least 2x. Each market must also leave room between its two margin lines, and that rule lifts the real floor above 0.1%. No market reaches 1000x.
+
+## The maintenance margin
+
+The maintenance margin is the lower line, and it marks liquidation. It reads your equity, which is what the position would return if it closed now. Your equity is your collateral, plus or minus your unrealized profit or loss, less the costs the close settles. A position whose equity falls under the maintenance margin's share of its size can be liquidated. The [Liquidation](./liquidation.md) page gives what that close costs you.
+
+The line also blocks you. While your equity sits under it, you cannot close the position and you cannot withdraw collateral. You can still add collateral, and the position trades again once the added margin lifts it clear of both lines.
 
 ## The buffer between the two lines
 
-The gap between the initial and maintenance margins is the buffer that absorbs adverse price moves and accruing costs before a position becomes liquidatable. It also means you cannot withdraw collateral down to the maintenance level yourself, since every withdrawal must leave the position at or above the initial margin. Only liquidation and auto-deleveraging bypass the initial floor.
+The gap between the two lines absorbs adverse price moves and the costs that build up. Each market keeps that gap wide enough to cover the fees of one small close. The gap is also the reason you cannot draw your collateral down to the maintenance margin. Every withdrawal must leave the position at or above the initial margin.
 
-## How leverage affects your outcomes
+Your effective leverage drifts after you open. Borrowing interest and the funding you owe build against a size that has not changed, and both lower your equity. An unrealized loss lowers your equity too. Funding you earn becomes a credit you can claim separately, and it does not raise your margin or your equity. Your posted margin does not change while those costs build, and a fill settles them against it. Added collateral restores the buffer at once.
 
-Leverage amplifies both directions. Take a position with a notional size of \$100 backed by \$10 of collateral. If the price rises 10% and the position closes, the trader receives the \$10 collateral plus \$10 of profit, doubling the margin after only a 10% move. A 10% move the other way would instead wipe the collateral out.
+## Position size limits
 
-Higher leverage also means a smaller buffer above the maintenance margin: the same price move consumes a larger share of a thinly collateralized position's equity, so a highly leveraged position becomes liquidatable after a smaller adverse move. And a position's effective leverage drifts after opening, as accrued fees and unrealized losses eat into its margin, which is why it pays to monitor leveraged positions and top up collateral when needed.
+Every market bounds the size of one position, with a minimum and a maximum. Both bounds are checked on the position a change leaves behind, so an order that would push you past the maximum is refused. The [Positions](./positions.md) page gives what happens to a close that would leave less than the minimum.
 
-The exact margin checks and formulas are in the [technical reference](/technical/market/margin-and-leverage).
+A market also caps the total size of all positions on one side. An increase is refused once that side's total would pass the cap, even while your own position sits inside its own bounds. The [Market parameters](../markets/market-parameters.md) page gives the bounds of the deployed markets.
+
+## When the vault is heavily used
+
+An increase can also be refused because the vault's liquidity is already committed. A side of a market may reserve at most a set share of half the vault balance. The market sets that share. The check runs on the positions the fill would leave behind, so a fill that pushes either side past its limit is refused. The check runs only on a fill that adds size. A fill that adds collateral alone skips it.
+
+The refusal is not permanent. The check reads the vault balance and the open positions at the moment of the fill. Capacity returns when positions close or when depositors add liquidity.
+
+For the exact checks and the order they run in, see the [technical reference](/technical/market/margin-and-leverage).

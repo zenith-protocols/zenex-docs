@@ -1,40 +1,48 @@
 ---
-sidebar_position: 9
-title: Auto-Deleveraging (ADL)
+title: Auto-deleveraging
+sidebar_position: 11
 ---
 
-# Auto-Deleveraging (ADL)
+# Auto-deleveraging
 
-Auto-deleveraging is a safety mechanism that protects the vault when the winning side of a market builds up more unrealized profit than the vault can comfortably back. Rather than letting the protocol drift toward insolvency, ADL closes some of the winning positions at the oracle price, taking their profit off the table before it becomes a problem the vault cannot pay.
+Auto-deleveraging (ADL) protects the vault when one side of a market carries more pending profit than the vault can safely back. The vault is the counterparty to every position, so a side far ahead is a claim the vault must keep ready to pay. ADL turns part of that claim into cash before it grows past the allowance the market sets for that side.
 
-ADL is decided per side. Each side (long and short) is evaluated on its own pending PnL, and only a side that is actually winning can ever be flagged.
+**Like a liquidation, ADL closes a position without your consent. It takes a position whose close brings the flagged side's profit down.**
 
-## When ADL Triggers
+## When a side is flagged
 
-The protocol tracks each side's pending PnL against a share of the vault, and a keeper can refresh this evaluation at any time by submitting a verified price. A side's ADL flag is managed with hysteresis, using two per-market thresholds set through the protocol's [parameter-change process](../governance/parameter-changes.md):
+The market measures each side's pending profit against two levels, an upper one and a lower one. Both are a share of half the vault balance. Longs and shorts are measured on their own, and each side carries its own flag. Any account can refresh both measurements with a verified price. The refresh pays no reward, and it is refused while the market is frozen or retired.
 
-- The flag **sets** when the side's pending PnL rises above the upper threshold (a share of half the vault balance).
-- Once set, it **holds** while pending PnL stays above a lower clear target.
-- It **clears** when pending PnL falls back to or below that clear target.
+If a side's pending profit rises above the upper level, that side is flagged. The flag holds while the profit stays above the lower level. A falling profit does not clear the flag on its own. Only a later refresh at a fresh price clears it, and you can run that refresh yourself. If the new measurement is at the lower level or below, the flag comes off. The gap between the two levels keeps the flag from switching on and off around one number. A side that is flat or behind is never flagged. Both levels are per-market parameters, and the [parameter-change process](../governance.md) covers how a value changes.
 
-The gap between the two thresholds prevents the flag from rapidly toggling on and off as PnL hovers near the line. A side that is not winning is never flagged.
+## What a flag stops
 
-## What a Flagged Side Means
+**A flagged side takes no new size.** No fill may open a position on that side or grow one you already hold. You can still sign and place an increase order. It rests until a keeper fills it after the flag comes off, or until it expires. An increase order that adds collateral and no size still fills, so you can defend the margin on a position you hold. Closes and decreases on the flagged side run as usual, and the other side of the market is untouched.
 
-While a side is flagged, two things happen:
+## How a position is reduced
 
-1. **New opens on that side are halted.** Orders that would grow a position on the flagged side cannot fill until the flag clears, though the orders themselves can still be placed and will rest. Adding collateral to an existing position still works, so you can defend your margin while the flag is up. Closing, reducing, and trading the other side all continue normally.
-2. **Winning positions on that side become eligible for deleveraging.** A keeper can close part or all of a winning position through the regular decrease path, bringing the side's pending PnL back down toward the clear target.
+A keeper names a position on the flagged side, an amount to close, and a verified price. The market closes that amount and settles it the way your own close settles. The close takes the same price a close you run yourself would take, and the [Prices](../markets/prices.md) page gives that price. If the market already holds a price newer than the keeper's report, it closes you at the newer one.
 
-## How Deleveraging Works
+A partial reduction realizes part of your profit and shrinks your size. It withdraws none of your collateral. The costs of the closed part come out of that realized profit first, and the market pays you the profit that is left. If the profit does not cover the costs, the rest comes out of the collateral on the position you keep. Every decrease order resting on that side stays in place.
 
-A keeper runs ADL permissionlessly by naming a position on the flagged side and an amount to close, along with a verified oracle price. The close settles at that oracle price through the ordinary decrease path. A partial deleverage realizes a slice of the position's profit and shrinks its size, leaving the collateral in place. A full deleverage closes the position and pays out the remaining collateral together with the realized profit.
+A full close pays your collateral and your realized profit as one settled amount, with the costs taken out of that amount first. It cancels every decrease order still resting on that side, and each cancelled order returns its escrow to you.
 
-The mechanism has guardrails. A close must actually reduce the side's pending PnL, and it may not overshoot below the clear target that the deleveraging is aiming for. A partial deleverage respects the decrease lock on freshly added size and always leaves at least a minimum-size remainder rather than dust. Deleveraging stops once the side has been brought back to its clear target.
+## What a reduction costs you
 
-## What You Should Know
+The closed part pays the ordinary trade fee and the impact fee, and it settles the borrowing interest and the funding it accrued. The keeper that ran the close takes a share of the two fees as its reward. No execution fee and no liquidation fee apply. For each of those charges, see [Fees](./fees.md). For the cap on the profit you realize, see [Profit and loss](./pnl.md).
 
-- **ADL is a backstop, not a routine event.** It only engages when a winning side has grown large relative to the vault. Under normal conditions, ordinary liquidations handle risk.
-- **It only touches winning positions.** If your side is not in profit, ADL never applies to you.
-- **No action is required from you.** Deleveraging is performed by keepers. If your winning position is reduced, you keep the realized profit on the closed portion, net of the regular close fees and any profit haircut in effect, and only your remaining exposure shrinks.
-- **It caps profit extraction during an overhang.** ADL works alongside the realized-profit haircut described in [PnL](./pnl.md): the haircut scales down gains while a side is overweight, and ADL bounds how large that overhang can grow.
+## The limits that still bind
+
+Two limits on your own close bind a keeper here as well. Size you added moments ago sits under the decrease lock. While any of your size is locked, a full close is refused, and a partial close can take no more than the unlocked part. The amount must also clear the market's minimum order size, which stops a keeper from cutting a winner into fragments.
+
+Each reduction must lower the pending profit of its side, and it must leave that profit at or above the lower level. A keeper therefore works a heavily flagged side down in steps rather than in one closure.
+
+What a partial close leaves behind must sit at or under the market's maximum position size. Its equity must stay at or above its maintenance margin. A request that would leave less than the market's minimum position size closes the position in full instead. That full close pays and cancels orders in the way described above. **The remainder is held to the maintenance margin alone. A position that ADL reduced can sit under the collateral a new position of that size needs.** A position already under its maintenance margin is out of reach here. For the close that takes such a position, see [Liquidation](./liquidation.md).
+
+## Which position a keeper picks
+
+The protocol enforces the side-level bound alone, and that bound protects the vault whichever eligible position closes. **Any position on the flagged side whose close lowers that side's profit is a candidate, and the limits above decide how much of it a keeper can take.**
+
+The market measures a side's profit at the price that favors that side, and your close settles at the other side of the quote. A position that shows a small loss at the price you close on can still be a candidate. No rule on chain sends a keeper to the largest winner, and nothing gives you a place in a queue or a warning first.
+
+What you keep after a reduction is a realized profit you did not choose to take, at a moment you did not pick. The flag and the close are outside your control. What you control is the size you carry on a winning side. You also control whether you take profit before that side is flagged.

@@ -1,44 +1,72 @@
 ---
-sidebar_position: 10
 title: Risks
+sidebar_position: 7
 ---
 
 # Risks
 
-Using Zenex involves real financial risk. This page describes the main categories of risk that traders and vault depositors should understand before using the protocol. No mitigation eliminates risk entirely, and you should never commit more capital than you can afford to lose.
+Zenex can cost you money in ways that have nothing to do with your view on the price. This page collects those ways in one place, for a trader and for a depositor. Each item states what can happen to you, and it names the page that gives the mechanism in full.
 
-## Smart Contract Risk
+Read it as a warning list. **Nothing on this page removes the risk it describes.** Commit only money you can afford to lose.
 
-Zenex operates through smart contracts deployed on Stellar Soroban. A market contract is upgradeable by its owner, which is how a defect can be fixed in place, but it also means the owner key (or the governance timelock it can be placed behind) is part of the trust model: whoever holds it can change the code a market runs. The vault holding depositor collateral is deliberately not upgradeable — every mutation is gated by its market contract, so a vault defect is contained by freezing the market and winding it down rather than by replacing vault code under live collateral. None of this removes the underlying risk: any bug or vulnerability in the code could lead to unexpected behavior or loss of funds, and no amount of review or testing can guarantee the absence of all defects.
+## The owner and the code
 
-## Oracle and Price Verification Risk
+Every trade, every deposit, and every payout runs through contract code. A defect in that code can take money, and no review proves that a defect is absent. For the reports from independent security firms, see [Audits](./audits.md).
 
-All prices on Zenex come from a signed price stream, one immutable stream per market. Keepers submit signed reports, and the market's oracle contract checks the publisher signatures, the stream id, the report's expiry, the age of its observation, and the sanity of its bid and ask before any fill, liquidation, or accrual. The protocol trusts that stream to determine entries, exits, liquidations, and fees. If it delivers an incorrect price, whether from a data-source failure, network delay, or manipulation, positions could be filled or closed at wrong prices and liquidations could trigger inappropriately. Those checks reduce rather than eliminate oracle risk.
+Each market has one owner. The owner replaces the whole parameter set, moves the market between its states, and replaces the market's code in place. Your position and your margin survive a code replacement, and the new rules then act on them. The oracle that checks prices has an owner of its own. That owner sets the age windows and the share of the spread that every market on that oracle uses. **An owner key that is lost or misused reaches your open positions.** No account owns the vault, and no one can replace its code. Assets leave the vault only on a call from the market, and the market owner can replace the market's code. Your deposit sits behind that code either way.
 
-## Keeper Liveness Risk
+An owner can be a timelock contract that runs a parameter change or a code replacement only after a public wait. An owner can also give up ownership for good, and the market then keeps the state it is in. **A market given up while it is frozen stays frozen, and every position and every deposit in it stays out of reach.** For the powers an owner holds and the limits an owner can accept, see [Governance](./governance.md). For the settings inside the parameter set, see [Market parameters](./markets/market-parameters.md).
 
-Because you do not fill your own trades, execution depends on keepers. A keeper is needed to fill your orders, run liquidations, deleverage winning positions, and fill vault deposits and redeems. Keepers are permissionless and incentivized by fees, so in normal conditions there is competition to do this work. But if keepers are unavailable or unwilling to act, for example during network congestion or when network fees outweigh the keeper reward, your order may not fill promptly, a stop-loss may fill later than you expected, or a liquidation may be delayed. Delayed liquidation can deepen a shortfall that the vault ultimately absorbs. Your protection is that a keeper can only ever fill within the bounds of your signed order and at a verified price.
+## The price feed
 
-## Liquidity and Solvency Risk
+Zenex acts on a signed price report from the one stream a market is bound to. The oracle refuses a report that carries a wrong signature or no signature at all. It then checks that the report names that stream. It also checks the expiry, the age, the forward skew, and the quote. Those checks bound what a bad report can do. They do not make the number right. If the stream publishes a wrong price, the market treats it as true, and positions open, close, and liquidate at it.
 
-Each market's vault has a finite pool of liquidity, and trader profits are paid from it. When many traders are profitable at once, particularly during a strong directional move, the vault's capacity to pay all winners can be strained. Zenex defends the vault in two layers, both configured per market. **Auto-deleveraging (ADL)** flags a winning side whose pending profit grows too large relative to the vault, blocking new opens on that side and letting a keeper reduce winning positions back toward a safe level. A **realized-profit haircut** provides a second layer at an equal or higher threshold: while the winning side's pending profit exceeds it, a closing winner's realized profit is scaled down and the withheld share stays in the vault. These mechanisms protect solvency, but they mean that in extreme scenarios a profitable position can have its realized upside capped or be partially closed before you choose to close it.
+A gap in the stream is the other failure. While no keeper holds a fresh enough report, no trade order and no vault order fills. A liquidation runs on a wider age window, and that window is never shorter than the one a fill runs on. **A keeper can close you out on a report too old to fill an order of yours, whenever the two windows differ.** A position that survives a gap is marked at the first price that lands after it. For the checks, the two windows, and the side of the quote your fill takes, see [Prices](./markets/prices.md).
 
-## Counterparty Risk for Vault Depositors
+## Nothing moves until a keeper acts
 
-Vault depositors provide the liquidity that backs every trade in their market, so they collectively take the opposite side of every position. When traders lose, those losses flow into the vault as yield. When traders win, their profits come out of the vault. If net trader profitability is high over a sustained period, the vault's value declines and depositors may redeem for less than they deposited. If a position closes with a shortfall past its freed margin, that **bad debt is absorbed by the vault**, reducing share value for everyone. Depositors should understand they are taking directional risk against the aggregate trading population.
+Your order does not fill by itself. Some account must submit the fill, and no account owes you that work. Anyone can run it, you included, and the reward on the fill is the whole reason someone acts.
 
-## Vault Order and Redeem Cooldown Risk
+If no keeper acts, your order rests where it is. A stop-loss can fill late, at a price past the level you named, or not at all. A liquidation can land late, and a late liquidation leaves a deeper shortfall behind. A deposit and a redeem wait the same way, and the market holds your escrow until the fill lands.
 
-Deposits and redeems settle in two steps: you place a vault order that escrows your assets or shares in the market contract, and a keeper fills it later at a verified price. Redeems are subject to a per-market cooldown before they can fill, and both deposits and redeems face safety checks at fill time. A deposit prices its shares against the vault's current state including pending trader profit and loss, with the mark set adverse to the depositor, so you cannot capture value from losses that have not yet realized, and the fill fails if it would push the vault past its size cap. A redeem can be gated while pending trader profits would let it drain the pool or while withdrawing would leave too little liquidity to back open positions. This means you may not be able to withdraw exactly when you want, and your redeem may rest until conditions clear. You can cancel a resting order to recover your escrowed assets or shares, except while the market is under an emergency freeze. The value you eventually realize still depends on the vault's state when the order fills.
+What bounds this is the order you signed. A keeper picks which order to fill and changes no term you signed into it. The fill must sit inside your trigger and your bound. For the work a keeper runs and the reward on each kind, see [Keepers](./keepers.md). For the terms you set, see [Orders](./trading/orders.md).
 
-## Liquidation Risk for Traders
+## Liquidation takes the whole position
 
-Leveraged trading amplifies both gains and losses. If the market moves against your position and your equity falls below the maintenance margin, a keeper can close the whole position. The close charges a liquidation fee, capped at the equity that survives its other costs, and returns whatever is left to you, so a position that has deteriorated close to insolvency gets little or nothing back. Higher leverage means a smaller adverse move can trigger liquidation. Liquidation closes the entire position on that side, with no partial liquidation. Traders should monitor positions actively, use stop-loss orders, and size leverage to their risk tolerance.
+Once your equity falls under the maintenance margin, any account can close your position. The whole position on that side closes at once, and none of it stays open. What is left of your equity after the costs of the close returns to you. A liquidation fee comes out of the equity that survives those other costs, so **a position caught late returns little or nothing.** Higher leverage starts the liquidation line nearer your entry price, and borrowing interest moves it nearer still while you hold. Funding moves it nearer on the side that pays. Funding you earn is credited to you apart from the position, so it moves the line neither way. For the line and for what returns to you, see [Liquidation](./trading/liquidation.md) and [Margin and leverage](./trading/margin-and-leverage.md).
 
-## Wind-Down Risk
+## The vault caps a win, and a keeper can close one for you
 
-A market can be delisted and, eventually, retired by the market owner. When a market is **delisted**, new openings stop. After a grace window a flat terminal settlement price can be set, and once the force-close deadline passes a keeper may close any remaining position regardless of its health, at the terminal price if one has been set and otherwise at a live verified price. Either way, your position can be closed at a level you did not choose. When a market is **retired**, only funding claims, cancels of resting orders and vault orders (recovering any escrow), and direct vault redemptions remain. If you hold a position or unclaimed funding in a market that is winding down, act within the published windows so you are not settled or closed on the protocol's timeline instead of your own.
+Two rules bound what one side of a market can draw from the vault. Both act on a side that carries too much pending profit, and neither one asks you first.
 
-## Regulatory Risk
+The first rule scales a realized profit down. While a side's pending profit sits above its allowance, a close pays a winner a reduced share of that profit. The vault keeps the rest. Your margin is never scaled, and a loss is never scaled. Your payout is final at the close. For the allowance and the scale, see [Profit and loss](./trading/pnl.md).
 
-Decentralized finance protocols operate in a rapidly evolving regulatory environment. Laws and regulations governing digital assets, derivatives, and decentralized exchanges vary by jurisdiction and are subject to change. There is no guarantee that Zenex or protocols like it will remain accessible or legal in all jurisdictions. Users are responsible for understanding and complying with the laws applicable to them.
+The second rule closes size for you. Auto-deleveraging runs on two levels of its own, and both sit at or below the allowance above. A side is flagged once its pending profit passes the higher of the two. A side can therefore be flagged before any payout is scaled down. Any account can set the flag, and setting it pays no reward. A side can run above the level with no flag on it. The same call is the only way to clear a flag, so a side stays flagged after its profit falls back inside the level. While a side is flagged, no fill opens a position on it or grows one you already hold. An order that only adds collateral still fills, so you can defend the margin behind a position. Any position on the flagged side is a candidate once its close lowers that side's profit. The market measures that profit at the price that favors the side. A position that shows a small loss at your own exit price can still be taken. **You get no notice, no queue, and no place in line.** For the two levels and for what a reduction costs, see [Auto-deleveraging](./trading/adl.md).
+
+## A depositor takes the other side
+
+A vault share is a claim on the vault that backs one market, and that vault is the counterparty to every position in the market. Trader losses stay in it. Trader profits are paid out of it.
+
+A depositor is therefore exposed to the aggregate result of everyone who trades that market. A long stretch of trader profit lowers what a share is worth, and you can redeem for less than you put in. Fees and borrowing interest are the income that stands against that exposure. A deposit and a redeem are also each priced at the side of the mark that pays you less. A deposit returns fewer shares, and a redeem returns fewer tokens. For both effects, see [Share value](./vault/share-value.md).
+
+## Bad debt falls on the vault
+
+A fast move can take a position past the point where any equity is left. The loss then runs past the margin behind that position, and the shortfall is bad debt. The vault absorbs it, and the value of every share falls with it. A trader is never asked for more than the margin behind the position, so this exposure sits with the depositors.
+
+A close that would draw more than the vault holds fails outright. The position stays open until someone closes it at a price the vault can pay. For that failure and for the bad debt behind it, see [Liquidation](./trading/liquidation.md).
+
+## A redeem can be refused
+
+Your redeem is an order, and it waits. A cooldown runs first, and a keeper fills it after that. At the fill the market runs four more checks. The vault must hold enough tokens to pay you. Pending trader losses raise what a share redeems for, so the amount owed can pass the balance the vault holds. The fill must return at least the minimum you set on the order. Enough liquidity must stay behind for the open positions the vault backs. Pending trader profit on each side must be at or under its limit, measured against what stays in the vault after the vault pays you. A redeem that fails a check keeps resting, and a keeper can try it again later. A deposit has a refusal of its own, the cap on the vault balance.
+
+A frozen market blocks the way out entirely. No fill runs, and no cancel runs either, so your escrow stays with the market until the freeze lifts. For the queue, the cancel, and every reason a fill is refused, see [Deposits and redeems](./vault/depositing.md).
+
+## A wind-down runs on the owner's clock
+
+The owner can delist a market, and new size stops at that moment. One day after the delist the owner can set a flat settlement price. From then on every fill in that market runs at that price, whatever the stream reports. The owner can replace it at any point while the market stays delisted, and the market uses the last price the owner set. Seven days after the delist, any account can close any position still open, at any level of health. The liquidation fee applies to that close at its usual rate.
+
+**A wind-down ends your position on a schedule you did not pick.** Close it yourself inside the window, cancel your resting orders, and redeem your shares. A retired market never trades again. What stays open there is your claim on funds. You can claim a balance, cancel a resting order, and redeem your shares yourself, with no keeper involved. For the five states and the clock, see [Market status](./markets/status.md).
+
+## Law and access
+
+Rules for digital assets and derivatives differ by country, and they change. Zenex can become unavailable or unlawful where you are, and you are responsible for the law that applies to you. Access to any given front end can also stop. The contracts stay reachable on chain either way.

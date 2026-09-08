@@ -1,30 +1,36 @@
 ---
-sidebar_position: 8
-title: PnL
+title: Profit and loss
+sidebar_position: 9
 ---
 
-# PnL Calculations
+# Profit and loss
 
-PnL ("profit and loss") measures how much you have gained or lost on a position as the market moves. It updates continuously and is the primary indicator of trade performance. It is also an important input to [liquidations](./liquidation.md), which is why this section elaborates on the subject.
+Your profit or loss on a position is the distance between what your size is worth now and what you paid for it. A long gains when that value rises above the cost, and loses when it falls below. A short runs the other way. The market works the number out again at every price.
 
-## PnL is implied, never stored
+## Your entry price is implied
 
-A position records its size in the base asset (its tokens) and its notional in the quote asset, and your entry is simply the ratio of the two. PnL is implied from the live price against that entry, rather than stored as a running figure.
+A position holds two numbers. One is the size it carries in the market's base asset. The other is what that size cost in the settlement token. Your entry price is that cost divided by that size. Nothing else records it.
 
-The oracle delivers two prices, a bid and an ask, and PnL is marked at the side your position would actually close at: a long is valued at the bid, a short at the ask. For a long, PnL is the current value of your tokens at the bid, minus your entry notional. It turns positive as the price rises above your entry and negative as it falls below. For a short, PnL runs the other way: it is your entry notional minus the current value of your tokens at the ask, so it turns positive as the price falls and negative as it rises. Marking each side at its closing price means the bid-ask spread is always reflected in your PnL.
+The cost is the value of the size at entry, not the margin you posted. The position tracks your margin on its own. Each fill adds its own size and its own cost to the pair, so your entry price follows your fills. The [Positions](./positions.md) page gives how a fill and a partial close move it.
 
-Because it is computed from the current prices each time, PnL always reflects the latest oracle update with no separate accounting to keep in sync.
+## The price your profit is marked at
 
-## Realizing PnL on a decrease
+You enter on one side of the quote and you leave on the other. A long enters at the ask and leaves at the bid. A short enters at the bid and leaves at the ask. The profit on your own position is marked at the price your side would leave on. The [Prices](../markets/prices.md) page gives the two prices and where they come from.
 
-Unrealized PnL only becomes cash when you reduce the position. A partial decrease realizes PnL pro-rata: closing half the size realizes half the position's PnL, and the implied entry of the remaining size is preserved. A full close realizes all of it. On a partial losing close the loss is charged against the margin that stays with the position, while the withdrawal you requested is paid out minus fees. On a full close the loss simply reduces the equity returned. If the loss and the fees on a partial close run past the margin that stays with the position, the shortfall is bad debt the vault absorbs.
+The spread between them is a real cost, and it is the first thing your position must overcome. A position shows a loss from the moment it opens. That loss is the full crossing from one side of the quote to the other, across your whole size. It grows with your size and with the width of the spread. A round trip at an unchanged quote returns less than you paid. The fees of the open and the fees of the close land on top of the spread. You pay the spread inside the price of every fill.
 
-## The realized-profit haircut
+## Unrealized profit moves with every price
 
-When a whole side of the market is sitting on very large unrealized profit, the vault protects itself by scaling down realized gains while that overhang lasts. If a side's pending PnL exceeds a threshold (a per-market share of half the vault balance), a closing profit is scaled by the ratio of the allowance to the side's pending PnL. Every profitable close during the overhang is cut by the same live factor, and the withheld share stays with the vault. Losses always pass through unchanged.
+Unrealized profit or loss is the gain or loss your open position carries at the current price. It changes every time the feed publishes a new price, and it needs no action from you. An unrealized profit is already reduced by the limit the vault puts on the profit it recognizes. The [profit cap](#the-profit-cap) section below gives that limit. Your unrealized profit or loss also sets your equity, and the [Margin and leverage](./margin-and-leverage.md) page gives how equity decides your liquidation line.
 
-The factor is re-read on each fill, so as the overhang relaxes the haircut eases. Slicing a close into many small fills can partially escape the haircut, but the same overhang is what arms [auto-deleveraging](./adl.md), which bounds how much can be extracted that way.
+**It is a mark, not a payout. Your profit becomes cash only when the position closes.** The close pays the trade fee, the impact fee, and the funding and borrowing the position owes. The money that reaches you is therefore smaller than the mark. The [Fees](./fees.md) page gives each of those charges, and the [Positions](./positions.md) page gives what a partial close and a full close return.
 
-## Example
+## The profit cap
 
-A user opens a long with a notional size of \$10,000 on XLM. A 10% price increase yields a \$1,000 gain, so the implied PnL is \$1,000. If the price then falls back so the position is 5% below entry, the implied PnL is -\$500. Closing there returns the collateral minus \$500 (net of fees). Had the user instead closed at the +\$1,000 mark while that side was under the profit overhang, the realized gain would have been scaled down by the live haircut factor, with the withheld portion retained by the vault.
+The vault is the counterparty to every position, so it recognizes a limited amount of trader profit on each side of a market. That allowance is a share of half the vault balance. Each market sets the share through the [parameter-change process](../governance.md).
+
+The side total is the profit and loss of every open position on your side, netted together. A loss on your side lowers it, and moves the point where the allowance starts to reduce payouts. While that total stays at or under the allowance, a winner is paid in full. **Above the allowance, a winner is paid a scaled-down share of the profit, and the vault keeps the rest.** The further the side runs past its allowance, the smaller the share it pays out. The market values the side at whichever of the two quoted prices gives the larger total. The allowance can therefore reduce your payout before your own mark shows it.
+
+A loss always passes through in full. The cap applies to every close that pays out a profit. It applies to a full close, to a partial close, and to a liquidation. Your payout is final at the close, and the withheld part stays in the vault with the liquidity that backs the market. The [Liquidation](./liquidation.md) page gives what happens when your equity runs out.
+
+Auto-deleveraging is the separate backstop against a side that runs past its allowance. It cuts the size of a winning position. The close it forces realizes profit through the cap above, like any other close. The [Auto-deleveraging](./adl.md) page gives when it fires and what it takes.

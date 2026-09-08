@@ -1,37 +1,45 @@
 ---
 slug: /
-sidebar_position: 1
 title: What is Zenex
+sidebar_position: 1
 ---
 
 # What is Zenex
 
-Zenex is a decentralized perpetual futures exchange built on Stellar Soroban. It lets traders open leveraged long and short positions on assets without intermediaries, expiry dates, or centralized custody of funds. Every position is collateralized and settled in its market's settlement token, and the protocol's smart contracts handle position management end to end, from opening and closing to fee accrual and liquidation. Every fill matches on-chain against a verified oracle price, and the vault itself, transparent and governed by its own contract, is your counterparty for every trade.
+Zenex is a perpetual futures exchange on Stellar Soroban. You take a leveraged long or short position on the price of an asset. The position has no expiry date. Your margin keeps it open. If your equity falls under the maintenance line, a keeper closes the position for you. Auto-deleveraging and the wind-down of the market can also close it. One token does all the work in a market, and that token is the settlement token. You post it as margin. You pay the fees in it. Your profit or loss settles in it.
 
-The protocol is built around three roles. **Traders** take leveraged positions on asset prices. **Vault depositors** provide the liquidity that backs those positions, and the vault stands as the counterparty to every trade in its market. **Keepers** are permissionless actors who fill orders, run liquidations, and keep the market's accounting current, earning a fee for the work. Traders pay fees that flow to the vault, keepers, and treasury, which creates yield for depositors and incentives for keepers. The result is a self-sustaining system where liquidity providers earn returns, keepers are rewarded for maintaining the protocol, and traders get on-chain leverage.
+Contracts on the network hold your collateral and settle every trade. A market prices your trade against a signed price report from its price feed. A vault of depositor liquidity stands on the other side of your position. The vault absorbs your loss, and it pays your profit. It can pay less than your marked profit when the profit owed to your side of the book grows large against the vault's liquidity. Read [Profit and loss](../trading/pnl.md) for that limit.
 
-## What Are Perpetual Futures
+## The three roles
 
-Perpetual futures, commonly called "perps," are derivative contracts that let you speculate on the price of an asset without ever owning the asset itself. If you believe XLM will rise, you open a long position. If you believe it will fall, you open a short. Your profit or loss is determined entirely by the price movement from your entry point, settled in the market's settlement token rather than in the underlying asset.
+| Role | What it does | Start here |
+| --- | --- | --- |
+| Trader | Posts collateral as margin, and holds a leveraged long or short position. | [Start trading](./start-trading.md) |
+| Liquidity provider | Signs a deposit order at one market, and holds the vault shares that the fill mints. | [Provide liquidity](./providing-liquidity.md) |
+| Keeper | Fills any order, including one it created itself, and runs liquidations. Each fill and each liquidation pays a reward. | [Keepers](../keepers.md) |
 
-Unlike traditional futures contracts that expire on a fixed date, perpetual futures have no expiry. You can hold a position for minutes or for months. This flexibility needs a mechanism to keep the perpetual price anchored to the real market price. That mechanism is the funding rate, a continuously accruing cost between the long and short sides. When one side dominates, it pays the lighter side, which rewards traders for taking the less popular side and pulls the market back toward balance. On Zenex, funding accrues into a pool and is **claimed**: the side that earns funding claims its accrued balance from the pool.
+Every role is open to any account, and one account can take all three at the same time.
 
-Leverage is the other defining feature of perpetual futures. Instead of posting the full notional value of a position, you post a fraction as collateral (called margin). With 10x leverage, for example, you control a 10,000 notional position with 1,000 in collateral. This amplifies both gains and losses. If the market moves against you enough that your equity falls below the maintenance margin, a keeper can liquidate your position to prevent bad debt.
+## One market, one vault, one price feed
 
-## The Order and Keeper Model
+A market is one leveraged pair, for example Stellar lumens (XLM) against the settlement token. A market gets its own vault and its own price feed at deployment, and it keeps both for its whole life. The vault serves that market alone, and it holds the liquidity that backs every position in the market.
 
-Zenex separates deciding a trade from executing it. When you want to open, close, or adjust a position, you **create an order** signed by you. Your order carries no execution price: it says what you want to do and the bounds you will accept, and the fill price always comes from the oracle. A permissionless **keeper** then **fills** your order, whether bundled into the same transaction or performed later, at a price it proves against the market's oracle feed.
+Losses therefore stay inside the market that produced them. A run of trader profit in one market draws on the liquidity of that market's vault. It cannot reach the liquidity of another market, and it cannot reach a depositor who deposited into another market.
 
-This split is what makes execution trustless. You never hand a keeper the right to trade on your behalf beyond what your order allows: your order sets a size, a price bound for slippage, an expiration, and, for limit and stop orders (entries and exits alike), a trigger price. A keeper can only fill within those limits and at a verified price. Anyone can run a keeper, so no single operator can censor or hold your order, and the keeper reward can even route back to you if you fill your own order. See [Start Trading](./start-trading.md) for the full trader flow.
+## Where to go next
 
-## Why Zenex
-
-Zenex is fully on-chain and permissionless. Anyone with a Stellar wallet can trade or provide liquidity, and anyone can run a keeper. The smart contracts enforce every rule transparently. Fees, margin requirements, liquidation thresholds, and interest curves are all visible on-chain and can be governed through a timelock that gives users advance notice of changes. Every fill matches against a verified price that any permissionless keeper can execute, leaving no room for an operator to front-run or censor trades.
-
-Capital efficiency is a core design goal. Each market pairs a market contract with its own strategy vault, so liquidity is dedicated to the asset it backs and the risk of one market never spills into another. Traders fill against a verified oracle price rather than a thin order book. The fee structure rewards balanced markets: the side that improves the long/short balance pays a lower fee than the side that worsens it. Borrowing interest follows a kink curve that steepens as the vault's liquidity is used up, keeping the system stable under heavy load.
-
-Zenex is built on Stellar Soroban, which provides fast finality, low transaction costs, and a WebAssembly-based smart contract environment. Transactions settle in seconds and cost fractions of a cent, making the protocol practical for active trading. For developers, every contract is composable: wallets, trading bots, keepers, aggregators, and strategy products can integrate directly with the protocol's on-chain primitives.
-
-## Markets on Zenex
-
-Each market on Zenex is its own market contract for a single asset, paired with its own vault. A market has an immutable oracle feed and its own configuration: the margin requirement (which determines maximum leverage), the liquidation threshold, the trade and impact fees, the borrowing and funding curves, and the utilization caps. Prices arrive as signed Chainlink Data Streams reports and are verified on-chain before any fill. See [Markets Overview](../markets/overview.md) for how markets are structured.
+| If you want to | Read |
+| --- | --- |
+| Know what a position costs, and what can close it | [Trading](../trading/overview.md) |
+| Know how the vault earns and what it can lose | [Vault](../vault/overview.md) |
+| See how a market is configured, priced, and retired | [Markets](../markets/overview.md) |
+| Run a keeper, or learn who fills your order | [Keepers](../keepers.md) |
+| See who can change a market parameter, and how long it takes | [Governance](../governance.md) |
+| Earn points on the traders you bring in | [Referrals](../referrals.md) |
+| Weigh what can take your money before you act | [Risks](../risks.md) |
+| Get a short answer to a common question | [FAQ](../faq.md) |
+| Look up a term | [Glossary](./glossary.md) |
+| Read the completed audits of the contracts | [Audits](../audits.md) |
+| Find a deployed address or a live parameter | [Deployments](../deployments/contract-addresses.md) |
+| Check a claim against the contracts | [Architecture overview](/technical) |
+| Call the contracts from your own code | [Integrations](/integrations/overview) |

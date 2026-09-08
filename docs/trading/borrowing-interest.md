@@ -1,29 +1,34 @@
 ---
-sidebar_position: 5
-title: Borrowing Interest
+title: Borrowing interest
+sidebar_position: 7
 ---
 
-# Borrowing Interest
+# Borrowing interest
 
-When you hold a leveraged position on Zenex, you are drawing on the vault's capacity to back your exposure. Borrowing interest is the cost of that capacity. It accrues while your position is open and is settled at each fill.
+Borrowing interest is the price of the vault liquidity that your position reserves. The vault stands behind every open position, and the market charges the side that holds more of the asset. The charge runs for as long as your side is not the smaller one.
 
-Borrowing interest is charged to the dominant side of the market, the side whose positions hold more of the base asset. If longs outweigh shorts, longs pay borrowing and shorts pay none, and vice versa. When the two sides are exactly balanced, both pay, each at a rate driven by its own utilization. This is different from funding, which is a transfer between the two sides. Borrowing is a cost that flows from traders to the vault, less a protocol share that goes to the treasury.
+## Who pays
 
-## How the Rate Is Determined
+The market compares the asset that all longs hold against the asset that all shorts hold. The larger side pays borrowing interest, and the smaller side pays nothing. If the two sides hold the same amount, both pay, and each pays at its own rate. The amount of the asset decides which side pays, so a price move alone does not switch the side that pays.
 
-The borrowing rate follows a kink model driven by vault utilization. Each side of the market has its own utilization. A side's utilization is how much of its lending capacity its open positions currently reserve, expressed as a percentage from 0% (nothing reserved) to 100% (fully reserved). A side's lending capacity is half of the vault, scaled by the share of the vault that may be committed to open positions.
+If your side holds less of the asset than the other side, you accrue nothing new. What you already owe stays owed until your next fill settles it. You accrue again once your side holds at least as much as the other side.
 
-For example, if a market allows up to 80% of the vault to back open positions and the vault holds 1,000,000 USDC, each side has a lending capacity of 400,000 USDC (80% of its 500,000 USDC half). If long positions currently reserve 200,000 USDC, the long side's utilization is 50%.
+## How the rate is set
 
-The rate has two regimes separated by a target utilization (the kink):
+The vault backs each side of a market with half its balance. Each market sets the share of that half a side may reserve, and that share is the side's capacity. Utilization is how much of its capacity the side's open positions reserve, from nothing reserved to fully reserved. A fill that adds size must leave both sides within their capacity. Your own increase can fail because the other side sits above its capacity. Between fills a price move or a vault outflow can carry a side above its capacity, and a side above it counts as fully used.
 
-- Below the target, the rate rises gently in proportion to utilization, scaled by the base borrow rate.
-- Above the target, an additional term kicks in that climbs more steeply, so that at full utilization the rate reaches the higher stressed borrow rate exactly.
+The rate follows utilization. An unused side pays nothing at all. From there the rate climbs in step with utilization, gently at first. Each market sets a target utilization where the curve bends, and above the bend the rate climbs faster. At full utilization it reaches the highest rate the market sets. The curve holds the cost down while the vault has room, and it climbs steeply near the top. That protects the vault from backing more than it can carry.
 
-The base borrow rate, the stressed borrow rate, and the target utilization are all per-market parameters, set through the protocol's [parameter-change process](../governance/parameter-changes.md). The design keeps borrowing cheap while the vault has ample spare capacity and makes it climb sharply as the market approaches full utilization, protecting the vault from becoming overextended. The exact rate formula is in the [technical reference](/technical/market/borrowing-rate).
+The two sides measure their reserve differently. The long side reserves the current market value of the asset its positions hold, so its reserve moves with the price. The short side reserves the value its positions opened at.
 
-## How It Accrues
+The bend, the two rates that shape the curve, and the share each side may reserve are per-market parameters. For the values in force and who changes them, see [Market parameters](../markets/market-parameters.md). For the curve in full, see the [technical reference](/technical/market/borrowing-rate).
 
-Borrowing interest accrues every second while your side of the market is the one being charged. The protocol tracks a cumulative borrowing index for each side of the market, and your position records a snapshot of its side's index each time it changes. The difference between the current index and your snapshot determines the borrowing you owe, and it is settled out of your collateral at the next fill. A market with no open interest reserves nothing and accrues no borrowing.
+## What you pay
 
-Because it accrues over time, longer-held positions on the paying side accumulate more borrowing interest. This is one of the key costs to monitor when holding leveraged positions over extended periods.
+The market accrues borrowing interest in windows. Each accrual reads which side is larger once, and that one reading prices the whole window since the last accrual. The charge falls on the value your position opened at. Your side's rate for that window sets how much it costs. The market takes the amount from your collateral, not from your wallet. The charge settles at your next fill. An increase, a decrease, a close, a liquidation, and an auto-deleveraging fill all settle it. Each of them itemizes the amount.
+
+What you owe counts against your equity before the market settles it, so it moves your liquidation price toward you over time. See [Liquidation](./liquidation.md). The longer you hold on the side that pays, the more you pay. The cost adds up on a position you hold open for days.
+
+## Where it goes
+
+Borrowing interest leaves the traders who pay it and goes to the vault, less the share the treasury takes. Keepers take no part of it, and no trader receives it. Funding works differently. It passes from one side of the market to the other and stays with traders. See [Funding rate](./funding-rate.md). For a liquidity provider, borrowing interest is one of the inflows that lift what a vault share is worth. See [Share value](../vault/share-value.md).

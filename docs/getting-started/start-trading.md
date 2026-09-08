@@ -1,81 +1,58 @@
 ---
+title: Start trading
 sidebar_position: 2
-title: Start Trading
 ---
 
-# How to Start Trading
+# Start trading
 
-### How Trading Works on Zenex
+A trade on Zenex has two parts. You sign an order, and a keeper fills it against a price the market verifies. The order carries the terms you set, and no keeper can fill outside them. A term you leave open puts no limit on the fill. This page walks a funded wallet through the trade form once, field by field. For the checks a price must pass before any fill, refer to [Prices](../markets/prices.md). For the ideas behind the form, refer to [Trading](../trading/overview.md).
 
-Before the steps, it helps to know what happens under the hood. On Zenex you **create an order** signed by you, and a permissionless **keeper** fills it at a price it verifies against the market's oracle feed. Your order is price-free: it carries the size and collateral you want, a **price bound** that caps the slippage you will accept, an **expiration**, and, for limit, stop-loss, and take-profit orders, a **trigger price**. A keeper can only fill within those limits. When you create an order, your collateral moves into the market contract as escrow, along with a small flat execution fee that pays the keeper who fills it. If a keeper fills the order, the escrowed collateral becomes your position's margin. If you cancel, the full escrow, fee included, is refunded.
+## Before you start
 
-The app presents all of this as a familiar trading form. The steps below map onto it.
+Connect a wallet that holds the market's settlement token. That token is your collateral. The market pays every fee and every payout in it.
 
-### Prerequisites
+## Step 1: Pick a market
 
-Zenex currently runs on **Stellar testnet**, so trading uses test tokens and no real funds are at risk. Before you begin, you need:
+Each market trades one asset, settles in one token, and sets its own parameters. The market you pick fixes your settlement token, your leverage ceiling, and your fee rates. Each market also has its own vault, and that vault stands on the other side of your trade. For what a market holds, refer to [Markets](../markets/overview.md).
 
-- A way to sign in. You have two options:
-  - **Smart account**: create a **passkey-based smart account** directly from Zenex. No seed phrase, no extension. Just your device's biometrics (fingerprint, Face ID) or a security key.
-  - **Browser wallet**: Zenex supports xBull, Freighter, Lobstr, Albedo, Hana, Ledger, and Hot Wallet. An advanced **Ed25519 key** import flow is also available.
-- The market's **settlement token** (USDC on testnet) in your account. New accounts are walked through funding automatically. See Step 2 below.
+## Step 2: Pick a side
 
-### Step 1: Connect or Create an Account
+If you expect the price to rise, pick long. If you expect it to fall, pick short. You can hold one long and one short in the same market at the same time. Each side carries its own collateral. Every later order on a side folds into the position you already hold there.
 
-Click **Connect** in the top-right corner on desktop, or at the top of the page on mobile. From here you can connect an existing browser wallet, connect an existing passkey account, or **create a new smart account** using a passkey. No wallet extension needed.
+## Step 3: Pick an order type
 
-### Step 2: Fund Your Testnet Account
+A market order fills at the next price the market verifies. A limit order rests until the price reaches your trigger in your favor. A stop entry rests until the price passes your trigger against you. For every order kind and the family it belongs to, refer to [Orders](../trading/orders.md).
 
-Because Zenex is on testnet, the app shows a banner walking you through three free funding steps when needed:
+A limit order and a stop entry both carry a trigger price, and the form asks for it here. Set the level the price must cross. On a limit order that level sits below the market price for a long and above it for a short. On a stop entry it sits above the market price for a long and below it for a short.
 
-1. **Fund the account** via Stellar's friendbot (creates the account on-chain).
-2. **Add a USDC trustline** so your account can hold USDC.
-3. **Claim test USDC** from the built-in faucet to use as collateral.
+## Step 4: Set the collateral and the leverage
 
-Click each banner action as it appears. Once your account holds USDC, you are ready to trade.
+Collateral is the amount you post with this order. The size the order adds is that collateral multiplied by the leverage you pick. Each market sets a smallest order size, a smallest collateral amount, and a leverage ceiling.
 
-### Quick Trading: One-Click Trading
+**On the order that opens a side, collateral posted at the exact leverage ceiling fails the fill.** The fill takes its costs out of the collateral you post with that order. What is left must still cover the whole position that the fill leaves you with. Pick leverage below the ceiling. An order that adds to a position already holding surplus collateral can pass at the ceiling. For the two margin lines and what each one measures, refer to [Margin and leverage](../trading/margin-and-leverage.md).
 
-When using a smart account, each action normally requires a passkey prompt (biometric confirmation). To streamline this, Zenex offers **Quick Trading** (a session key under the hood): a temporary signing key that lets you create orders with a single click for up to **4 hours**, without repeated passkey prompts.
+## Step 5: Set the expiry and the price bound
 
-To enable it, click the **Quick Trading** (fish icon) button in the top bar after connecting your smart account, then click **Enable**. An ephemeral key is generated and authorized on your account under a scoped on-chain session policy: it can only call the market contracts and the router, and it can only move your USDC into the market, nowhere else. When the session expires, simply re-enable it. Quick Trading keys can be revoked at any time.
+The expiry is the last ledger at which a keeper can fill the order. After it passes, the order stops filling. The market keeps holding your escrow until you cancel. A cancel returns it in full, before or after the expiry. **A frozen market blocks a cancel**, and your escrow stays with the market until the freeze lifts. For what else a freeze stops, refer to [Market status](../markets/status.md).
 
-### Step 3: Select a Market
+The price bound is the worst fill price you accept. A keeper can fill at that price or better, never worse. Leave the bound empty to accept a fill at any verified price. The app sets the bound from the slippage you allow.
 
-Choose the market you want to trade. The testnet deployment currently lists a single XLM market; each market is its own contract with its own vault, and all markets settle in USDC on testnet.
+## Step 6: Add a stop loss or a take profit
 
-### Step 4: Choose Your Direction
+Both are decrease orders that rest against your position with a trigger price. A stop loss closes the position when the price passes your trigger against you. A take profit closes it when the price reaches your trigger in your favor. Every fill that adds size locks that size for a short window. A full close inside the window fails, so a trigger that fires there leaves the position open. That order stays where it is, and a keeper can fill it once the lock ends. For the lock and the size it covers, refer to [Positions](../trading/positions.md). For the length of the window, refer to [Market parameters](../markets/market-parameters.md).
 
-Select **Long** if you expect the price to go up, or **Short** if you expect it to go down.
+A decrease order escrows its own execution fee. It posts no collateral. An entry order with a stop loss and a take profit therefore escrows three execution fees.
 
-### Step 5: Set Your Collateral and Leverage
+You can rest up to eight decrease orders on one side. The app can create them in the same signature as your entry order. When a close takes your position to zero, the market cancels every decrease order left on that side and returns each escrow to you. Liquidation can close your position whatever your triggers say. For the line that liquidation runs on, refer to [Liquidation](../trading/liquidation.md).
 
-Enter the amount of collateral you want to allocate (the input is labeled **Amount**, denominated in USDC) and choose a **leverage** multiplier (up to the market's maximum). Your notional position size equals collateral multiplied by leverage. For more details, see [Margin and Leverage](../trading/margin-and-leverage.md) and [Collateral](../trading/collateral.md).
+## Step 7: Review and sign
 
-### Step 6: Choose Your Order Type
+Check the market, the side, the order type, any trigger, the collateral, the leverage, the expiry, the bound, and any stop loss or take profit. Then sign.
 
-- A **market order** is an order you expect to fill right away: a keeper fills it at the current verified price, within the price bound you set. The app translates your slippage tolerance into that bound.
-- A **limit order** carries a trigger price and rests until the market reaches it, at which point a keeper can fill it. A long limit fills at or below your price, a short limit at or above.
+**Your collateral and one execution fee for every order in the signature leave your wallet the moment you sign.** The market holds them as escrow against those orders. If a keeper fills an order, the fill's costs come out of the collateral you posted, and the rest becomes the position's margin. The market holds the execution fee beside that collateral, and the fee never reduces it. It pays the keeper in full. A cancel returns the whole escrow of that order. The transaction itself also costs a network fee, and [Fees](../trading/fees.md) covers how you pay it.
 
-Either way, you also set an **expiration**. Your order stays fillable until it expires, after which a keeper can no longer fill it. You can cancel any of your orders at any time, before or after expiration, and cancelling refunds the escrowed collateral and fee.
+## What happens next
 
-### Step 7: Set Stop-Loss and Take-Profit (Optional)
+The app can send your order and its fill in one transaction, so a market order often fills at once. If that fill fails, one of two outcomes follows, and the app picks which one when it builds the transaction. Either the whole transaction unwinds and nothing leaves your wallet, or the order rests until a keeper fills it on the escrow terms in Step 5.
 
-Add **stop-loss** and **take-profit** orders to automate your risk management. Each is a closing order that carries a trigger price: a stop-loss closes your position once the price moves against you past a threshold, and a take-profit closes it once the price reaches your target. A keeper fills the trigger once the market crosses it. Each trigger order escrows the flat execution fee when you place it, refunded if the order is cancelled. See [Liquidation](../trading/liquidation.md) for more on how positions are protected.
-
-### Step 8: Review and Submit
-
-Review your order details: direction, collateral, leverage, order type and price, price bound, expiration, and any triggers. When everything looks correct, click **LONG/BUY** or **SHORT/SELL** (the action button matches the direction you chose), confirm in the order dialog, and sign the transaction. When you submit, your collateral and the execution fee are escrowed with the order, and cancelling refunds them in full. Your order is now live for a keeper to fill.
-
-How the transaction reaches the chain depends on your account type. A **smart account** submits through Zenex's relay: the relay sponsors the transaction's XLM gas and charges a small network fee in USDC instead, capped at a maximum you sign (and can adjust in settings), and a market order is filled in the same transaction when possible. A **browser wallet** signs and submits a classic Stellar transaction: you pay the network fee in XLM yourself, and your order rests briefly until a keeper fills it. See [Fees](../trading/fees.md) for the full cost breakdown.
-
-### Managing Your Position
-
-Each position on Zenex is netted: you hold at most one long and one short per market, and every order adjusts that single position. Once your position is open you can:
-
-- **Add or remove [collateral](../trading/collateral.md)** with a collateral-only order.
-- **Reduce** the position with a partial closing order, or **close it fully** with a full-close order (the app submits a close for your entire size).
-- **Update your stop-loss and take-profit** by cancelling the old trigger order and placing a new one. Trigger orders accumulate rather than replace each other, so an uncancelled old trigger stays live. When your position fully closes, any remaining trigger orders are cancelled automatically and their escrowed fees refunded.
-- **Claim credit** you have earned. Funding you are owed (and any payout the token could not deliver directly) accrues into a claimable credit balance that you can claim whenever you like.
-
-See [PnL Calculations](../trading/pnl.md) for how profit and loss are computed, and [Fees](../trading/fees.md) for the applicable trading costs.
+You control the side, the collateral, the leverage, the order type, the bound, the expiry, and the cancel. You do not control who fills your order, at what moment, or at which verified price inside your bound. For the costs a fill settles, refer to [Fees](../trading/fees.md). For the life of the position after it opens, refer to [Positions](../trading/positions.md).

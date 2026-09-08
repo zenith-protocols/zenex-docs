@@ -1,38 +1,52 @@
 ---
+title: Provide liquidity
 sidebar_position: 3
-title: Providing Liquidity
 ---
 
-# How to Use the Vault
+# Provide liquidity
 
-### What Is The Vault?
+Each market has one vault. The vault holds the settlement token that backs every position in that market, and it is the counterparty to every trader there. If you put tokens in, you hold a share of the vault. You earn what the traders pay, and you carry the loss when the traders win. For what a share is worth and what you risk, see the [vault section](../vault/overview.md).
 
-Each Zenex market pairs a market contract with its own **strategy vault**. The vault holds the liquidity that traders borrow against and stands as the counterparty to every position in that market. By depositing the market's settlement token, you earn yield from the trading fees and borrowing interest that traders pay. For a deeper overview of how the vault works, see [Vault Overview](../vault/overview.md).
+## A deposit is an order
 
-### How Deposits and Redeems Work
+A deposit takes two steps, at different times. First you sign a deposit order. Your tokens leave your account at that moment, together with a flat execution fee. The market holds both. Second, a keeper fills the order at a signed price, and the vault mints your shares. The whole order fills at once.
 
-Deposits and redeems on Zenex flow **through the market contract as vault orders**. When you deposit, your assets are held in escrow and a keeper fills the order shortly after, minting your **vault shares** net of the vault fee. When you redeem, your shares are escrowed and a keeper fills the redeem, burning them and paying out assets net of the vault fee. Alongside your deposit or redeem, a small flat execution fee in the settlement token is escrowed too. It pays the keeper that fills your order and is refunded in full if you cancel. This ordering exists so that share pricing always reflects the market's live PnL and cannot be sniped or drained by a well-timed deposit or withdrawal.
+Your order waits between the two steps. A deposit mints no shares while it waits, so it earns nothing for you. While an order waits, you can cancel it. A cancelled deposit returns your tokens and the execution fee in full. A cancelled withdrawal returns your shares and the execution fee in full. An emergency freeze on the market blocks the fill and the cancel until the freeze lifts. For what a freeze stops, see [Market status](../markets/status.md).
 
-Two things follow from this. First, a deposit or redeem rests until a keeper fills it, and you can cancel it while it rests to get your escrowed assets or shares and the execution fee back in full, except while the market is under an emergency freeze. Second, redeems have a cooldown and fills are subject to safety gates, described below.
+**The fill sets your share count, not your signature.** The vault values what it holds and the open positions it faces, both at the moment of the fill. That value moves between the two steps, so your share count moves with it. The count the app shows you is an estimate. You can set the least you accept from a fill. On a deposit that bound is a number of shares, and on a withdrawal it is an amount of the settlement token. The fill measures your bound after the vault fee. A fill below your bound fails, and your order keeps waiting.
 
-### Depositing
+A withdrawal is the same order in reverse. Your shares leave your account when you sign, and the settlement token arrives at the fill. Your money stays exposed to the vault's value for the whole wait. The fill sets the amount you receive, at the value the vault holds at that moment.
 
-1. **Connect your wallet** by clicking **Connect** and selecting your sign-in method.
-2. **Navigate to the Vault page** by selecting the **Vault** tab from the main navigation.
-3. On the **Deposit** tab, **enter the amount** of the settlement token you want to deposit. Each market sets a minimum deposit amount, and a deposit below it is rejected when you submit. The shares shown are an estimate: the exact amount is determined at the price the keeper fills your order with.
-4. **Confirm the transaction** by signing in your wallet. Your assets and the execution fee are escrowed and the deposit order is created. A keeper then fills it and you receive **vault shares** net of the vault fee, proportional to your deposit.
+## What it costs
 
-### Withdrawing
+You pay two costs. The execution fee is a flat amount in the settlement token. It escrows with your order. It pays the keeper that fills the order. A cancel returns it. The vault fee is a percentage. The fill takes it off the amount you deposit, and off the assets a withdrawal returns. The keeper takes a cut of that percentage, the treasury takes a cut, and the rest stays in the vault.
 
-1. **Navigate to the Vault page** by selecting the **Vault** tab from the main navigation.
-2. Switch to the **Withdraw** tab. You can specify either the amount of assets you want to receive or the number of shares you want to burn. There is no minimum redeem amount.
-3. **Confirm the transaction** by signing in your wallet. Your shares and the execution fee are escrowed and a redeem order is created. A keeper fills it, burns your shares, and returns the corresponding assets net of the vault fee.
+Each market sets both costs, and the current amounts are on the [market parameters](../markets/market-parameters.md) page. The fill reads the percentage rates as they stand at that moment, so a rate change reaches an order that still waits. Your order carries its own execution fee from the moment you sign.
 
-### Important Notes
+## Before you start
 
-- **Redeem cooldown**: a redeem has a cooldown that counts from the moment you create the order and must elapse before a keeper can fill it. The cooldown length is a per-market parameter (see [Parameter Changes](../governance/parameter-changes.md)), read when the order fills, so a parameter change can shorten or lengthen a resting redeem's wait. A deposit has no cooldown. It can fill as soon as a price newer than your order arrives, because shares are always priced against the market's pending PnL marked in existing depositors' favor, so there is nothing for a fast deposit to snipe.
-- **Whole fills**: a deposit or redeem order fills in full. A keeper either fills your entire order or leaves it resting.
-- **Safety gates**: to protect existing depositors, a redeem is blocked while pending trader profits would let it drain the pool, or while withdrawing would leave too little liquidity to back open positions. If a gate is active, your order simply rests until the condition clears.
-- **Minimum received**: when you create a deposit or redeem you can set a minimum amount to receive (shares for a deposit, assets for a redeem, measured after the vault fee). If a fill would return less than that, the fill fails and your order keeps resting.
-- **Balance cap**: each vault has a maximum total balance, a per-market parameter. A deposit that would push the vault above that cap will not fill until room opens up.
-- **Share value**: the value of your shares changes over time based on trading activity. When traders pay fees and interest, or lose money, share value rises. When traders profit, share value can fall. See [Risks & Rewards](../vault/risks-and-rewards.md) for a full breakdown.
+You need an account and the market's settlement token. For the account setup and the test funds, see [Start trading](./start-trading.md).
+
+## Deposit
+
+1. Connect your account, then open the Vault tab.
+2. On the Deposit tab, enter the amount of the settlement token you want to deposit. Each market sets a minimum deposit, and the market refuses a smaller amount when you sign. The minimum reads the amount you enter. The vault fee comes off that amount at the fill, and the vault mints your shares on what is left. The execution fee is charged on top of the amount you enter.
+3. Confirm and sign. Your tokens and the execution fee move into escrow, and the order waits for a keeper.
+
+A keeper fills your deposit with a price published at or after the moment you signed. The market also refuses a price report that is too old. The fill lands in a later ledger than your signature.
+
+Each vault has a ceiling on its balance. A deposit fills while it keeps the vault at or under that ceiling. A larger deposit rests until the balance falls back under the ceiling, and you can cancel it instead. The [market parameters](../markets/market-parameters.md) page carries the current minimum deposit and the current ceiling.
+
+## Withdraw
+
+1. Open the Vault tab and switch to the Withdraw tab.
+2. Enter how many of your shares you want to return. The market accepts any positive number up to the shares you hold. A larger number fails when you sign. You can also set the least amount of the settlement token you accept from the fill.
+3. Confirm and sign. Your shares and the execution fee move into escrow, and the order waits for a keeper.
+
+A withdrawal waits out a cooldown before any keeper can fill it. The cooldown runs from the moment you sign. The market sets its length, and the fill reads that setting. A change to the length reaches an order that already waits.
+
+Two gates protect the open positions. A withdrawal fills while enough liquidity stays behind the positions the vault backs. It also fills while the pending profit of the traders stays under a set part of what remains in the vault. That second gate measures the long traders and the short traders separately. Your order waits until the condition clears, and you can cancel it instead. The [market parameters](../markets/market-parameters.md) page carries the current cooldown and the current profit limit.
+
+## After the fill
+
+Your shares are a token in your account. You can send them to another account, and whoever holds them can withdraw. Their value rises as traders pay fees and interest, and as traders lose. It falls while traders hold profit, before those traders close. For how that value is set, see [Share value](../vault/share-value.md).

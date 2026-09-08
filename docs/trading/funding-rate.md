@@ -1,34 +1,44 @@
 ---
+title: Funding rate
 sidebar_position: 6
-title: Funding Rate
 ---
 
-# Funding Rate
+# Funding rate
 
-The funding rate is a transfer between longs and shorts based on the market's imbalance. It is comparable to the funding rate on traditional perpetual exchanges, and it exists to push the market toward balance: the crowded side pays, the underrepresented side earns. A positive rate means longs pay shorts, a negative rate means shorts pay longs.
+Funding is a transfer between the two sides of a market. The side that the rate points at pays, and the other side earns. A positive rate means longs pay shorts, and a negative rate means shorts pay longs. The rate builds toward the crowded side, so a crowded book ends with the crowd paying. The payment rewards the trader who takes the less popular side, and it pulls the book back toward balance.
 
-## Velocity Funding
+**Funding is a transfer between traders.** The market holds what a payer settles, and it reaches a receiver as a claimable balance when that receiver's own position next settles.
 
-Zenex uses a velocity funding model. Rather than setting the rate directly from the current imbalance, the protocol adjusts the rate over time based on how one-sided the book is. The saved rate has momentum: while one side dominates, the rate keeps accelerating toward that side, and when the book comes back toward balance it winds down again.
+## How the rate moves
 
-The imbalance that drives this is measured in tokens: it is the difference between the long and short base-token totals, divided by their sum. A perfectly balanced book has a skew of zero, and a market where one side holds all the open tokens has a skew of one.
+The rate builds up and winds down over time. The imbalance between the two sides sets how fast the rate builds, and time sets how far it gets. A wide imbalance therefore costs more after a day than it costs one hour after the imbalance appears. The market measures the imbalance in the asset that positions hold, as a share of the total size that both sides hold. A balanced book sits at 0%, and a book with one side only sits at 100%.
 
-For example, a market with 3,000 XLM of long exposure and 1,000 XLM of short exposure has 4,000 tokens open in total and an imbalance of 2,000 between the two sides, so its skew is 2,000 divided by 4,000, or 50%.
+While the rate already points at the crowded side, two per-market levels decide what it does next:
 
-- When the skew is large (or the rate is fresh or has just flipped sign), the rate accelerates toward the dominant side. The wider the skew, the faster it accelerates.
-- When the skew is small but the book is not perfectly balanced, the rate decays. The charge never drops below the market's minimum funding charge though: the crowded side keeps paying at least that minimum until the market empties or the dominant side flips.
-- Between those bands, and when the book is exactly balanced, the rate holds steady where it is.
+- Above the upper level, the rate builds toward the crowded side. The wider the imbalance, the faster it builds.
+- Below the lower level, the rate winds down toward zero at a flat speed. The imbalance does not change that speed.
+- Between the two levels, the rate holds where it is.
 
-The rate returns fully to zero in only two ways: the market empties out (which resets it), or the dominant side flips and the momentum ramps the rate through zero toward the other side.
+Two cases skip those levels. A rate of zero and a rate that points at the thin side both build toward the crowded side, at any imbalance above 0%. While the two sides hold equal size, the rate holds in every case, because the book names no side to steer toward. The rate returns to zero once the market carries no open position.
 
-The acceleration and decay speeds, the skew thresholds that separate the bands, and the minimum funding charge are all per-market parameters. The saved rate is hard-capped in both directions. The exact rate mechanics are in the [technical reference](/technical/market/funding-rate).
+The rate stops at a cap that the market sets. It goes no further in either direction, however wide the imbalance grows. The cap bounds what a payer is charged, and it does not bound what a receiver earns. A receiver earns the payers' charge spread across the value that the receiving side holds. A thin receiving side therefore earns at a rate above the cap.
 
-Because the rate carries momentum, a persistently one-sided market builds a strong funding rate that makes the crowded side increasingly expensive to hold and the other side increasingly attractive. This is what nudges traders back toward balance and reduces the vault's directional risk.
+The paying side is the side the rate points at, and that side can be the thin one. If the crowd flips from long to short, the rate still points the old way. The rate then moves toward the new crowded side, and a wide imbalance can carry it across in a single update. Until it crosses, the thin side keeps paying.
 
-## Funding Accrues to a Claimable Balance
+The build speed, the wind-down speed, the two levels, the minimum charge, and the cap are per-market parameters. The protocol's [parameter-change process](../governance.md) sets them. For the rate model in full, see the [technical reference](/technical/market/funding-rate).
 
-Funding runs through an internal credit pool rather than flowing directly onto your position's PnL.
+## The minimum charge
 
-When a position settles at a fill, the funding it owes is banked into the pool, and the funding it has earned is added to that user's claimable balance. To collect it you submit a separate claim, which pays out your claimable balance from the pool rather than topping up your collateral automatically. If the pool cannot cover the full amount at that moment, it pays what it can and the remainder stays claimable for later.
+Every market sets a floor under the rate it charges. Whenever a market charges funding, it charges at that floor or above. The amount you pay still grows with the size of your position and with the time you hold it. The wind-down stops one step short of zero, so a rate that decays almost to nothing still charges the floor. You pay it for as long as you hold a position on the side that pays, even in a near-balanced market. The charge ends when you close the position, or when the rate crosses over and your side starts to earn instead.
 
-The pool can be briefly short because funding only enters it when a paying position settles at a fill. What you have earned may be owed by payers who have not touched their positions since, so that money is still sitting in their positions rather than in the pool. If you claim during such a window you receive what the pool currently holds, and the rest of your balance becomes collectable as the paying side settles. Nothing is lost by claiming early or waiting, the unclaimed remainder stays yours either way.
+The charge runs on the paying side alone. While nobody holds the other side, what you pay stays with the market and no trader receives it. The protocol takes no funding for itself, and the market holds that money against what it owes traders. For where that money goes at the end of a market's life, see [Market status](../markets/status.md).
+
+## What you pay
+
+Funding accrues every second while your side pays. The market charges it against the collateral behind your position. It settles at the next change to the position. An increase, a decrease, a close, a liquidation, and an auto-deleveraging fill all settle it.
+
+**What you owe counts against your equity before the market settles it.** Equity is what keeps a position alive, so unsettled funding moves your liquidation price toward you every second the position stays open. See [Liquidation](./liquidation.md).
+
+## What you earn
+
+Funding you earn becomes a claimable balance in your name, and it grows each time your position settles, on the same events that settle what you pay. The balance sits apart from the position, so your collateral, your equity, and your liquidation price stay as they are. A claim is a separate action that you choose when to make. See [Claimable credit](./claimable-credit.md).
