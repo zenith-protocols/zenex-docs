@@ -1,253 +1,145 @@
 ---
-sidebar_position: 14
 title: Events
+sidebar_position: 17
 ---
 
 # Events
 
-The market contract emits 18 events. This page lists each one with its exact Rust definition, so an indexer can decode topics and data without reading the contract source.
+The market declares 17 events, and the Ownable module it carries publishes three more. Each event is the receipt for one action, and its payload carries what the call charged, moved, or set. The state a call leaves behind is read from the views and from the transaction's ledger entry changes. Every unit named below is defined on [Units and scales](../units.md).
 
-Events are receipts for actions, not mirrors of contract state. The one exception is the created order row, carried on the create events because it is immutable while pending, so the payload stays authoritative until the order's fill or cancel receipt. Resulting position and market state are read back through the getters (`get_position`, `get_market_data`, ...) or from the transaction's ledger entry changes, which carry every stored row the transaction wrote.
+## Wire layout
 
-All events use Soroban's `#[contractevent]` derive. The event-name symbol (the snake_case struct name, e.g. `create_order` for `CreateOrder`) is the first topic, then the `#[topic]` fields follow in declared order, and all remaining fields form the data map, keyed by field name and sorted by that name's bytes, so the declaration order below is documentation rather than wire layout. An event with no non-topic fields carries an empty map rather than a void value. Field comments state the units: token decimals (token-dec), base decimals (base-dec), feed precision for prices, or `SCALAR_18`. The stored types behind the rows are documented on [Storage](./storage.md#stored-types).
+Every market event carries the `contractevent` attribute from soroban-sdk 26.1.1. The first topic is the event name symbol, the struct name in lower snake case. The fields marked `#[topic]` follow as the remaining topics, in declaration order. Every other field sits in the data map under its own field name. The host holds a map in key order, so the data map is ordered by field name and not by declaration order. An event that declares no data field carries an empty map.
 
-## Trade Orders
+## Event index
 
-Emitted by `create_order` and `cancel_order`.
+| Event | Topics after the name | Published by |
+| --- | --- | --- |
+| `create_order` | `user: Address`, `id: u32` | `create_order` |
+| `cancel_order` | `user`, `id` | `cancel_order`, and the closure sweep in `execute_order`, `execute_liquidation`, and `execute_adl` |
+| `create_vault_order` | `user`, `id` | `create_vault_order` |
+| `cancel_vault_order` | `user`, `id` | `cancel_vault_order` |
+| `deposit_fill` | `user`, `id` | `execute_vault_order` |
+| `redeem_fill` | `user`, `id` | `execute_vault_order`, and `create_vault_order` on a `Retired` market |
+| `claim_credit` | `user` | `claim_credit` |
+| `adl_update` | none | `update_adl_state` |
+| `accrual_update` | none | `accrue` |
+| `status_update` | none | `set_status` |
+| `config_update` | none | `set_config` |
+| `terminal_price_update` | none | `set_terminal_price` |
+| `open_fill` | `user`, `id`, `is_long: bool` | `execute_order` |
+| `increase_fill` | `user`, `id`, `is_long` | `execute_order` |
+| `decrease_fill` | `user`, `id`, `is_long` | `execute_order`, `execute_adl` |
+| `close_fill` | `user`, `id`, `is_long` | `execute_order`, `execute_adl` |
+| `liquidation` | `user`, `is_long` | `execute_liquidation` |
 
-```rust
-/// Order created via `create_order`. The row is immutable while pending, so
-/// the payload stays authoritative until the order's fill or cancel receipt.
-#[contractevent]
-pub struct CreateOrder {
-    #[topic] pub user: Address,
-    #[topic] pub id: u32,
-    pub order: Order, // the stored order row, as returned by `get_order`
-}
+## Order receipts
 
-/// Pending order cancelled by its owner via `cancel_order`, or by the closure
-/// sweep that cancels every decrease order still resting on a closed side.
-#[contractevent]
-pub struct CancelOrder {
-    #[topic] pub user: Address,
-    #[topic] pub id: u32,
-    pub refund: i128, // escrow returned by this cancel (Order::escrow_amount), token-dec
-}
-```
+| Event | Data field | Unit | Meaning |
+| --- | --- | --- | --- |
+| `create_order` | `order` | `Order` | The stored order row, as `get_order` returns it. |
+| `cancel_order` | `refund` | token-dec | The escrow this one cancel returns, `Order::escrow_amount`. |
 
-`cancel_order` covers auto-cancels too. When a position fully closes (decrease fill, liquidation, ADL, or delist wind-down), every pending decrease order resting on that side is auto-cancelled with one `cancel_order` event per id, each carrying its own `refund`. An owner-initiated cancel pays its refund in its own transfer, while the swept refunds ride the closure payout's single transfer.
+The order row is immutable while the order rests, so the `create_order` payload stays authoritative until the order's fill or cancel receipt.
 
-## Position Fills
+`cancel_order` covers two paths. The order's `user` cancels one order through `cancel_order`, or a full close sweeps every decrease order that still rests on the closed side. The sweep publishes one event for each swept id, and each event carries that order's own escrow in `refund`.
 
-Emitted by `execute_order`, `execute_adl`, and `execute_liquidation`. An increase that opens the side (the position was empty before the fill) emits `open_fill`, an increase on an already-open position emits `increase_fill`, a partial decrease (the position survives) emits `decrease_fill`, and a full close emits `close_fill`, with `execute_adl` emitting the decrease or close receipt under id `0`. Both lifecycle boundaries are chain-attested: `open_fill` marks zero to size exactly as `close_fill` marks size to zero. Only the order-fill path can open, so ADL and liquidation never emit `open_fill`. The fill is the itemized receipt. The resulting position state is the stored row, readable at `get_position(user, is_long)` and in the transaction's ledger entry changes (a fully closed position persists as the canonical zeroed row).
+## Vault order receipts
 
-```rust
-/// A keeper fill that opens the position (the side was empty before the fill).
-/// Same payload keys as IncreaseFill minus `funding` and `borrowing`: accruals
-/// settle over the pre-fill notional, which is 0 when the side was empty, so
-/// both are structurally zero on an open.
-#[contractevent]
-pub struct OpenFill {
-    #[topic] pub user: Address,
-    #[topic] pub id: u32,
-    #[topic] pub is_long: bool,
-    pub keeper: Address,  // reward recipient named by the fill's caller
-    pub price: i128,      // entry-side execution price (ask for a long, bid for a short), feed precision
-    pub notional: i128,   // size opened, token-dec
-    pub tokens: i128,     // base size bought, base-dec
-    pub margin: i128,     // margin pulled from the trader, token-dec
-    pub base_fee: i128,   // trade fee charged, token-dec
-    pub impact_fee: i128, // impact fee charged, token-dec
-}
+| Event | Data field | Unit | Meaning |
+| --- | --- | --- | --- |
+| `create_vault_order` | `order` | `VaultOrder` | The stored vault order row, as `get_vault_order` returns it. |
+| `deposit_fill` | `keeper` | Address | The reward recipient the fill's caller named. |
+| `deposit_fill` | `assets` | token-dec | The gross assets taken from escrow. |
+| `deposit_fill` | `shares` | share-dec | The vault shares minted to the user. |
+| `deposit_fill` | `fee` | token-dec | The vault fee charged. |
+| `deposit_fill` | `net_pnl` | token-dec, signed | The capped net pending trader PnL the share mint priced against. |
+| `redeem_fill` | `keeper` | Address | The reward recipient the fill's caller named. |
+| `redeem_fill` | `shares` | share-dec | The vault shares burned. |
+| `redeem_fill` | `assets` | token-dec | The gross assets redeemed from the vault. |
+| `redeem_fill` | `fee` | token-dec | The vault fee charged. |
+| `redeem_fill` | `net_pnl` | token-dec, signed | The capped net pending trader PnL the share burn priced against. |
 
-/// A keeper fill of an increase order on an already-open position (the user's
-/// itemized receipt); an order that opens the side emits OpenFill instead.
-#[contractevent]
-pub struct IncreaseFill {
-    #[topic] pub user: Address,
-    #[topic] pub id: u32,
-    #[topic] pub is_long: bool,
-    pub keeper: Address,  // reward recipient named by the fill's caller
-    pub price: i128,      // entry-side execution price (ask for a long, bid for a short), feed precision
-    pub notional: i128,   // size added, token-dec
-    pub tokens: i128,     // base size bought, base-dec
-    pub margin: i128,     // margin pulled from the trader, token-dec
-    pub base_fee: i128,   // trade fee charged, token-dec
-    pub impact_fee: i128, // impact fee charged, token-dec
-    pub funding: i128,    // settled funding, token-dec; + = paid from margin, - = credited claimable
-    pub borrowing: i128,  // settled borrowing fee, token-dec
-}
+A deposit fill prices the share mint against `assets - fee`. The vault also takes its cut of `fee`, so its net credit is the sum of the two. A redeem fill pays the user `assets - fee`. `Settlement::compute_vault_order` splits `fee` into the keeper, treasury, and vault legs. [Vault orders](./vault-orders.md) gives both steps.
 
-/// A keeper fill of a partial decrease (the position survives the fill).
-#[contractevent]
-pub struct DecreaseFill {
-    #[topic] pub user: Address,
-    #[topic] pub id: u32, // filled order id; 0 = forced ADL close via `execute_adl`
-    #[topic] pub is_long: bool,
-    pub keeper: Address,  // reward recipient named by the fill's caller
-    pub price: i128,      // exit-side execution price (bid for a long, ask for a short), feed precision
-    pub notional: i128,   // closed size, token-dec
-    pub tokens: i128,     // base size closed, base-dec
-    pub margin: i128,     // requested withdrawal, token-dec
-    pub pnl: i128,        // realized PnL on the closed fraction (post-haircut), gross of settled costs, token-dec
-    pub base_fee: i128,   // trade fee charged, token-dec
-    pub impact_fee: i128, // impact fee charged, token-dec
-    pub funding: i128,    // settled funding, token-dec; + = paid from margin, - = credited claimable
-    pub borrowing: i128,  // settled borrowing fee, token-dec
-    pub returned: i128,   // payout to the trader: the gross legs less the fees they cover, token-dec
-}
-
-/// A keeper fill that closes the whole position (the stored row zeroes).
-#[contractevent]
-pub struct CloseFill {
-    #[topic] pub user: Address,
-    #[topic] pub id: u32, // filled order id; 0 = forced ADL close via `execute_adl`
-    #[topic] pub is_long: bool,
-    pub keeper: Address,  // reward recipient named by the fill's caller
-    pub price: i128,      // exit-side execution price (bid for a long, ask for a short), feed precision
-    pub notional: i128,   // full closed size, token-dec
-    pub tokens: i128,     // base size closed, base-dec
-    pub margin: i128,     // freed margin, gross of the itemized fees, token-dec
-    pub pnl: i128,        // realized PnL on the closed size (post-haircut), gross of settled costs, token-dec
-    pub base_fee: i128,   // trade fee charged, token-dec
-    pub impact_fee: i128, // impact fee charged, token-dec
-    pub funding: i128,    // settled funding, token-dec; + = paid from margin, - = credited claimable
-    pub borrowing: i128,  // settled borrowing fee, token-dec
-    pub bad_debt: i128,   // fees and losses past the freed margin, absorbed by the vault, token-dec
-    pub returned: i128,   // post-fee equity paid to the trader, token-dec
-}
-
-/// A keeper liquidation receipt (the full size is force-closed). Every
-/// liquidation charges the capped `liq_fee`, split keeper/treasury/vault like a
-/// trade fee, and pays the trader the rest on `returned`. Any shortfall past
-/// the freed margin lands on `bad_debt`.
-#[contractevent]
-pub struct Liquidation {
-    #[topic] pub user: Address,
-    #[topic] pub is_long: bool,
-    pub keeper: Address,  // reward recipient named by the fill's caller
-    pub price: i128,      // exit-side execution price (bid for a long, ask for a short), feed precision
-    pub notional: i128,   // force-closed size, token-dec
-    pub tokens: i128,     // base size closed, base-dec
-    pub margin: i128,     // freed margin, gross of the itemized fees, token-dec
-    pub pnl: i128,        // realized PnL on the closed size (post-haircut), gross of settled costs, token-dec
-    pub base_fee: i128,   // trade fee charged, token-dec
-    pub impact_fee: i128, // impact fee charged, token-dec
-    pub funding: i128,    // settled funding, token-dec; + = paid from margin, - = credited claimable
-    pub borrowing: i128,  // settled borrowing fee, token-dec
-    pub bad_debt: i128,   // fees and losses past the freed margin, absorbed by the vault, token-dec
-    pub returned: i128,   // remainder paid to the trader net of the liquidation fee, token-dec
-    pub liq_fee: i128,    // liquidation fee charged: min(equity, ceil(liq_fee_rate * notional)), token-dec
-}
-```
-
-### Reading the fill receipts
-
-- **`price` is the execution price** the fill settled at: the entry side (ask for a long, bid for a short) on an `open_fill` or `increase_fill`, the exit side (bid for a long, ask for a short) on the close receipts. On a close, `notional` and `tokens` are the closed size at entry pricing, so `notional * SCALAR_18 / tokens` is the entry price of the closed chunk while `price` is what it closed at.
-- **`open_fill` carries no `funding` or `borrowing`**: accruals settle over the notional held before the fill, which is zero when the side opens, so both fields would always be zero and are omitted from the payload.
-- **`margin` and `pnl` are gross** of the itemized fees, and `pnl` is post-haircut. `returned` is the actual payout: the gross legs less the fees they cover, floored at zero. On a `decrease_fill` a realized loss debits the surviving margin, never the payout, and margin floors at zero with any shortfall past it booked as bad debt. The survivor must still clear its margin lines, so a partial that would leave bad debt behind aborts, and the partial receipt carries no `bad_debt` field. On a `close_fill` the payout is the post-fee equity and any shortfall past the freed margin lands on `bad_debt`.
-- **`liquidation` always charges `liq_fee`**, capped at the close's post-fee equity. `returned` is the remainder paid to the trader net of that fee, zero exactly where the fee saturates the whole remainder.
-- **The trader transfer exceeds `returned`** when a full closure auto-cancels resting decrease orders: their refunded escrow is folded into the single payout transfer, itemized by the accompanying `cancel_order` events.
-
-## Vault Orders
-
-Emitted by `create_vault_order`, `cancel_vault_order`, and `execute_vault_order`.
-
-```rust
-/// Vault deposit or redeem order created via `create_vault_order`. The row is
-/// immutable while pending, so the payload stays authoritative until the
-/// order's fill or cancel receipt.
-#[contractevent]
-pub struct CreateVaultOrder {
-    #[topic] pub user: Address,
-    #[topic] pub id: u32,
-    pub order: VaultOrder, // the stored vault-order row, as returned by `get_vault_order`
-}
-
-/// Pending vault order removed via `cancel_vault_order`.
-#[contractevent]
-pub struct CancelVaultOrder {
-    #[topic] pub user: Address,
-    #[topic] pub id: u32,
-}
-
-/// A keeper fill of a deposit order via `execute_vault_order` (the user's receipt).
-#[contractevent]
-pub struct DepositFill {
-    #[topic] pub user: Address,
-    #[topic] pub id: u32,
-    pub keeper: Address, // reward recipient named by the fill's caller
-    pub assets: i128,    // gross assets deposited from escrow, token-dec; the vault receives assets - fee
-    pub shares: i128,    // vault shares minted to the user
-    pub fee: i128,       // vault fee charged (keeper, treasury, and vault cuts), token-dec
-    pub net_pnl: i128,   // capped net pending trader PnL the share mint priced against, signed, token-dec
-}
-
-/// A keeper fill of a redeem order via `execute_vault_order` (the user's receipt).
-#[contractevent]
-pub struct RedeemFill {
-    #[topic] pub user: Address,
-    #[topic] pub id: u32, // vault order id; 0 = retired-market instant redeem executed at creation
-    pub keeper: Address,  // reward recipient named by the fill's caller; the redeeming user on a retired-market instant redeem
-    pub shares: i128,     // vault shares burned from escrow
-    pub assets: i128,     // gross assets redeemed from the vault, token-dec; the user is paid assets - fee
-    pub fee: i128,        // vault fee charged (keeper, treasury, and vault cuts), token-dec
-    pub net_pnl: i128,    // capped net pending trader PnL the share burn priced against, signed, token-dec
-}
-```
+`cancel_vault_order` declares no data field and carries the empty map.
 
 ## Credit
 
-```rust
-/// A user claimed their credit balance through `claim_credit`.
-#[contractevent]
-pub struct ClaimCredit {
-    #[topic] pub user: Address,
-    pub amount: i128, // paid claimable balance, token-dec
-}
-```
+`claim_credit` carries one data field, `amount` (token-dec), the sum the call paid. The payout is the claimable balance capped at what the credit pool holds, so a claim can be partial. An unpaid remainder stays claimable for a later call.
 
-The credit ledger holds earned funding plus any payout whose direct token
-transfer failed (the market parks it as claimable credit instead of
-trapping the fill).
+## Fill receipts
 
-## Market State
+When the side held no position before the fill, an increase fill publishes `open_fill`, and `increase_fill` otherwise. When the row survives, a decrease fill publishes `decrease_fill`, and `close_fill` when the row zeroes. `execute_liquidation` publishes `liquidation`. Only the order path opens a position, so `open_fill` comes from `execute_order` alone.
 
-```rust
-/// ADL flags recomputed via `update_adl_state`.
-#[contractevent]
-pub struct AdlUpdate {
-    pub long: bool,  // long-side ADL enabled (long increases blocked)
-    pub short: bool, // short-side ADL enabled (short increases blocked)
-}
+Accruals settle over the notional the position held before the fill. That notional is zero on an open, so `open_fill` declares neither `funding` nor `borrowing`.
 
-/// A keeper advanced the accrual indices through `accrue`. The event only
-/// marks the poke and carries no payload; the post-accrual market state is
-/// read from `get_market_data`.
-#[contractevent]
-pub struct AccrualUpdate {}
+The five fill events share one payload shape, so the table below is keyed by data field. The last column names the events that carry the field.
 
-/// Operational status changed via `set_status`.
-#[contractevent]
-pub struct StatusUpdate {
-    pub status: u32, // the new operational status (Status discriminant)
-}
+| Data field | Unit | Meaning | Carried by |
+| --- | --- | --- | --- |
+| `keeper` | Address | The reward recipient the fill's caller named. | all five |
+| `price` | feed precision | The entry-side price: the ask for a long, the bid for a short. | `open_fill`, `increase_fill` |
+| `price` | feed precision | The exit-side price: the bid for a long, the ask for a short. | `decrease_fill`, `close_fill`, `liquidation` |
+| `notional` | token-dec | The size opened or added. | `open_fill`, `increase_fill` |
+| `notional` | token-dec | The closed size, as the position booked it at entry. | `decrease_fill`, `close_fill`, `liquidation` |
+| `tokens` | base-dec | The base size bought. | `open_fill`, `increase_fill` |
+| `tokens` | base-dec | The base size closed. | `decrease_fill`, `close_fill`, `liquidation` |
+| `margin` | token-dec | The margin the order escrowed at creation, gross of the debited fees. | `open_fill`, `increase_fill` |
+| `margin` | token-dec | The requested withdrawal. An auto-deleveraging fill requests `0`. | `decrease_fill` |
+| `margin` | token-dec | The freed margin, gross of the debited fees. | `close_fill`, `liquidation` |
+| `pnl` | token-dec, signed | The realized PnL on the closed size, post-haircut and gross of the debited fees. | `decrease_fill`, `close_fill`, `liquidation` |
+| `base_fee` | token-dec | The trade fee charged. | all five |
+| `impact_fee` | token-dec | The impact fee charged. | all five |
+| `funding` | token-dec, signed | The settled funding. A positive value is paid from margin, a negative value is credited as claimable. | every fill except `open_fill` |
+| `borrowing` | token-dec | The settled borrowing fee. | every fill except `open_fill` |
+| `bad_debt` | token-dec | The fees and losses past the freed margin, which the vault absorbs. | `close_fill`, `liquidation` |
+| `returned` | token-dec | The paid withdrawal plus the profit the fees did not consume. | `decrease_fill` |
+| `returned` | token-dec | The settled equity, floored at zero. | `close_fill` |
+| `returned` | token-dec | The settled equity, floored at zero, less `liq_fee`. | `liquidation` |
+| `liq_fee` | token-dec | The liquidation fee charged, capped at the settled equity floored at zero. | `liquidation` |
 
-/// Global configuration replaced via `set_config`.
-#[contractevent]
-pub struct ConfigUpdate {
-    pub config: Config, // the new global market configuration
-}
+On a `close_fill` and on a `liquidation`, `Position::settle` computes the settled equity as the freed `margin`, less the debited fees, plus `pnl`. The debited fees are `base_fee`, `impact_fee`, `borrowing`, and `funding` when it is positive. [Margin and leverage](./margin-and-leverage.md) defines the terms. A close whose settled equity is negative returns `0` and reports the shortfall in `bad_debt`. A partial decrease prices its own fees over the closed fraction, and it can leave a shortfall that the vault funds too. `decrease_fill` declares no `bad_debt` field, so its absence is not a zero.
 
-/// Flat settlement price set or refreshed via `set_terminal_price`.
-#[contractevent]
-pub struct TerminalPriceUpdate {
-    pub price: i128, // flat settlement price (feed precision)
-}
-```
+A `returned` amount is owed to the trader, and not always transferred to them. A payout the token transfer rejects becomes a claimable credit, which `claim_credit` later pays. No event separates the two outcomes.
 
-Both accrual events come only from `accrue`, always as a pair on one accrual clock (`MarketData::accrued_at`), so they always carry the same `timestamp`. Every other price-bearing call (order fills, vault-order fills, liquidation, ADL) advances the same indices silently, so the authoritative live indices between accrual pokes are the `MarketData` row in each transaction's ledger entry changes.
+## Administration
 
-## Other Emitters
+| Event | Data field | Unit | Meaning |
+| --- | --- | --- | --- |
+| `adl_update` | `long` | bool | Auto-deleveraging is enabled on the long side. |
+| `adl_update` | `short` | bool | Auto-deleveraging is enabled on the short side. |
+| `status_update` | `status` | u32 | The new operational status, as the `Status` discriminant. |
+| `config_update` | `config` | `Config` | The new market configuration. |
+| `terminal_price_update` | `price` | feed precision | The flat settlement price the call set or refreshed. |
 
-The factory emits one further event, `Deploy { trading, vault }`, when it deploys a pair. See [Factory](../factory/overview). The strategy vault emits the share token's standard events plus the library's `Deposit` and `Withdraw` (see [Vault](../vault/overview)). The Ownable module additionally emits its standard ownership-transfer events.
+`accrual_update` declares no data field and carries the empty map.
+
+## Struct payloads
+
+Four payloads carry a stored row or a discriminant, each documented on its own page. The `Order` row is on [Orders](./orders.md). The `VaultOrder` row is on [Vault orders](./vault-orders.md). The `Config` struct is on [Config](./config.md). The `status` value is the `Status` discriminant, on [Market status](./status.md).
+
+## Reserved ids
+
+`next_order_id` allocates order ids from `1` and never reuses one, so an id in a topic is never `0` for a stored order. Trade orders and vault orders draw from one counter per account, so `user` and `id` name one order across both receipt families. Two receipts use `0` as a marker:
+
+- `execute_adl` fills no order, so its `decrease_fill` or `close_fill` carries `id` `0`.
+- A redeem created on a `Retired` market pays the user inside `create_vault_order`. It stores no row and publishes `redeem_fill` with `id` `0`, `keeper` set to the user who redeems, `fee` `0`, and `net_pnl` `0`. That path publishes no `create_vault_order`.
+
+## Order of emission
+
+The events of one call arrive in the order the contract publishes them. Three sequences are fixed:
+
+- `execute_order` on a full close publishes `close_fill` first, then one `cancel_order` for each swept sibling.
+- `execute_liquidation` publishes the swept `cancel_order` events first, then `liquidation`.
+- `execute_adl` on a full close publishes the swept `cancel_order` events first, then `close_fill`.
+
+`execute_order`, `execute_liquidation`, `execute_adl`, and both `execute_vault_order` fills publish their receipts before `Settlement::settle` runs. The transfers of that settlement, and the events those transfers publish, follow the market's own receipts. The redeemer's net payout is the trader leg of that settlement, so it transfers after `redeem_fill`. A swept escrow refund also joins the trader leg, so it transfers after its own `cancel_order`.
+
+A vault fill also moves tokens before its receipt. `deposit_fill` follows the `strategy_deposit` transfer into the vault, and `redeem_fill` follows the `strategy_redeem` draw from it.
+
+`cancel_order`, `cancel_vault_order`, `claim_credit`, and the retired-market redeem transfer before their receipt. When `Order::escrow_amount` is above zero, `create_order` transfers the escrow first. When the credit-pool surplus is positive, `set_status` into `Retired` sweeps it to the vault first. `set_config`, `set_terminal_price`, `update_adl_state`, and `accrue` move no tokens. A partial fill sweeps no resting order, so a `decrease_fill` on a position that survives carries no `cancel_order` with it.
+
+## Ownership events
+
+The market also carries the Ownable module, which publishes `ownership_transfer`, `ownership_transfer_completed`, and `ownership_renounced` under the same layout rule. Their payloads are on [Ownership and upgrade](../ownership.md).

@@ -1,56 +1,123 @@
 ---
-sidebar_position: 4
-title: PnL Calculation
+sidebar_position: 9
+title: PnL and the profit cap
 ---
 
-# PnL Calculation
+# PnL and the profit cap
 
-PnL in Zenex is **implied**, never stored. A position records its size in two units, `tokens` (base) and `notional` (quote), and its profit is derived from those against the current price whenever it is needed.
+`Position` holds `tokens` (base-dec) and `notional` (token-dec), and `MarketData` holds the same pair as a per-side aggregate. `MarketData` also holds `margin`, the posted margin per side (token-dec). Every profit and loss (PnL) number is derived from one of those pairs against the effective price of the call, and no profit figure is stored. Four symbols do that work:
 
-## Formula
+- `math::pnl` marks one position.
+- `MarketData::side_pnl` marks a whole side.
+- `Market::haircut_pnl` caps a realized profit.
+- `Market::capped_net_pnl` marks the book for the vault share price.
 
-The position's `tokens` field is the base size actually bought, and `notional` is the quote value paid for it. The implied entry price is `notional / tokens`. Marking the base size at the current price and subtracting what was paid gives the PnL.
+None of the four raises an error code of its own. Each one traps where a fixed-point helper below traps.
 
-For a **long** position:
+The [Pricing](./pricing.md) page gives how a call resolves that price.
+
+## Fixed-point helpers
+
+`engine::math` holds the shared fixed-point helpers. Each helper takes `&Env` as its first argument, omitted in the table below. `SCALAR_18` is `1_000_000_000_000_000_000`, the fixed-point representation of one.
+
+| Symbol | Formula | Result unit |
+| --- | --- | --- |
+| `to_notional_floor(tokens, price)` | `floor(tokens * price / SCALAR_18)` | token-dec |
+| `to_notional_ceil(tokens, price)` | `ceil(tokens * price / SCALAR_18)` | token-dec |
+| `to_tokens(notional, price)` | `floor(notional * SCALAR_18 / price)` | base-dec |
+| `apply_factor_floor(amount, factor)` | `floor(amount * factor / SCALAR_18)` | unit of `amount` |
+| `apply_factor_ceil(amount, factor)` | `ceil(amount * factor / SCALAR_18)` | unit of `amount` |
+| `half_factor(balance, factor)` | `floor((balance / 2) * factor / SCALAR_18)` | token-dec |
+| `impact_fee(notional, impact_scalar)` | `min(ceil(notional * notional / impact_scalar), ceil(notional * MAX_IMPACT_RATE / SCALAR_18))` | token-dec |
+| `to_ratio_floor(numerator, denominator)` | `floor(numerator * SCALAR_18 / denominator)` | `SCALAR_18` |
+| `to_ratio_ceil(numerator, denominator)` | `ceil(numerator * SCALAR_18 / denominator)` | `SCALAR_18` |
+| `pnl(tokens, notional, price, is_long)` | stated below | token-dec, signed |
+| `prorate(amount, part, whole)` | `floor(amount * part / whole)` | unit of `amount` |
+| `accrued_amount(notional, index_delta)` | `ceil(notional * index_delta / SCALAR_18)` | token-dec |
+
+`tokens` is base-dec and `notional` is token-dec. In `to_notional_floor`, `to_notional_ceil` and `to_tokens`, `price` is one `PriceData` field in the feed's own precision. `pnl` takes the whole `PriceData` and selects the exit field itself. `balance` is the vault's `total_assets` (token-dec). `numerator` and `denominator` share one unit with each other. `factor`, `index_delta`, `MAX_IMPACT_RATE`, and every ratio are `SCALAR_18`. `impact_scalar` is token-dec. `part` and `whole` share one unit with each other, which need not be the unit of `amount`. The [Fee system](./fee-system.md) page gives the value of `MAX_IMPACT_RATE` and the fill size where the ceiling binds.
+
+`floor` and `ceil` are the `SorobanFixedPoint` operations on `i128`. `floor` rounds toward negative infinity and `ceil` toward positive infinity, and both directions hold for a negative result. Each one traps on a zero denominator, and on a result outside `i128`. The `/ 2` inside `half_factor` is plain integer division, which truncates toward zero, so an odd balance drops its last unit before the factor applies. Each side of the book measures against its own half, so the two allowances sum to at most `factor * balance`.
+
+## Per-position PnL
+
+```rust
+pub(crate) fn pnl(e: &Env, tokens: i128, notional: i128, price: &PriceData, is_long: bool) -> i128
+```
+
+For a long:
 
 $$
-\text{pnl} = \text{tokens} \times \text{price} - \text{notional}
+\text{pnl} = \left\lfloor \frac{\text{tokens} \times \text{price.bid}}{\text{SCALAR\_18}} \right\rfloor - \text{notional}
 $$
 
-For a **short** position the sign is inverted (a short profits as the price falls):
+For a short:
 
 $$
-\text{pnl} = \text{notional} - \text{tokens} \times \text{price}
+\text{pnl} = \text{notional} - \left\lceil \frac{\text{tokens} \times \text{price.ask}}{\text{SCALAR\_18}} \right\rceil
 $$
 
-`price` is in the feed's own precision and the `tokens * price` product is divided by `SCALAR_18`, so the feed's precision cancels through the round trip that defined `tokens` and the result lands in the settlement token's decimals. The marked value rounds against the trader (floor for a long, ceil for a short), favoring the vault on rounding dust.
+`tokens` is the base size the position holds (base-dec). `notional` is the quote value paid for it (token-dec). `price.bid` and `price.ask` come from the effective `PriceData` of the call, in the feed's own precision. The result is signed token-dec. `to_tokens` sizes `tokens` as `floor(notional * SCALAR_18 / price)`, so a mark at any feed precision returns a token-dec value.
 
-The formula always marks at the **exit** side of the verified price (`bid` for a long, `ask` for a short), and every position-level measurement uses it: unrealized equity for the maintenance-margin and liquidation checks, and realization on a close. The **entry** side (`ask` for a long, `bid` for a short) is consumed at fill time when sizing `tokens`, which embeds the spread in the implied entry instead. See [Pricing](./pricing.md).
+The mark reads the exit side of the spread, `PriceData::exit`, which is the bid for a long and the ask for a short. The long branch floors the marked value and the short branch ceils the closing cost, so the rounding runs against the trader on both branches. `Position::settle` marks the full size with it for every equity and maintenance measurement, and `Position::decrease` marks the closed slice on a partial close.
 
-The per-side aggregates that gate the vault (the haircut, the ADL trigger, the redeem gates, share pricing) are marked separately by `side_pnl`, which takes whichever side of the spread errs toward the gate it feeds and floors a losing side at that side's posted margin.
+## The implied entry price
 
-## Blended Entry Across Increases
+The entry price of a stored position is implied by the stored pair, as `notional` over `tokens` at the `SCALAR_18` scale, in the feed's own precision. No symbol computes it. `Position::increase` sizes each fill with `to_tokens` at the entry side of the spread, `PriceData::entry`, which is the ask for a long and the bid for a short. The implied entry carries that entry side, and the mark carries the exit side. A round trip at an unchanged quote books the full ask-to-bid crossing as a loss. No separate spread charge is taken.
 
-Because only `tokens` and `notional` are stored, successive increases blend automatically: each fill adds its bought `tokens` and its paid `notional`, and the implied entry `notional / tokens` moves to the size-weighted average. A partial close removes a pro-rata slice of both fields, preserving the implied entry on the remainder.
+Because only the pair is stored, successive increases blend on their own. Each fill adds its bought `tokens` and its paid `notional`, so the implied entry becomes the `tokens`-weighted mean of the fill prices. A partial close of `closed_notional` (token-dec) removes `prorate(tokens, closed_notional, position.notional)` from `tokens`, and `closed_notional` from `notional`. The implied entry of the remainder is unchanged, apart from the rounding down inside `prorate`.
 
-## Fill Price on Events
+## Per-side PnL
 
-Every fill receipt (`open_fill`, `increase_fill`, `decrease_fill`, `close_fill`, `liquidation`) carries the execution price on `price`: the entry side on an open or increase, the exit side on a close. On the close receipts, `notional` and `tokens` are the moved size prorated at the position's entry ratio, so `notional * SCALAR_18 / tokens` gives the entry price of the closed chunk at the feed's own precision. The emitted `pnl` is post-haircut and the mark rounds against the trader, so recomputing PnL from `price` reproduces the field only up to that rounding and only when the haircut did not fire.
+```rust
+pub fn side_pnl(&self, e: &Env, price: &PriceData, is_long: bool, maximize: bool) -> i128
+```
 
-## Equity, Payout, and Bad Debt
+`MarketData::side_pnl` marks a whole side of the book from the `SidePair` aggregates `tokens` (base-dec) and `notional` (token-dec). `price.bid` and `price.ask` come from the effective `PriceData` of the call, in the feed's own precision. The result is signed token-dec.
 
-Realized settlement combines PnL with margin and fees:
+| `is_long` | `maximize` | Marked value | Result |
+| --- | --- | --- | --- |
+| `true` | `true` | `to_notional_ceil(tokens.long, price.ask)` | value less `notional.long` |
+| `true` | `false` | `to_notional_floor(tokens.long, price.bid)` | value less `notional.long` |
+| `false` | `true` | `to_notional_floor(tokens.short, price.bid)` | `notional.short` less value |
+| `false` | `false` | `to_notional_ceil(tokens.short, price.ask)` | `notional.short` less value |
 
-$$
-\text{equity} = \text{margin} + \text{pnl} - \text{fees}
-$$
+The result is then floored at `-margin.get(is_long)`, the negated `MarketData` posted margin of that side (token-dec), because a paper loss past the posted margin cannot realize.
 
-`fees` in this formula is the debit total: base fee, impact fee, borrowing interest, and funding when the position pays it. Earned funding never offsets the debit. It accrues to the trader's claimable credit balance and is claimed separately.
+`maximize` selects which side of the spread and which rounding direction the caller wants. `maximize = true` reads the side's profit as high as the price allows. The profit cap below and the redeem gate on `execute_vault_order` measure at `maximize = true`. `update_adl_state` and `execute_adl` read the trigger for auto-deleveraging and the clear allowance at `maximize = true` as well. `maximize = false` reads the same profit as low as the price allows, and a deposit fill marks with it.
 
-On a **full close** the trader's payout is the post-fee equity floored at zero. If equity is negative, the trader receives nothing. The loss is drawn from the freed margin, and any shortfall past that margin becomes `bad_debt` absorbed by the vault.
+## The profit cap
 
-A **partial close** settles differently. The trader is paid the requested margin withdrawal plus the (haircut) realized profit, less the fees those proceeds cover. A realized loss and any fees the proceeds do not cover debit the surviving margin, which floors at zero with the excess reported as bad debt. The survivor is then held to the margin lines, so a partial that would leave any bad debt behind aborts instead. In practice only a full close or a liquidation lands bad debt on the vault.
+```rust
+pub fn haircut_pnl(&self, e: &Env, is_long: bool, pnl: i128) -> i128
+```
 
-A **liquidation** follows the full-close payout rule, then charges the liquidation fee `min(equity, ceil(liq_fee * notional / SCALAR_18))` on the freed equity and pays the trader the remainder. Where equity falls short of the rated fee, the fee takes all of it and the trader receives nothing. See [Liquidation](./liquidation.md).
+`Market::haircut_pnl` scales a realized profit down while the winning side overhangs the vault. Both `pnl` and the return are token-dec. It runs in this order:
 
-The realized profit on any close (partial or full, including liquidation and ADL) may additionally be scaled down by the [realized-profit haircut](./fee-system.md#realized-profit-haircut) while the winning side's pending PnL overhangs the vault. A loss passes through unscaled.
+1. If `pnl <= 0`, return `pnl`. A loss is never scaled.
+2. `side_pnl = data.side_pnl(price, is_long, maximize = true)`.
+3. `cap = half_factor(vault_balance, config.max_pnl_trader)`.
+4. If `side_pnl <= cap`, return `pnl`.
+5. Otherwise return `prorate(pnl, cap, side_pnl)`, which is `floor(pnl * cap / side_pnl)`.
+
+`vault_balance` is the vault's `total_assets`, read at load and tracked through the call (token-dec). `haircut_pnl` and `capped_net_pnl` take `cap` from the value as it stands when they run. `config.max_pnl_trader` is a `SCALAR_18` factor, and config validation rejects a value at or above `SCALAR_18`. So `cap` is that factor of half the vault balance, and it is one allowance per side.
+
+A realized profit is measured on the book before the closing mutation. `Position::settle` and `Position::decrease` both apply the cap while the side still carries the size being closed. The survivor check in `Position::require_valid` settles again after the aggregates move, which re-prices the position and banks nothing. While the side's pending profit stays above `cap`, a trader who closes in slices re-reads a smaller overhang on each slice. The slices then pay that trader more in total than one close of the same size. Auto-deleveraging bounds how far the overhang can grow before the market forces it down. See [Auto-deleveraging](./auto-deleveraging.md).
+
+`Position::settle` applies the cap to the full-size mark. `Position::decrease` applies it to the closed slice on a partial close. If the request clamps to a full close, `Position::decrease` returns the already capped full-size value from the gate settle. The `pnl` field on `DecreaseFill`, `CloseFill`, and `Liquidation` is the post-cap value.
+
+## The vault mark
+
+```rust
+pub fn capped_net_pnl(&self, e: &Env, maximize: bool) -> i128
+```
+
+`Market::capped_net_pnl` returns the signed token-dec value the vault marks its shares against. It takes `cap = half_factor(vault_balance, config.max_pnl_trader)`, the same allowance the profit cap uses. `vault_balance` is the vault's `total_assets` (token-dec) and `config.max_pnl_trader` is a `SCALAR_18` factor. `capped_net_pnl` returns `min(side_pnl(long, maximize), cap) + min(side_pnl(short, maximize), cap)`.
+
+The cap binds per side, and a losing side passes through at its margin-floored value, so the sum can be negative. `execute_vault_order` passes the result to the vault as the `net_pnl` argument of `strategy_deposit` and `strategy_redeem`. A deposit fill marks with `maximize = false` and a redeem fill marks with `maximize = true`. The value each one used rides out on `DepositFill.net_pnl` and `RedeemFill.net_pnl`. On a retired market `create_vault_order` redeems at once and publishes `RedeemFill` with id `0` and `net_pnl` `0`. `capped_net_pnl` does not run on that path.
+
+## Fill price on receipts
+
+`OpenFill`, `IncreaseFill`, `DecreaseFill`, `CloseFill` and `Liquidation` carry a `price` field, the execution price of that fill in the feed's own precision. `OpenFill` and `IncreaseFill` carry the entry side of the spread, `PriceData::entry`. `DecreaseFill`, `CloseFill` and `Liquidation` carry the exit side, `PriceData::exit`. `execute_adl` emits its decrease or close receipt at the same exit price.
+
+On a close receipt, `notional` and `tokens` are the closed size at the position's own entry ratio, so the pair implies the entry price of the closed chunk. `price` is what the chunk closed at. A recomputation of `pnl` from those fields reproduces the emitted value only where the profit cap did not bind.

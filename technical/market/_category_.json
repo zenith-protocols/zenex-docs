@@ -1,5 +1,9 @@
 {
   "label": "Market",
-  "position": 2,
-  "collapsed": true
+  "position": 4,
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "market/overview"
+  }
 }

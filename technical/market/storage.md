@@ -1,201 +1,118 @@
 ---
-sidebar_position: 12
+sidebar_position: 16
 title: Storage
 ---
 
 # Storage
 
-This page is the state reference for the market contract: its storage keys and TTL tiers, the stored types, the status lifecycle, and the error table. The `Config` singleton has its [own page](./config.md), and the events the contract emits are on [Events](./events.md).
+The `DataKey` enum names every value the market contract owns, apart from three keys its two mixed-in libraries own. This page holds the four time-to-live tiers and their constants, the ledger key table, and the `MarketData` singleton. The last column of the key table names the page that owns that key's semantics.
 
-## Storage
+## Time-to-live tiers
 
-Four TTL tiers cover the contract's keys, at roughly 5 seconds per ledger. The instance tier (threshold 30 days, bump 31) holds the market-wide singletons and is bumped by every state-changing call. `MarketData` lives alone in a shared persistent tier (threshold 45 days, bump 46), extended on every read and write. Everything user-keyed lives in the user persistent tier (threshold 100 days, bump 120), also extended on every access. The price cache is the one temporary entry, re-extended by 16 ledgers on every write and harmless when it lapses.
+A ledger lasts about 5 seconds. A threshold is the remaining time-to-live below which an access extends an entry. A bump is the time-to-live the access extends the entry to. Both are counts of ledgers.
 
-| Key | Value | Tier | Notes |
-|---|---|---|---|
-| `Config` | `Config` | instance | Mutable singleton, replaced wholesale by `set_config` |
-| `FeedId` | `BytesN<32>` | instance | Price stream id, immutable, constructor-set |
-| `Status` | `u32` | instance | `Status` discriminant, read by the status gate without loading `Config` |
-| `Token` | `Address` | instance | Settlement token |
-| `Vault` | `Address` | instance | Strategy vault |
-| `Oracle` | `Address` | instance | Price oracle |
-| `Treasury` | `Address` | instance | Protocol fee sink |
-| `DelistedAt` | `u64` | instance | First-delist timestamp, the grace and deadline anchor. Removed on an in-grace revert |
-| `TerminalPrice` | `i128` | instance | Flat settlement price in feed precision, absent until set |
-| `Adl` | `AdlState` | instance | Zeroed default until first written |
-| `MarketData` | `MarketData` | shared persistent | Singleton |
-| `PriceCache` | `PriceData` | temporary | Newest verified price the market has consumed, monotonic on `publish_time` |
-| `Position(Address, bool)` | `Position` | user persistent | Keyed `(user, is_long)`, hedge mode, carries the side's pending decrease order ids |
-| `Order(Address, u32)` | `Order` | user persistent | Pending trade order with its escrow |
-| `VaultOrder(Address, u32)` | `VaultOrder` | user persistent | Pending deposit or redeem with its escrow |
-| `OrderCounter(Address)` | `u32` | user persistent | Next order id, shared by trade and vault orders, allocated from 1 (id 0 is reserved as the retired-market instant-redeem return) |
-| `ClaimableCredit(Address)` | `i128` | user persistent | Funding and parked failed payouts owed to the user (token-dec), absent until first credited |
+| Constant | Ledgers | Time |
+| --- | --- | --- |
+| `ONE_DAY_LEDGERS` | 17_280 | 1 day |
+| `LEDGER_THRESHOLD_INSTANCE` | 518_400 | 30 days |
+| `LEDGER_BUMP_INSTANCE` | 535_680 | 31 days |
+| `LEDGER_THRESHOLD_SHARED` | 777_600 | 45 days |
+| `LEDGER_BUMP_SHARED` | 794_880 | 46 days |
+| `LEDGER_THRESHOLD_USER` | 1_728_000 | 100 days |
+| `LEDGER_BUMP_USER` | 2_073_600 | 120 days |
+| `LEDGER_BUMP_PRICE_CACHE` | 16 | about 80 seconds |
 
-Archival loses no state. An archived position still counts in the market totals and must be restored before it can be closed or liquidated. An archived order is restored keeper-paid at fill, and an order's `expiration` (a ledger sequence) is a pure validity gate decoupled from the storage TTL. Every order removal runs through contract code, so escrow always resolves.
+### Instance
 
-## Stored Types
+The instance carries the small read-mostly state: the parameters, the four wired addresses, the feed id, the status, the wind-down markers, and the auto-deleveraging flags. It loads whole with every invocation. `extend_instance` opens the body of fourteen entry points: `set_config`, `set_status`, `set_terminal_price`, `create_order`, `cancel_order`, `create_vault_order`, `cancel_vault_order`, `claim_credit`, `execute_order`, `execute_liquidation`, `update_adl_state`, `execute_adl`, `execute_vault_order`, and `accrue`. On `set_config`, `set_status`, and `set_terminal_price` the owner check runs ahead of it, and the owner must sign each of the three. `__constructor` calls it last, after every write it makes. `upgrade` also needs the owner's signature. It calls `extend_instance` after the owner check and before it replaces the contract WebAssembly. The views leave the instance time-to-live as it is, and so do the four `Ownable` entry points `get_owner`, `transfer_ownership`, `accept_ownership`, and `renounce_ownership`.
 
-The structs behind the storage rows above, as read back by `get_order`, `get_vault_order`, `get_position`, `get_market_data`, and `get_adl`. The order rows also ride on their create [events](./events.md), while position and market state are read from the getters or from each transaction's ledger entry changes. Field comments state the units: token decimals (token-dec), base decimals (base-dec), feed price precision, or `SCALAR_18`.
+### Shared
 
-### Order
+`MarketData` is the only entry in the shared tier. Both `get_market_data` and `set_market_data` extend it, so an on-chain call of the `get_market_data` view extends the entry. A simulated call leaves no footprint.
 
-```rust
-pub struct Order {
-    pub is_long: bool,       // side this order targets
-    pub kind: u32,           // OrderKind discriminant, see below
-    pub notional: i128,      // size change magnitude (>= 0), token-dec
-    pub margin: i128,        // margin change magnitude (>= 0), token-dec
-    pub trigger_price: i128, // crossing level for a trigger kind (feed precision); unread for a market kind
-    pub price_bound: i128,   // fill slippage limit (feed precision); 0 = unbounded
-    pub exec_fee: i128,      // keeper execution fee escrowed at creation, token-dec
-    pub created_at: u64,     // submission timestamp; per-fill anti-replay anchor
-    pub expiration: u32,     // ledger sequence; eligible while ledger sequence <= expiration
-}
-```
+### User
 
-`kind` crosses the ABI as the `u32` discriminant of `OrderKind`:
+The user tier holds the five per-user keys. `get_position`, `get_order`, and `get_vault_order` extend the entry they read, and `set_position`, `set_order`, and `set_vault_order` extend the entry they write. A `get_position` miss stores the zeroed row, which extends it as well. `get_claimable_credit` and `get_order_counter` read without extending. Only `add_claimable_credit` and `next_order_id` extend those two keys.
 
-```rust
-pub enum OrderKind {
-    MarketIncrease = 0, // grow now; trigger_price unused
-    LimitIncrease = 1,  // grow when the price crosses trigger_price favorably
-    StopIncrease = 2,   // grow when the price crosses trigger_price adversely
-    MarketDecrease = 3, // shrink now; trigger_price unused
-    LimitDecrease = 4,  // take profit: shrink on a favorable crossing
-    StopDecrease = 5,   // stop loss: shrink on an adverse crossing
-}
-```
+### Temporary
 
-### VaultOrder
+`PriceCache` is the only temporary `DataKey` entry. Its bump is the network-minimum temporary lifetime, and `LEDGER_BUMP_PRICE_CACHE` serves as both the threshold and the bump. Soroban does not refresh the time-to-live of a live temporary entry on a plain rewrite, so `set_price_cache` extends the entry itself on every write.
 
-```rust
-pub struct VaultOrder {
-    pub kind: u32,       // 0 = Deposit, 1 = Redeem
-    pub amount: i128,    // escrowed assets (deposit, token-dec) or shares (redeem, share decimals)
-    pub min_out: i128,   // minimum received at fill, net of the vault fee: shares (deposit) or assets (redeem); 0 = unset
-    pub exec_fee: i128,  // keeper execution fee escrowed at creation in the settlement token, token-dec
-    pub created_at: u64, // creation timestamp; fills need a publish_time at or after it and a strictly later ledger timestamp, redeems also the redeem_lock cooldown
-}
-```
+## Ledger keys
 
-Share decimals are the underlying token's decimals plus the vault's decimals offset.
+Class is the Soroban storage type. Tier is the time-to-live tier from the previous section.
 
-### Position
+| Key | Value | Class | Tier | Written by | Semantics |
+| --- | --- | --- | --- | --- | --- |
+| `Config` | `Config` | instance | instance | `__constructor`, `set_config` | [Config](./config.md) |
+| `FeedId` | `BytesN<32>` | instance | instance | `__constructor` | [Constructor and dependencies](./dependencies.md) |
+| `Status` | `u32`, a `Status` discriminant | instance | instance | `__constructor`, `set_status` | [Market status](./status.md) |
+| `Vault` | `Address` | instance | instance | `__constructor` | [Constructor and dependencies](./dependencies.md) |
+| `Token` | `Address` | instance | instance | `__constructor` | [Constructor and dependencies](./dependencies.md) |
+| `Oracle` | `Address` | instance | instance | `__constructor` | [Constructor and dependencies](./dependencies.md) |
+| `Treasury` | `Address` | instance | instance | `__constructor` | [Constructor and dependencies](./dependencies.md) |
+| `DelistedAt` | `u64`, seconds | instance | instance | `set_status`, which also removes it | [Market status](./status.md) |
+| `TerminalPrice` | `i128`, feed precision | instance | instance | `set_terminal_price` | [Market status](./status.md) |
+| `Adl` | `AdlState` | instance | instance | `update_adl_state` | [Auto-deleveraging](./auto-deleveraging.md) |
+| `MarketData` | `MarketData` | persistent | shared | `__constructor`, `Market::store` on the working set, `claim_credit`, the retirement sweep in `set_status` | This page |
+| `PriceCache` | `PriceData` | temporary | temporary | `Market::load` on the working set, when no cache entry exists or the submitted report is newer than the cache | [Pricing](./pricing.md) |
+| `Position(Address, bool)` | `Position` | persistent | user | `get_position` on a miss, a decrease order in `create_order` or `cancel_order`, `Position::store` | [Position lifecycle](./position-lifecycle.md) |
+| `VaultOrder(Address, u32)` | `VaultOrder` | persistent | user | `create_vault_order`, and cancel and fill remove it | [Vault orders](./vault-orders.md) |
+| `Order(Address, u32)` | `Order` | persistent | user | `create_order`, and cancel, fill, and the closure sweep remove it | [Orders](./orders.md) |
+| `OrderCounter(Address)` | `u32` | persistent | user | `next_order_id` | [Orders](./orders.md) |
+| `ClaimableCredit(Address)` | `i128`, token-dec | persistent | user | Earned funding in `Position::settle_accruals`, a parked payout in `pay_trader`, `claim_credit` | [Funding rate](./funding-rate.md) |
 
-```rust
-pub struct Position {
-    pub margin: i128,          // posted margin, token-dec
-    pub notional: i128,        // size in quote, token-dec; 0 = no open position
-    pub tokens: i128,          // size in base, base-dec; entry price implied = notional/tokens
-    pub funding_idx: i128,     // funding index snapshot at last change (SCALAR_18)
-    pub borrowing_idx: i128,   // borrowing index snapshot at last change (SCALAR_18)
-    pub locked_notional: i128, // notional under the decrease lock, token-dec
-    pub unlocks_at: u64,       // lock deadline ts; locked_notional counts while now < unlocks_at
-    pub priced_at: u64,        // publish_time of the last fill's price; force-close anti-replay floor
-    pub decrease_orders: Vec<u32>, // pending decrease order ids on this side (max 8)
-}
-```
+The [units page](../units.md) defines token-dec, base-dec, feed precision, `SCALAR_18`, and seconds.
 
-The zeroed row is the canonical closed state, whether the storage entry exists or not. `decrease_orders` is pruned when an order fills or cancels, and cleared with escrow refunds when the position closes.
+Eight keys are present from the constructor onward: the seven instance keys it writes and `MarketData`. The rest are lazy. The contract creates each one on its first write, and two of those writes sit on a read path. `get_position` stores the zeroed row when it finds none, and the working set stores the submitted report when the cache is absent. An absent key reads as a default where the contract defines one. `Adl` reads `AdlState::default`, which is `{ long: false, short: false }`. `ClaimableCredit` reads `0`. `OrderCounter` reads `1`. `Position` reads as the zeroed row. `DelistedAt`, `TerminalPrice`, `PriceCache`, `Order`, and `VaultOrder` have no default, and each caller tests for presence or traps. `Position(Address, bool)` is keyed by the account and the side, so the long and the short row of one account are independent.
 
-### MarketData
+Three keys sit outside `DataKey`. `OwnableStorageKey::Owner` and `UpgradeableStorageKey::SchemaVersion` are instance entries, and `OwnableStorageKey::PendingOwner` is a temporary entry. The [ownership page](../ownership.md) covers all three.
+
+## The market record
+
+`MarketData` is the market's own book. It is a contract type, so it crosses the application binary interface whole as the return of `accrue` and of `get_market_data`. The constructor writes it as its `Default`, all fields zero, with `accrued_at` set to the deploy ledger's timestamp.
+
+| Field | Type | Unit and meaning |
+| --- | --- | --- |
+| `notional` | `SidePair` | token-dec. Open interest per side. |
+| `margin` | `SidePair` | token-dec. Posted margin per side. |
+| `tokens` | `SidePair` | base-dec. Base size per side, the sum of each position's `tokens`. |
+| `funding_idx` | `SidePair` | `SCALAR_18`. The cumulative funding index per side, signed. |
+| `borrowing_idx` | `SidePair` | `SCALAR_18`. The cumulative borrowing index per side, non-decreasing. |
+| `funding_rate` | `i128` | `SCALAR_18` per second, signed. Positive means longs pay. |
+| `accrued_at` | `u64` | seconds. The last accrual timestamp. Both indices share it. |
+| `credit_pool` | `i128` | token-dec. The internal ledger of claimable credit, parked failed payouts included. It can stand above the contract's token balance. |
+| `credit_owed` | `i128` | token-dec. The total of every `ClaimableCredit` balance. |
+
+The [funding rate page](./funding-rate.md) holds the five writers of the pool pair, the surplus it carries, and the invariant between them. The five index and aggregate fields use `SidePair`:
 
 ```rust
-pub struct MarketData {
-    pub notional: SidePair,      // open interest per side, token-dec
-    pub margin: SidePair,        // posted margin per side, token-dec
-    pub tokens: SidePair,        // base size per side = sum(notional/entry), base-dec
-    pub funding_idx: SidePair,   // cumulative funding index per side (SCALAR_18)
-    pub borrowing_idx: SidePair, // cumulative borrowing index per side (SCALAR_18)
-    pub funding_rate: i128,      // signed funding rate, + = longs pay (SCALAR_18, per second)
-    pub accrued_at: u64,         // last accrual timestamp, shared by both indices
-    pub credit_pool: i128,       // internal claimable-credit pool, incl. parked failed payouts, token-dec
-    pub credit_owed: i128,       // total funding and parked failed payouts owed to traders, token-dec
-}
-
 pub struct SidePair {
     pub long: i128,
     pub short: i128,
 }
-```
 
-The credit pool's surplus is `credit_pool - credit_owed`.
-
-### AdlState
-
-```rust
-pub struct AdlState {
-    pub long: bool,  // long-side ADL enabled: long increases blocked
-    pub short: bool, // short-side ADL enabled: short increases blocked
+impl SidePair {
+    pub fn get(&self, is_long: bool) -> i128
+    pub fn add(&mut self, is_long: bool, delta: i128)
+    pub fn total(&self) -> i128
 }
 ```
 
-`Config` is a stored type as well, an instance singleton documented on the [Config](./config.md) page together with its validation rules. The cached `PriceData` is the oracle's return type, documented on [Pricing](./pricing.md). `ClaimableCredit` is a bare `i128` (token-dec).
+`get` returns one side. `add` applies a signed delta to one side. `total` returns the sum of both sides, and `set_status` reads it on `notional`, `tokens`, and `margin` to gate retirement. `get` cannot fail. `add` and `total` trap on an `i128` overflow, because the contract builds with overflow checks on.
 
-## Status Lifecycle {#status-lifecycle}
-
-The market runs through five states (the `u32` discriminant is in parentheses):
-
-```text
-Active (0)   OnIce (1)   Frozen (2)   Delisted (3)   Retired (4)
+```rust
+fn get_market_data(e: Env) -> MarketData;
 ```
 
-| Status | Opens | Closes / decreases | Vault orders | Claims | Keeper fills | Accrual |
-|---|---|---|---|---|---|---|
-| Active | yes | yes | yes | yes | yes | yes |
-| OnIce | no | yes | yes | yes | yes | yes |
-| Frozen | no | no | no | no | no | no |
-| Delisted | no | yes | yes | yes | yes | yes |
-| Retired | no | no (book already empty) | redeem (direct) only | yes | no | no |
+The view needs no signer and raises no market error. It returns the record as of the last accrual, so the indices and `accrued_at` are as old as the last price-bearing call. An on-chain read extends the shared-tier time-to-live. `accrue` returns the same record after it advances the clock, under the rule on the [pricing page](./pricing.md).
 
-- **Active** is the only status that accepts opens (size-growing increases).
-- **OnIce** blocks opens, and everything else keeps running.
-- **Frozen** is an emergency halt: `create_order`, `cancel_order`, `create_vault_order`, `cancel_vault_order`, `claim_credit`, every keeper fill, and `accrue` revert with `MarketFrozen` (704). No accrual runs while a market is Frozen.
-- **Delisted** starts the wind-down. Opens are blocked. Within `DELIST_GRACE` (1 day) of the first delist it can be reverted to `Active` or `OnIce`, after that the trading statuses are unreachable for good, and a flat terminal settlement price can be set and refreshed. Once `DELIST_DEADLINE` (7 days) passes, keepers may force-close any remaining position regardless of health, at the flat terminal price if one has been stored and at a verified feed price otherwise (a healthy position closed this way keeps its equity net of the same liquidation fee). Vault orders keep working in both directions, with redeems still gated by the withdraw-utilization and pending-PnL checks.
-- **Retired** is final and reachable from any other status. The only gate is an **empty book** (all positions closed), else `MarketNotCleared` (706). Entering it sweeps the credit-pool surplus to the vault. Only `claim_credit`, a direct vault redeem (a `create_vault_order` redeem executes immediately through the vault's `strategy_redeem` at the raw share price, charges no `exec_fee`, and returns id `0`, deposits are rejected), and cancels stay live. No transition leaves `Retired`.
+## Archival
 
-`Active`, `OnIce`, and `Frozen` interchange freely on a live market. `Frozen`, `Delisted`, and `Retired` are each reachable from any other status except `Retired` itself. A same-status set is rejected with `InvalidStatus` (702). The switch to flat pricing is governed by terminal-price presence, not by the status value. Accrual never stops during the wind-down. Once a terminal price is stored, it keeps running with everything priced flat at the stored value.
+The network archives an entry in the instance, shared, or user tier when its time-to-live runs out, and the contract cannot read it until a restoration brings it back. A restoration returns the entry unchanged, so no state is lost.
 
-## Error Codes
+The instance tier is one ledger entry. It carries the ten instance `DataKey` entries, `OwnableStorageKey::Owner`, `UpgradeableStorageKey::SchemaVersion`, and the reference to the contract code. `extend_instance` extends that single entry, not one key at a time. If it is archived, no entry point runs at all, the views included, until a restoration brings the instance back.
 
-All errors are hard panics that abort the transaction. Market errors occupy the `7xx` range.
+An archived position still counts in the market totals. It must be restored before it can be closed or liquidated. A fill restores an archived order, and the keeper who submits that fill pays for the restoration. `Order.expiration` is a ledger sequence and a pure validity gate, so it is independent of the entry's time-to-live. Every removal of an order runs through contract code, so `Order::escrow_amount` always resolves through a fill, a cancel, or a sweep.
 
-| Code | Name | Meaning |
-|---|---|---|
-| 700 | `InvalidConfig` | A config value is out of bounds or an ordering invariant is violated |
-| 701 | `InvalidPrice` | Flat settlement price is not strictly positive |
-| 702 | `InvalidStatus` | Illegal status transition, or the action needs a different status |
-| 703 | `MarketNotAccrued` | An accrual-rate parameter (borrowing or funding) changed without a same-ledger `accrue` |
-| 704 | `MarketFrozen` | Action halted by status (`Frozen`, or `Retired` on trading paths) |
-| 705 | `IncreaseHalted` | An Increase ran while the market does not accept opens (status or ADL flag) |
-| 706 | `MarketNotCleared` | Retirement attempted while positions remain open |
-| 710 | `NegativeValueNotAllowed` | A value that must be non-negative is negative |
-| 711 | `NotionalBelowMinimum` | Resulting notional below `min_position_notional` |
-| 712 | `NotionalAboveMaximum` | Notional (or an increase delta) above `max_position_notional` |
-| 713 | `InsufficientMargin` | Equity below the initial-margin floor (open, increase, or withdraw) |
-| 714 | `UtilizationExceeded` | Open interest or withdrawal would exceed the utilization cap |
-| 715 | `OpenInterestExceeded` | A side's open interest would exceed `max_open_interest` |
-| 720 | `PositionNotFound` | No position exists for `(user, is_long)` |
-| 721 | `NotionalLocked` | Requested close exceeds the position's unlocked notional |
-| 722 | `NotLiquidatable` | Liquidation attempted while equity is still above maintenance margin |
-| 723 | `PositionLiquidatable` | Settled equity below maintenance margin, before a decrease or ADL close, or on the surviving position after any fill. Liquidation is the only legal transition |
-| 730 | `OrderNotFound` | No keeper order for `(user, id)` |
-| 731 | `OrderExpired` | Order `expiration` is behind the current ledger sequence |
-| 732 | `InvalidOrder` | Disallowed delta pair, a moved value below a dust floor, a trigger kind with `trigger_price == 0`, an increase whose `margin + exec_fee` escrow sum overflows, or a non-positive `execute_adl` amount |
-| 733 | `TooManyOrders` | The side already holds `MAX_ORDERS_PER_SIDE` (8) pending decrease orders |
-| 734 | `UnknownKind` | Order or vault-order `kind` discriminant is not a known variant |
-| 740 | `StalePrice` | Verified price predates the position or the order, or a vault-order fill lands in the creation ledger (anti-replay) |
-| 741 | `PriceBoundExceeded` | Fill price is worse than the order's `price_bound` |
-| 742 | `TriggerNotMet` | The order's `trigger_price` was not crossed |
-| 750 | `VaultOrderNotFound` | No vault order for `(user, id)` |
-| 751 | `VaultOrderLocked` | A redeem filled before `redeem_lock` seconds from `created_at` elapsed |
-| 752 | `MinOutNotMet` | Vault order fill returned less than the order's `min_out` |
-| 753 | `VaultBalanceExceeded` | Deposit fill would push the vault above `max_vault_balance` |
-| 754 | `PendingPnlExceeded` | Redeem fill while a side's pending PnL exceeds `max_pnl_withdraw` of half the post-redeem balance |
-| 755 | `VaultInsolvent` | A settlement's vault draw exceeds the vault's balance |
-| 760 | `NothingToClaim` | Claim attempted with no claimable credit balance |
-| 770 | `AdlNotTriggered` | ADL execution while the side is unflagged or already at the clear target |
-| 771 | `AdlOvershoot` | ADL close overshot below the side's clear target |
-| 772 | `AdlNotEligible` | ADL close did not reduce the side's pending PnL (not a winner) |
-
-The table covers this contract's own domain. The Ownable entry points raise the OpenZeppelin `stellar-access` library's codes instead, and a non-owner calling an owner-only entry point fails as a host auth error.
+The price cache is the one `DataKey` entry meant to lapse. With no `TerminalPrice` stored, `Market::load` on the working set reads a lapsed cache as absent and prices the call from the submitted report alone. It stores that report as the new cache. Under a stored `TerminalPrice` the cache is neither read nor written.

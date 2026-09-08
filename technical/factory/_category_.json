@@ -1,1 +1,9 @@
-{"label":"Factory","position":4,"collapsed":true}
+{
+  "label": "Factory",
+  "position": 8,
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "factory/overview"
+  }
+}

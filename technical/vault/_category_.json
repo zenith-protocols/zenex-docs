@@ -1,5 +1,9 @@
 {
   "label": "Vault",
-  "position": 3,
-  "collapsed": true
+  "position": 5,
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "vault/overview"
+  }
 }

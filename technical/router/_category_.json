@@ -1,1 +1,9 @@
-{"label":"Market Router","position":8,"collapsed":true}
+{
+  "label": "Market router",
+  "position": 7,
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "router/overview"
+  }
+}
