@@ -5,11 +5,11 @@ sidebar_position: 4
 
 # Market parameters
 
-Every market carries a set of values that decides what you pay and how much risk you can take. This page groups those values, says what each group does to your money, and links to the page that explains the mechanism. The last section records the values on the testnet market.
+Every market carries a set of values that decides what you pay and how much risk you can take. This page groups those values, says what each group does to your money, and links to the page that explains the mechanism. [Deployments](../deployments.md) lists the values each live market runs with, read from the chain, next to the limit the protocol puts on each one.
 
 The owner of a market sets its values, so each market has its own set. Two markets for the same asset pair can charge different fees and allow different leverage. The owner replaces the whole set in one step. Four values have other owners. The treasury owner sets the protocol's share of each fee. The oracle owner sets the price rules, and the oracle is the contract that checks each price report. [Governance](../governance.md) covers who those owners are and how much warning a change gives you.
 
-The protocol bounds most values and keeps related ones in a fixed order, so no fee rate can pass its ceiling. The size limits and the vault balance cap have no fixed maximum, so an owner can raise them. An owner can change any value inside its bounds, so a figure on this page records one moment.
+The protocol bounds most values and keeps related ones in a fixed order, so no fee rate can pass its ceiling. The size limits and the vault balance cap have no fixed maximum, so an owner can raise them. An owner can change any value inside its bounds, so a value always comes from the contract that holds it.
 
 ## Two margin lines set your leverage and your liquidation point
 
@@ -72,40 +72,3 @@ A delisted market runs two counts from the moment of the delist. The first count
 ## A change applies to what you already hold
 
 A change by the owner applies to positions and orders that already exist. Two values are the exception because the market records them when you act. An order keeps the execution fee it carried at creation, and added size keeps the lock it received. A fee, a margin line, or a cap can therefore differ between the day you open a position and the day you close it.
-
-## Current testnet values
-
-The table records the configuration of the testnet-v3-20260929 stack on 2026-09-29. That stack runs one market, the market for XLM, the Stellar network's own asset, settled in USDC. The treasury share is a setting of the treasury. The last two rows hold the three price settings of the oracle, and every market on that oracle uses them. The contracts hold the values in force at any moment.
-
-| Parameter | Value |
-| --- | --- |
-| Maximum leverage | a little under 20x, from a 5% initial margin |
-| Maintenance margin | 2% of the position size |
-| Liquidation fee | 0.5% of the size that closes |
-| Position size | 1 to 25,000 USDC |
-| Total size per side | 50,000 USDC |
-| Minimum per order | 1 USDC of size and 1 USDC of collateral |
-| Trade fee | 0.06% on the part of a fill that pushes the sides apart and 0.04% on the part that brings them together |
-| Impact fee | 0.1% of the fill at a size of 10,000 USDC. The rate doubles when the size doubles. |
-| Execution fee | 0.01 USDC per order |
-| Keeper share | 10% of the trade fee, the impact fee, the liquidation fee, and the vault fee |
-| Treasury share | 30% of those same four charges and of the borrowing charge |
-| Utilization cap | 80% of half the vault balance for an increase and 90% for a redeem |
-| Borrowing curve bend | 80% utilization |
-| Borrowing rate | one straight line from nothing on an unused side to about 40% a year at the bend and about 50% a year at full utilization |
-| Funding cap | about 20% a year in either direction |
-| Minimum funding charge | about 1% a year whenever a side pays at all |
-| Funding build-up level | a 4% imbalance |
-| Funding wind-down level | a 0% imbalance |
-| Funding build-up speed | at full imbalance, from nothing to the cap in about 2 hours |
-| Funding wind-down speed | from the cap to nothing in about 2 days. No imbalance falls under a 0% level, so this speed never applies on this market. |
-| Auto-deleveraging | flags a side at 55% of half the vault balance and clears the flag at 40% |
-| Profit cap | starts at 90% of half the vault balance |
-| Redeem block | pending profit on a side above 15% of half the vault balance that the redeem would leave |
-| Vault fee | 0.1% of the assets a deposit fill moves and 0.25% of the assets a redeem fill moves |
-| Minimum deposit | 10 USDC |
-| Vault balance cap | 100,000 USDC |
-| Redeem cooldown | 1 hour |
-| Lock on new size | 30 seconds |
-| Price age | 15 seconds for a fill and 60 seconds for a liquidation or an auto-deleveraging close |
-| Spread narrowing | the oracle moves each side of the quote half the way to the middle of the spread |

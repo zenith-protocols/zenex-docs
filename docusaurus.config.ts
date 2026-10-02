@@ -10,6 +10,12 @@ const config: Config = {
   title: 'Zenex Documentation',
   tagline: 'Perpetuals Exchange on Soroban',
   favicon: 'img/favicon.ico',
+  // Icon set mirrors zenex-trade/index.html: the SVG mark for browsers that
+  // take it, the ICO above as the fallback, and the iOS touch icon.
+  headTags: [
+    { tagName: 'link', attributes: { rel: 'icon', type: 'image/svg+xml', href: '/img/favicon.svg' } },
+    { tagName: 'link', attributes: { rel: 'apple-touch-icon', href: '/img/apple-touch-icon.png' } },
+  ],
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -148,7 +154,7 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/zenex-social-card.png',
+    image: 'img/og.png',
     mermaid: {
       theme: { light: 'neutral', dark: 'dark' },
       options: {
@@ -167,10 +173,9 @@ const config: Config = {
       respectPrefersColorScheme: false,
     },
     navbar: {
-      title: 'Zenex',
       logo: {
-        alt: 'Zenex Logo',
-        src: 'img/favicon.ico',
+        alt: 'Zenex',
+        src: 'img/wordmark-white.svg',
       },
       items: [
         {

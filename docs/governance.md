@@ -7,7 +7,7 @@ sidebar_position: 6
 
 Each market has one owner from the moment it is deployed. The owner is an account or a contract, and it decides which rules the market runs under. This page covers what an owner can change, how a timelock slows those changes, and how ownership ends.
 
-One owner can own several markets, so one key can change the rules of every market you hold a position in. **The owner of a market is part of what you trust when you trade in it or supply liquidity to it.** Anyone can read the owner of a market from the market, and the wait of a timelock from the timelock. [Contract addresses](./deployments/contract-addresses.md) lists the markets.
+One owner can own several markets, so one key can change the rules of every market you hold a position in. **The owner of a market is part of what you trust when you trade in it or supply liquidity to it.** Anyone can read the owner of a market from the market, and the wait of a timelock from the timelock. [Deployments](./deployments.md) lists the markets and the account that owns each one.
 
 ## An owner sets the parameters and the state of a market
 

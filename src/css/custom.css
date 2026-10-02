@@ -15,7 +15,7 @@
   --ease-dart: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-drift: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
-  /* === Zenex tokens (mirror zenex-trade/src/index.css) ===
+  /* === Zenex tokens (mirror zenex-trade/src/shared/theme/tokens.css) ===
      The jade accent is split like the app: --zx-primary is a FILL color
      (button backgrounds), --zx-primary-text is the brighter jade used
      for text on dark surfaces. Never use the fill jade as text color. */
@@ -24,7 +24,8 @@
   --zx-primary-text: #1fd8a4;
   --zx-text-primary: #edeef0;
   --zx-text-secondary: #b0b4ba;
-  --zx-text-tertiary: #696e77;
+  /* 4.9:1 on --zx-bg (WCAG AA), as in the app; was #696e77 at 3.7:1 */
+  --zx-text-tertiary: #7c828c;
   --zx-bg: #111113;
   --zx-surface: #18191b;
   --zx-elevated: #212225;
@@ -245,16 +246,18 @@ h1, h2, h3, h4, h5, h6,
 }
 
 /* Navbar Brand & Logo */
+/* The app's white wordmark carries the fish and the name, so the brand
+   is the image alone and the navbar has no title text. */
 .navbar__logo {
   display: flex;
   align-items: center;
+  height: 40px;
   margin-right: 2px;
 }
 
 .navbar__logo img {
-  height: 30px;
-  width: 30px;
-  transform: translateY(2px);
+  height: 40px;
+  width: auto;
 }
 
 .navbar__brand {
@@ -269,23 +272,6 @@ h1, h2, h3, h4, h5, h6,
 .navbar__brand:hover {
   opacity: 0.8;
   transform: none;
-}
-
-/* Navbar Title Styling */
-.navbar__title {
-  font-family: Satoshi, -apple-system, Roboto, Helvetica, sans-serif !important;
-  font-size: 36px !important;
-  font-weight: 800 !important;
-  letter-spacing: -1.4px !important;
-  line-height: 1 !important;
-  text-transform: lowercase !important;
-  color: #edeef0 !important;
-  -webkit-text-fill-color: #edeef0 !important;
-  background: none !important;
-  -webkit-background-clip: unset !important;
-  background-clip: unset !important;
-  margin: 0 !important;
-  padding: 0 !important;
 }
 
 /* Navbar Links */
@@ -670,7 +656,7 @@ blockquote {
   opacity: 0.05;
   pointer-events: none;
   z-index: -1;
-  background-image: url('/img/zenex-mark.svg');
+  background-image: url('/img/logo-duo.svg');
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
@@ -767,22 +753,6 @@ blockquote {
 @media (max-width: 1023px) {
   .main-wrapper::before {
     display: none;
-  }
-}
-
-/* Navbar Title - Tablet */
-@media (max-width: 768px) {
-  .navbar__title {
-    font-size: 28px !important;
-    letter-spacing: -1.1px !important;
-  }
-}
-
-/* Navbar Title - Mobile */
-@media (max-width: 480px) {
-  .navbar__title {
-    font-size: 24px !important;
-    letter-spacing: -1px !important;
   }
 }
 

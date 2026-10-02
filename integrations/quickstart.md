@@ -17,7 +17,7 @@ npm install github:zenith-protocols/zenex-sdk-js#main @stellar/stellar-sdk
 
 ## 2. Load the market snapshot
 
-A market contract instance is a single market, identified by its contract address. The published market addresses are in [Contract Addresses](/deployments/contract-addresses). `Market.load` pulls the whole market in one `getLedgerEntries` round trip; `loadWithUser` adds your user's positions and counters to the same trip. The snapshot is plain data — refreshing is calling `load` again.
+A market contract instance is a single market, identified by its contract address. The published market addresses are in [Deployments](/deployments). `Market.load` pulls the whole market in one `getLedgerEntries` round trip; `loadWithUser` adds your user's positions and counters to the same trip. The snapshot is plain data — refreshing is calling `load` again.
 
 ```typescript
 import { Market } from '@zenith-protocols/zenex-sdk';
