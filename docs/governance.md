@@ -5,34 +5,38 @@ sidebar_position: 6
 
 # Governance
 
-Every market has one owner, set at deployment. The owner is an account or a contract, and it holds the parameters, the state, and the code of the market. One owner can hold several markets, so one owner can hold the rules of every market you have a position in. The owner of a market is part of what you trust when you trade in it or supply liquidity to it. **Before you commit funds to a market, find out who owns it and what limits that owner accepts.**
+Each market has one owner from the moment it is deployed. The owner is an account or a contract, and it decides which rules the market runs under. This page covers what an owner can change, how a timelock slows those changes, and how ownership ends.
 
-## What an owner can change
+One owner can own several markets, so one key can change the rules of every market you hold a position in. **The owner of a market is part of what you trust when you trade in it or supply liquidity to it.** Anyone can read the owner of a market from the market, and the wait of a timelock from the timelock. [Contract addresses](./deployments/contract-addresses.md) lists the markets.
 
-An owner replaces the whole parameter set of a market in one call. Every fee, every margin line, the leverage ceiling, the size limits, and the borrowing and funding curves move together in that call. Read [Market parameters](./markets/market-parameters.md) for what the set covers.
+## An owner sets the parameters and the state of a market
 
-An owner also sets the state of the market. The owner can stop every fill that opens a position or adds size to one, freeze the market, or delist it for wind-down. Retirement is a state of its own, and no state follows it. The owner can retire a market only after every position is closed and every margin balance is out of it. One day after a delist, the owner can fix a flat settlement price. From then on, the market prices every close, every liquidation, and every vault fill at that price. Until the owner sets it, those fills take the price from the feed. The owner can replace the flat settlement price while the market stays delisted. Read [Market status](./markets/status.md) for what each state does to your position.
+An owner replaces the whole parameter set of a market in one call. Every fee, every margin line, the leverage ceiling, the size limits, and the borrowing and funding curves move together. The protocol bounds each value, so no owner can push a fee past its ceiling. Read [Market parameters](./markets/market-parameters.md) for what the set covers. The settlement token, the price stream, the vault, and the oracle are fixed at deployment, and no call changes them.
 
-## The code of a market can be replaced
+A change to a borrowing or funding curve never reprices time that has already passed. It applies only right after the market updates its interest, so the earlier period keeps the old rates. A frozen market cannot update. There the owner can change the curves, and the first update after the freeze bills the whole frozen period at the new rates.
 
-An owner replaces the code of a market in place. The stored state survives the replacement, so your position, your margin, and your orders stay as they were. The rules that act on them are then the new rules. **This is the widest power an owner holds.** It repairs a defect in a live market. It also rewrites the rules you accepted when you opened your position.
+An owner also moves the market between five states: active, on ice, frozen, delisted, and retired. Each state closes some actions and leaves others open. [Market status](./markets/status.md) holds the five states, the wind-down clock, and what each state does to your position. In a delisted market the owner can also fix a flat settlement price for every close once the first day of the wind-down has ended. The owner can replace that price while the market stays delisted. The owner can retire a market only when every position is closed and every margin balance is out of it. Retirement is final.
 
-## A market owned by a timelock
+## An owner can replace the code of a market
 
-An owner can pass a market to a timelock contract. The timelock has an owner of its own, and that owner cannot reach the market directly. Each parameter change and each code replacement goes into a public queue and waits.
+An owner replaces the code of a market in place. Your position, your margin, and your orders stay as they were, and the new code then acts on them. **This is the widest power an owner holds.** It repairs a defect in a live market. It also rewrites the rules that were in force when you opened your position.
 
-The timelock fixes the unlock time of a change at the moment it records the change, and publishes that time on chain. Anyone can read the whole queued change and its unlock time from the timelock. The wait is one fixed length for that timelock. It can be as short as one second and as long as 60 days. Read the wait of a market's timelock before you treat it as protection.
+## A timelock makes an owner's changes wait in public
 
-Once the wait ends, any account can apply the change. Until the moment it runs, the owner of the timelock can cancel it. The cancel window stays open past the unlock time, so a queued change can sit unlocked and never land.
+An owner can pass a market to a timelock, a contract that holds each change in a public queue before it reaches the market. The timelock has an owner of its own, and that owner cannot reach the market directly. Each parameter change and each code replacement enters the queue with an unlock time. Anyone can read the queued change and its unlock time from the timelock.
 
-A change to the wait itself sits outside the queue. The owner records the change, and it then waits the length in force at that moment. A second change to the wait replaces the one on record. An owner that cuts a one-day wait to one minute waits a full day before the one-minute wait applies.
+Every entry waits the same fixed length. The owner of the timelock picks that length, from one second up to 60 days. A wait of one second gives you no time to react, so the length decides how much protection a timelock gives.
 
-A change of state is the exception. The owner of the timelock forwards a new state to the market at once, with no queue and no wait. A freeze therefore lands in a single transaction under either kind of owner. Every other call the owner makes, a change to the flat settlement price included, goes into the queue and waits.
+Once the wait ends, any account can apply the change. Until the change runs, the owner of the timelock can cancel it. The cancel window stays open after the unlock time. An unlock is therefore no promise that the change lands. A change to a borrowing or funding curve can also sit unlocked until the market next updates its interest.
 
-## Where ownership ends
+The wait can change, but a shorter wait cannot arrive faster than the old one allows. The owner of the timelock records the new length, and it applies only after the wait in force at that moment. An owner that cuts a one-day wait to one minute therefore waits a full day before the one-minute wait applies. A second change replaces the first and restarts the day. The owner cannot cancel a recorded change to the wait, only replace it. The timelock announces the change publicly with its unlock time. Entries already in the queue keep the unlock time they were given.
 
-An owner can hand a market to a new owner. The transfer completes only when the new owner accepts it, and the current owner keeps every power until then.
+A change of state is the exception. The owner of the timelock sends a new state to the market at once, with no queue and no wait. This lets the owner pause a market in an emergency. **A timelock gives you no warning before a freeze, a delist, or a retirement.** These states land in a single step under either kind of owner. Every other call goes through the queue, the flat settlement price included.
 
-An owner can also give up ownership. That is permanent, and no later call restores it. The parameters, the code, and the state of the market are then fixed for its life. Trades go on under the rules in force at that moment, as far as the state allows.
+## Ownership ends by transfer or by giving it up
 
-**A market given up while it is frozen stays frozen.** Every position and every deposit in it stays out of reach, because no fill, no cancel, and no claim runs in a frozen market. On a market given up in wind-down, no account can set or replace the flat settlement price again.
+An owner can hand a market to a new owner. The new owner must accept before a deadline that the current owner sets. The current owner keeps every power until the acceptance and can withdraw the offer before then.
+
+An owner can also give up ownership. That is permanent, and no later call restores it. The owner cannot give up while an offer to a new owner is open. Once given up, the parameters, the code, and the state of the market stay as they are for its life. An active market keeps trading under the rules in force at that moment. A market on ice keeps blocking new size. A delisted market stays delisted and keeps the price rule it has at that moment.
+
+**A market given up while it is frozen stays frozen.** Every position and every deposit in it stays out of reach, because no fill, no cancel, and no claim runs in a frozen market. A market given up during a wind-down can never get a flat settlement price, or a new one.

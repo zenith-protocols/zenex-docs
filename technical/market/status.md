@@ -5,94 +5,137 @@ sidebar_position: 4
 
 # Market status
 
-`Status` is the operational state of a market. It is an instance storage singleton under the `Status` key, stored as its `u32` discriminant. The trader entries and the keeper entries read it before they act. `set_terminal_price` reads it as its first gate. `set_config` reads it only when a borrowing or funding parameter changes. The owner moves it with `set_status`. The wind-down carries two more instance keys, `DelistedAt` and `TerminalPrice`, which this page also covers. `DELIST_GRACE` and `DELIST_DEADLINE` are durations in seconds, and their values are on the [Config page](./config.md).
+This page covers the five statuses of a market, the two owner calls that move it through a wind-down (`set_status` and `set_terminal_price`), the two views that read the wind-down, and the gate each status applies to every other entry.
 
-## Status values
+`Status` is an instance storage singleton under the `Status` key, stored as its `u32` discriminant. The instance tier holds it so that the status gate reads it without loading `Config`. The wind-down adds two lazy instance keys, `DelistedAt` and `TerminalPrice`. `DELIST_GRACE` and `DELIST_DEADLINE` are durations in seconds, and the [Config page](./config.md) holds their values.
+
+## Five statuses, and only one accepts an increase that adds notional
 
 ```rust
 #[repr(u32)]
 pub enum Status {
     Active = 0,   // normal trading
-    OnIce = 1,    // opens are blocked, everything else runs
+    OnIce = 1,    // an increase that adds notional is halted, everything else runs
     Frozen = 2,   // every price-bearing and fund-moving entry is halted
-    Delisted = 3, // the wind-down
-    Retired = 4,  // terminal
+    Delisted = 3, // the wind-down, revertible within DELIST_GRACE
+    Retired = 4,  // terminal, only credit claims, instant redeems, and cancels remain
 }
 ```
 
-`Status` crosses the contract boundary as a bare `u32`. It appears as the `set_status` argument, the `get_status` return, and the `StatusUpdate` payload. `Status::from_u32` decodes it, and any value above 4 traps `InvalidStatus` (702). `Status::allows_open` is true for `Active` only. It gates every increase fill that adds notional.
+An increase adds notional when its `order.notional` is above zero. An increase with `order.notional == 0` adds margin only. `Status::allows_open` is true for `Active` alone, and `execute_order` reads it to gate an increase that adds notional.
 
-## set_status
+`Status` crosses the contract boundary as a bare `u32`. It appears as the `set_status` argument, the `get_status` return, and the `status` field of the `status_update` event. `Status::from_u32` decodes it, and any value above 4 traps `InvalidStatus` (702).
+
+## set_status moves the status under a transition matrix
 
 ```rust
 fn set_status(e: Env, status: u32);
 ```
 
-Owner only (`#[only_owner]`). The owner must authorize the call. If the market has no owner, the call traps `OwnerNotSet` (2100) before anything else runs. `status` is the target `Status` discriminant. The call decodes it with `Status::from_u32` and checks the move with `Status::check_transition`. It then applies the side effects of the target, writes `Status`, and publishes `StatusUpdate`.
+Owner only (`#[only_owner]`). The owner must authorize the call, and a market with no owner traps `OwnerNotSet` (2100) before anything else runs. `status` is the target discriminant. The checks and effects run in this order.
 
-`Status::check_transition` is pure. It takes the current status, the target, the stored `DelistedAt` if any, and `now`, the ledger timestamp in unix seconds. `delisted_at` is the stored `DelistedAt` value in unix seconds. `DELIST_GRACE` is a duration in seconds.
+1. `extend_instance` raises the instance time to live (TTL) to `LEDGER_BUMP_INSTANCE`, 535,680 ledgers, when fewer than `LEDGER_THRESHOLD_INSTANCE`, 518,400 ledgers, remain.
+2. `Status::from_u32` decodes `status`. An unknown value traps `InvalidStatus` (702).
+3. `Status::check_transition` judges the move. It reads no storage. Its inputs are the current status, the target, the stored `DelistedAt` if any, and `now`, the ledger timestamp in unix seconds. A rejected move traps `InvalidStatus` (702).
+4. The side effect of the target runs, as listed below.
+5. The call writes `Status` and publishes `status_update`.
 
-| From | To | Result |
+`Status::check_transition` applies the rows of this table from the top, and the first match decides. `delisted_at` is the stored `DelistedAt` value.
+
+| Row | From | To | Result |
+| --- | --- | --- | --- |
+| 1 | `Retired` | any | `InvalidStatus` (702) |
+| 2 | any | the same status | `InvalidStatus` (702) |
+| 3 | any | `Frozen`, `Delisted`, `Retired` | allowed |
+| 4 | any | `Active`, `OnIce` | allowed if `DelistedAt` is absent or `now < delisted_at + DELIST_GRACE`, else `InvalidStatus` (702) |
+
+Row 4 closes the way back to trading once the grace window ends. After that point the delist is permanent, which is the condition for a flat settlement price. Row 3 leaves retirement open, and the `retire` step of the call gates it on an empty book.
+
+### Side effects by target
+
+- `Delisted` writes `DelistedAt = now` when the key is absent. The first delist anchors the grace and deadline windows. A `Frozen` market that returns to `Delisted` keeps that anchor, so a freeze does not restart either window.
+- `Active` and `OnIce` remove `DelistedAt` when it is present. A later delist then starts a fresh window.
+- `Frozen` runs no extra step.
+- `Retired` runs `retire`, described below.
+
+`retire` sums three `MarketData` totals over both sides. They are open interest (`notional`, token-dec), base size (`tokens`, base-dec), and posted margin (`margin`, token-dec). If any sum is nonzero, the call traps `MarketNotCleared` (706). Otherwise it sweeps the credit pool surplus to the vault.
+
+```text
+surplus = credit_pool - credit_owed
+```
+
+`credit_pool` is the claimable-credit pool and `credit_owed` is the credit owed to traders, both in `MarketData` and both token-dec. The market keeps the credit it owes and sends the rest to the vault. If `surplus > 0`, the market transfers `surplus` of the settlement token to the `Vault` address, sets `credit_pool = credit_owed`, and writes `MarketData`. Two rows show the range.
+
+| `credit_pool` | `credit_owed` | Transfer to the vault | `credit_pool` after |
+| --- | --- | --- | --- |
+| 12,500,000 | 10,000,000 | 2,500,000 | 10,000,000 |
+| 10,000,000 | 10,000,000 | none | 10,000,000 |
+
+If the contract token balance is below `surplus`, the transfer traps with the settlement token's own error, and the market keeps its current status. A balance that covers the surplus makes retirement reachable again.
+
+### set_status raises three errors and writes three keys
+
+| Error | Code | Condition |
 | --- | --- | --- |
-| `Retired` | any | `InvalidStatus` (702) |
-| any | the same status | `InvalidStatus` (702) |
-| any other | `Frozen`, `Delisted`, `Retired` | allowed |
-| any other | `Active`, `OnIce` | allowed if `DelistedAt` is absent or `now < delisted_at + DELIST_GRACE`, else `InvalidStatus` (702) |
+| `OwnerNotSet` | 2100 | The market has no owner. |
+| `InvalidStatus` | 702 | `status` is above 4, or `Status::check_transition` rejects the move. |
+| `MarketNotCleared` | 706 | The target is `Retired` and a total of `notional`, `tokens`, or `margin` is nonzero. |
 
-The `set_status` body gates retirement on an empty book, through `retire` below.
+The call reads `Status` and `DelistedAt`. On retirement it also reads `MarketData`, and on a positive surplus `Token` and `Vault`. It writes `Status` and `DelistedAt`, and on retirement with a surplus it writes `MarketData`. `TerminalPrice` keeps its stored value across every transition. The event is `status_update` with the data field `status`, the new discriminant.
 
-Side effects by target:
-
-- `Delisted`: writes `DelistedAt = now` only if the key is absent. The first delist anchors the grace and deadline windows. A freeze and a second delist keep that anchor.
-- `Active` or `OnIce`: removes `DelistedAt` if present. A later delist starts a fresh window.
-- `Retired`: runs `retire`. The call sums each of open interest (token-dec), base size (base-dec), and posted margin (token-dec) over the two sides. If any of the three sums is nonzero, the call traps `MarketNotCleared` (706). Otherwise it computes `surplus = credit_pool - credit_owed` (token-dec). `credit_pool` is the claimable-credit pool (token-dec). `credit_owed` is the credit owed to traders (token-dec). If `surplus > 0`, the market transfers `surplus` of the settlement token to the `Vault` address, sets `credit_pool = credit_owed`, and writes `MarketData`. If the contract token balance is below `surplus`, the transfer traps with the settlement token's own error, and the market keeps its current status.
-- `Frozen`: no extra state.
-
-`set_status` writes `Status`, `DelistedAt`, and `MarketData` only. `TerminalPrice` keeps its stored value across every transition.
-
-Errors: `OwnerNotSet` (2100), `InvalidStatus` (702) from `Status::from_u32` or `Status::check_transition`, and `MarketNotCleared` (706) on target `Retired` with a non-empty book. A failed surplus transfer traps with the settlement token's own error. Reads: `Status`, `DelistedAt`, on retirement `MarketData`, and on a positive surplus `Token` and `Vault`. Writes: `Status`, `DelistedAt`, and on retirement with a surplus `MarketData`. The call extends the instance TTL before it decodes `status`. Event: `StatusUpdate { status }`.
-
-## set_terminal_price
+## set_terminal_price fixes one settlement price for the wind-down
 
 ```rust
 fn set_terminal_price(e: Env, price: i128);
 ```
 
-Owner only (`#[only_owner]`). The owner must authorize the call. If the market has no owner, the call traps `OwnerNotSet` (2100) before anything else runs. `price` is the flat settlement price in price_scalar, the feed's native precision. The checks run in this order:
+Owner only (`#[only_owner]`). The owner must authorize the call, and a market with no owner traps `OwnerNotSet` (2100) before anything else runs. `price` is the flat settlement price at feed precision (18 decimals, see [Units and scales](../units.md)). The checks run in this order.
 
-1. Status is not `Delisted`: `InvalidStatus` (702).
-2. `grace_expired` is false: `InvalidStatus` (702).
-3. `price <= 0`: `InvalidPrice` (701).
+1. `extend_instance` extends the instance TTL, as in `set_status`.
+2. The status is not `Delisted`. The call traps `InvalidStatus` (702).
+3. `grace_expired` is false. The call traps `InvalidStatus` (702).
+4. `price <= 0`. The call traps `InvalidPrice` (701).
 
-The call writes `TerminalPrice` and publishes `TerminalPriceUpdate { price }`. It runs any number of times, and each run replaces the stored value. `TerminalPrice` is sticky, because no entry removes it. From the first write on, `Market::load` prices every price-bearing entry flat at it. It sets both `bid` and `ask` to the stored `TerminalPrice` in price_scalar. It sets `publish_time` to `now`, the ledger timestamp in unix seconds. It ignores the submitted price bytes and skips the oracle call. The pricing mechanics are on the [Pricing page](./pricing.md).
+The call writes `TerminalPrice` and publishes `terminal_price_update` with the data field `price`. It runs any number of times, and each run replaces the stored value. Once written, `TerminalPrice` stays stored for the life of the market. From the first write on, `Market::load` prices every price-bearing entry at `TerminalPrice` and does not verify the submitted report. The [Pricing page](./pricing.md) gives the mechanics.
 
-Errors: `OwnerNotSet` (2100), `InvalidStatus` (702), `InvalidPrice` (701). Reads: `Status`, `DelistedAt`. Writes: `TerminalPrice`. The call extends the instance TTL before it reads `Status`. Event: `TerminalPriceUpdate { price }`.
+The call reads `Status` and `DelistedAt`, and it writes `TerminalPrice`. Its errors are `OwnerNotSet` (2100), `InvalidStatus` (702), and `InvalidPrice` (701).
 
-## Views
+## Two views expose the wind-down
 
 ```rust
 fn get_status(e: Env) -> u32;
 fn get_retirement(e: Env) -> Option<(i128, u64)>;
 ```
 
-`get_status` returns the `Status` discriminant. The constructor writes `Active`, and `set_status` is the only other writer of the key, so the stored value is always one of the five discriminants. Errors: none.
+`get_status` returns the `Status` discriminant. The constructor writes `Active`, and `set_status` is the only other writer of the key, so the stored value is always one of the five discriminants.
 
-`get_retirement` returns `None` while `DelistedAt` is absent. Otherwise it returns `(terminal_price, delisted_at)`. `terminal_price` is the stored `TerminalPrice` in price_scalar, or `0` while none is set. `delisted_at` is `DelistedAt` in unix seconds. Errors: none. Both views are read-only and leave the instance TTL as it is.
+`get_retirement` returns `None` while `DelistedAt` is absent. That covers a market never delisted and a market whose last delist was reverted. Otherwise it returns `(terminal_price, delisted_at)`. `terminal_price` is the stored `TerminalPrice` at feed precision, or `0` while none is set. `delisted_at` is `DelistedAt` in unix seconds.
 
-## Timing predicates
+Neither view raises an error. Both are read-only and leave the instance TTL as it is.
 
-Both predicates read `DelistedAt` and `now` (unix seconds). `DELIST_GRACE` and `DELIST_DEADLINE` are durations in seconds. Both predicates are false while `DelistedAt` is absent. Each addition to `delisted_at` saturates.
+## Two timing predicates read the delist anchor
 
-| Predicate | True when | Effect |
-| --- | --- | --- |
-| `grace_expired` | `now >= delisted_at + DELIST_GRACE` | Unlocks `set_terminal_price`. |
-| `deadline_passed` | `now >= delisted_at + DELIST_DEADLINE` | With status `Delisted`, waives `NotLiquidatable` (722) in `execute_liquidation`. |
+```text
+grace_expired   = now >= delisted_at + DELIST_GRACE
+deadline_passed = now >= delisted_at + DELIST_DEADLINE
+```
 
-`grace_expired` is private, and `set_terminal_price` is its one caller. `deadline_passed` is crate-visible and read by `execute_liquidation`. `Status::check_transition` locks the `Active` and `OnIce` targets on the same grace arithmetic, which it applies to its own `delisted_at` and `now` arguments.
+`now` is the ledger timestamp and `delisted_at` is `DelistedAt`, both in unix seconds. `DELIST_GRACE` and `DELIST_DEADLINE` are durations in seconds. Both predicates are false while `DelistedAt` is absent, and each addition saturates. `grace_expired` is private, and `set_terminal_price` is its one caller. `deadline_passed` is crate-visible, and `execute_liquidation` reads it. `Status::check_transition` applies the same grace arithmetic to its own `delisted_at` and `now` arguments.
+
+With `DELIST_GRACE` at 86,400 seconds and `DELIST_DEADLINE` at 604,800 seconds, a delist anchored at `T` gives these rows.
+
+| `now` | `grace_expired` | `deadline_passed` | Effect |
+| --- | --- | --- | --- |
+| `T + 86,399` | false | false | `Active` and `OnIce` stay reachable. `set_terminal_price` traps `InvalidStatus` (702). |
+| `T + 86,400` | true | false | `Active` and `OnIce` are unreachable. `set_terminal_price` runs while the status is `Delisted`. |
+| `T + 604,799` | true | false | `execute_liquidation` still checks eligibility. |
+| `T + 604,800` | true | true | With status `Delisted`, `execute_liquidation` waives `NotLiquidatable` (722). |
+
+Until the deadline, traders may close voluntarily. After it, a forced close reaches every remaining position.
 
 ## Status gates by entry
 
-The owner entries `set_config`, `upgrade`, and the ownership entries run in every status. `set_status` runs in every status except `Retired`, which is terminal. `set_terminal_price` runs in `Delisted` only. Every view runs in every status. `set_config` carries one status-dependent rule. A change to a borrowing or funding parameter traps `MarketNotAccrued` (703) unless the market accrued in the current ledger, and `Frozen` waives that precondition. A `Retired` market never accrues again, so every later ledger traps that change. The [Config page](./config.md) holds the rule. The table below covers the trader and keeper entries.
+The owner entries `set_config`, `upgrade`, and the ownership entries run in every status. `set_status` runs in every status except `Retired`. `set_terminal_price` runs in `Delisted` only. Every view runs in every status. `set_config` carries one status-dependent precondition, `MarketNotAccrued` (703), which `Frozen` alone waives. The [Config page](./config.md) holds the rule. The table covers the trader and keeper entries.
 
 | Entry | Status | Effect |
 | --- | --- | --- |
@@ -104,12 +147,17 @@ The owner entries `set_config`, `upgrade`, and the ownership entries run in ever
 | `cancel_vault_order` | `Frozen` | traps `MarketFrozen` (704) |
 | `claim_credit` | `Frozen` | traps `MarketFrozen` (704) |
 | `execute_order`, `execute_liquidation`, `execute_vault_order`, `execute_adl`, `update_adl_state`, `accrue` | `Frozen`, `Retired` | traps `MarketFrozen` (704) in `Market::load`, before the oracle call |
-| `execute_order`, increase with `order.notional > 0` | `OnIce`, `Delisted` | traps `IncreaseHalted` (705), after the `Market::load` gate, `OrderNotFound` (730), and `UnknownKind` (734) |
-| `execute_order`, increase with `order.notional == 0` | `Active`, `OnIce`, `Delisted` | runs |
-| `execute_liquidation` | `Delisted` with `deadline_passed` | waives `NotLiquidatable` (722), closes the position even when its settled equity covers the maintenance requirement, and still charges `liq_fee` |
+| `execute_order`, an increase that adds notional | `OnIce`, `Delisted` | traps `IncreaseHalted` (705), after the `Market::load` gate, `OrderNotFound` (730), and `UnknownKind` (734) |
+| `execute_order`, an increase with `order.notional == 0` | `Active`, `OnIce`, `Delisted` | runs |
+| `execute_liquidation` | `Delisted` with `deadline_passed` | waives `NotLiquidatable` (722) and closes the position whatever its settled equity. It charges `liq_fee`, capped at the equity the close frees. |
 
-An increase fill with `order.notional > 0` also traps `IncreaseHalted` (705) when the side's `AdlState` flag is set, in every status that reaches the fill. The instant redeem is on the [Vault orders page](./vault-orders.md). The waived liquidation is on the [Liquidation page](./liquidation.md).
+`execute_order` also traps `IncreaseHalted` (705) for an increase that adds notional when the `AdlState` flag of the order's side is set. That check applies in every status that passes `Market::load`. The margin-only increase is exempt from both halts, so a trader can add margin to a position while the market is `OnIce` or `Delisted`. The [Vault orders page](./vault-orders.md) describes the instant redeem, and the [Liquidation page](./liquidation.md) describes the waived liquidation.
 
-## Invariants
+## The statuses guarantee four things across calls
 
-`DelistedAt` is written once per wind-down, on the first delist. Only a revert to `Active` or `OnIce` before `delisted_at + DELIST_GRACE` removes it. From `delisted_at + DELIST_GRACE` on, the trading statuses are unreachable, and `Frozen`, `Delisted`, and `Retired` remain. `Retired` is terminal. With an empty book and a token balance that covers the surplus sweep, `Retired` is reachable from every other status. The switch to flat pricing follows the presence of `TerminalPrice`, not the status value. Through `Delisted`, accrual and every keeper fill except an increase that adds notional keep running, priced flat once a terminal price exists.
+- `DelistedAt` is written once per wind-down, on the first delist. Only a revert to `Active` or `OnIce` before `delisted_at + DELIST_GRACE` removes it.
+- From `delisted_at + DELIST_GRACE` on, the trading statuses are unreachable, and `Frozen`, `Delisted`, and `Retired` remain.
+- `Retired` is terminal. It is reachable from every other status when the book is empty and the token balance covers the surplus sweep.
+- Flat pricing follows the presence of `TerminalPrice`, not the status value. Through `Delisted`, accrual and every keeper fill except an increase that adds notional keep running, priced flat once a terminal price exists.
+
+For a reader of a `Delisted` market, `get_retirement` answers the pricing question. A nonzero `terminal_price` means every price-bearing entry settles at that value. A `terminal_price` of `0` means the entries still verify the submitted report.

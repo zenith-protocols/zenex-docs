@@ -5,7 +5,9 @@ sidebar_position: 1
 
 # Trading
 
-A trade on Zenex starts with an order that you sign with your own key. You escrow the margin and the keeper's fee with the order, so your own funds cover the keeper's reward. A keeper fills that order against a price that the oracle checks. On a fill that opens or adds to a position, the escrow covers the costs and the remainder posts as margin. On a fill that reduces a position, the costs come out of the margin and the profit already on it. Your position runs until you close it, or until a keeper closes part of it or all of it for you. The pages below cover each part of a trade.
+A trade on Zenex has two parts. You sign an order, and a [keeper](../keepers.md) fills it against a price the market verifies. This page follows one trade from order to close and names the page that owns each step. For the checks a price must pass, refer to [Prices](../markets/prices.md).
+
+Your position stays open until you close it. Two closes can come without your request. A liquidation closes the whole position once its equity falls under the maintenance margin, or whatever its equity once a delisted market passes its seventh day. Auto-deleveraging (ADL) reduces a winning position when the vault cannot safely back the profit its side holds. **Both closes happen without your consent.** Each page below owns one part of the trade.
 
 | Page | What it covers |
 | --- | --- |

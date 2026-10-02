@@ -5,30 +5,42 @@ sidebar_position: 3
 
 # Delay changes
 
-The delay is the wait that `queue` adds to the ledger timestamp to set the unlock time of every new entry. It is a `u64` count of seconds, held under `GovKey::Delay` in instance storage.
+This page covers how the timelock delay changes: the bounds on the delay, the two calls `set_delay` and `apply_delay`, the `PendingDelay` record, and the two events those calls publish.
 
-A change to the delay passes through the timelock itself, in two steps. The owner calls `set_delay` to record the change. Any account calls `apply_delay` after the wait to put the new value in force.
+The delay is a `u64` count of seconds under `GovKey::Delay` in instance storage. `queue` adds it to the ledger timestamp to set the unlock time of every new queue entry. A change to the delay passes through the timelock itself, in two steps. The owner calls `set_delay` to record a pending change. Any account calls `apply_delay` after the delay in force has passed, and the new value then takes effect. The change takes effect only after the delay in force when `set_delay` runs, so the owner cannot shorten the timelock instantly.
 
-The wait is the delay in force when `set_delay` runs, so the owner cannot shorten the wait for that change.
+A queue entry keeps the unlock time it received at queue time, so a change reaches only the entries that `queue` writes after `apply_delay` returns. The [timelock page](./timelock.md#the-queued-call-record) gives the `QueuedCall` record and that rule. The same page holds the [storage table](./timelock.md#storage), the [time to live (TTL) constants](./timelock.md#time-to-live), and the [event list](./timelock.md#events) for the queued calls.
 
-For the queued call surface and the time to live (TTL) constants, refer to [Timelock](./timelock.md).
+## The delay stays between 1 second and 60 days
 
-## Delay range
+A valid delay is at least `1` second and at most `5_184_000` seconds, which is 60 days. Both ends are inclusive. Zero would make every entry executable in the ledger that queues it. The ceiling stays below the 120-day TTL that `LEDGER_BUMP_QUEUED` gives a queue entry, so an entry outlives its own delay.
 
-A valid delay is at least `1` second and at most `5_184_000` seconds, which is 60 days. Both ends are inclusive. If `new_delay` is outside that range, `set_delay` traps with `InvalidDelay` (812). The delay recorded at deploy passes the same check. The value that `get_delay` returns is therefore always inside the range.
+| Delay in seconds | Result |
+| --- | --- |
+| `0` | `InvalidDelay` (812) |
+| `1` | Valid |
+| `5_184_000` | Valid |
+| `5_184_001` | `InvalidDelay` (812) |
 
-## `set_delay`
+`set_delay` applies the check to `new_delay`. `__constructor` applies the same check to the delay recorded at deploy. The value that `get_delay` returns is therefore always inside the range.
+
+## `set_delay` records a pending change
 
 ```rust
 #[only_owner]
 fn set_delay(e: Env, new_delay: u64)
 ```
 
-Records a pending delay change. The owner must sign. `new_delay` is whole seconds.
+The owner must sign. `new_delay` is a count of seconds.
 
-The call writes a `PendingDelay` record under `GovKey::PendingDelay` in persistent storage. That record is the only value it writes. `get_delay` keeps returning the delay in force until `apply_delay` runs. A second `set_delay` overwrites the record, and the replacement carries a fresh unlock time from the ledger timestamp of the second call. A pending change is replaced only by another `set_delay`, and it is removed only by `apply_delay`.
+The call writes a `PendingDelay` record under `GovKey::PendingDelay` in persistent storage and writes no other storage value. `get_delay` keeps returning the delay in force until `apply_delay` runs. A second `set_delay` overwrites the record, and the replacement carries a fresh unlock time from the ledger timestamp of the second call. Only another `set_delay` replaces a pending change, and only `apply_delay` removes it.
 
-The checks run in order. If the owner key is absent, the call traps with `OwnerNotSet` (2100). If the owner does not sign, the host rejects the call, and that failure carries no contract error code. The range check runs last, so only the owner reaches `InvalidDelay` (812) for a `new_delay` outside the delay range. A rejected call leaves storage and the event log as they were. For the owner check, refer to [Ownership and upgrade](../ownership.md).
+The gates run in this order.
+
+1. The owner check, injected by `#[only_owner]`. If the owner key is absent, the call traps with `OwnerNotSet` (2100). If the owner does not sign, the host rejects the call, and that failure carries no contract error code. The [market dependency page](../market/dependencies.md#ownership-and-upgrade) gives the owner check.
+2. The range check. If `new_delay` is `0` or above `5_184_000`, the call traps with `InvalidDelay` (812).
+
+A trapped call reverts every write and publishes no event. The TTL rules for the instance entry and for `GovKey::PendingDelay` are under [Time to live](./timelock.md#time-to-live).
 
 ### Unlock time
 
@@ -36,37 +48,48 @@ The checks run in order. If the owner key is absent, the call traps with `OwnerN
 unlock_time = ledger_timestamp + current_delay
 ```
 
-- `unlock_time`: `u64`, unix seconds. The time from which `apply_delay` succeeds.
-- `ledger_timestamp`: `u64`, unix seconds. The ledger timestamp of the transaction that carries the call.
-- `current_delay`: `u64`, seconds, read from `GovKey::Delay`. It is the delay in force at that moment, and not `new_delay`.
+Where:
 
-`set_delay` computes this. The addition is integer, and no rounding applies. A move from a long delay to a short one waits the long delay. A move from a short delay to a long one waits the short delay.
+- `unlock_time` is a `u64` in unix seconds. It is the first time at which `apply_delay` succeeds.
+- `ledger_timestamp` is a `u64` in unix seconds. It is the timestamp of the ledger that includes the call.
+- `current_delay` is a `u64` count of seconds read from `GovKey::Delay`. It is the delay in force at that moment, not `new_delay`.
 
-### Event
+`set_delay` computes this as an integer addition, so no rounding applies. In words, a change takes the delay that is in force when the owner asks for it, whatever the new value is. A move from a long delay to a short one takes effect after the long delay, and a move from a short delay to a long one takes effect after the short delay.
 
-`set_delay` publishes the `Queued` event under the topic symbol `queued`. The `nonce` topic carries the sentinel `u32::MAX`, which is `4_294_967_295`. The data map carries `fn_name` set to the symbol `set_delay`, `target` set to the governance contract's own address, and `unlock_time` as computed above. The sentinel marks a delay change inside the same event stream as the queued calls. The change itself lives under `GovKey::PendingDelay` alone, so `get_queued` with that nonce traps with `NotQueued` (810).
+The rows below use `ledger_timestamp = 1_800_000_000`.
 
-## `apply_delay`
+| `current_delay` | `new_delay` | `unlock_time` | Time until `apply_delay` succeeds |
+| --- | --- | --- | --- |
+| `604_800` (7 days) | `86_400` (1 day) | `1_800_604_800` | 7 days |
+| `86_400` (1 day) | `2_592_000` (30 days) | `1_800_086_400` | 1 day |
+| `172_800` (2 days) | `172_800` (2 days) | `1_800_172_800` | 2 days |
+
+### The delay form of `Queued`
+
+`set_delay` publishes the `Queued` event under the topic symbol `queued`. The `nonce` topic carries the sentinel `u32::MAX`, which is `4_294_967_295`. The data map carries `fn_name` set to the symbol `set_delay`, `target` set to the governance contract's own address, and `unlock_time` as computed above. The sentinel lets a consumer tell a delay change from a queued call inside one event stream. The queue holds no entry for the change, so `get_queued` with that nonce traps with `NotQueued` (810).
+
+## `apply_delay` puts the change in force
 
 ```rust
 fn apply_delay(e: Env)
 ```
 
-Puts the pending delay in force. The call is permissionless and unrewarded. Any account may submit it once the record unlocks.
+Any account may call it once the record unlocks. The call reads `GovKey::PendingDelay` and applies two gates in order.
 
-The call reads `GovKey::PendingDelay`. If no record exists, the call traps with `NotQueued` (810). If `pending.unlock_time > ledger_timestamp`, the call traps with `NotUnlocked` (811). Equality unlocks, so the call succeeds from `unlock_time` onward. On success the call removes `GovKey::PendingDelay`, writes `pending.new_delay` to `GovKey::Delay`, and publishes `DelaySet`.
+1. If no record exists, the call traps with `NotQueued` (810).
+2. If `pending.unlock_time > ledger_timestamp`, the call traps with `NotUnlocked` (811). Equality unlocks, so the call succeeds from `unlock_time` onward.
 
-An entry queued before the change keeps its own unlock time. `QueuedCall` freezes that field at queue time for the life of the entry. The new delay reaches only the entries that `queue` writes after `apply_delay` returns.
+On success the call reads the old delay from `GovKey::Delay`, removes `GovKey::PendingDelay`, writes `pending.new_delay` to `GovKey::Delay`, and publishes `DelaySet`. The call does not check the range again, because `set_delay` checked it before the record was written.
 
-## `get_delay`
+## `get_delay` returns the delay in force
 
 ```rust
 fn get_delay(e: Env) -> u64
 ```
 
-`get_delay` is a permissionless view. It returns the value under `GovKey::Delay`, in seconds, which is the delay in force until `apply_delay` runs. `get_delay` does not extend the instance TTL, so that TTL stands as the last write left it.
+Any account may call this view. It returns the value under `GovKey::Delay` in seconds, which is the delay in force until `apply_delay` runs. It never returns a pending value.
 
-## `PendingDelay`
+## The `PendingDelay` record
 
 ```rust
 #[contracttype]
@@ -77,22 +100,13 @@ pub struct PendingDelay {
 ```
 
 | Field | Type | Unit | Meaning |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `new_delay` | `u64` | seconds | The delay that `apply_delay` writes to `GovKey::Delay` |
 | `unlock_time` | `u64` | unix seconds | The time from which `apply_delay` succeeds |
 
-No entry point returns `PendingDelay`. A consumer reads the record from the ledger entry under `GovKey::PendingDelay`. The `set_delay` invocation carries `new_delay`. Of the two record fields, the `queued` event carries `unlock_time` alone. The `DelaySet` event that `apply_delay` publishes is the first event to carry the new value.
+No entry point returns `PendingDelay`. A consumer reads the record from the ledger entry under `GovKey::PendingDelay`. The `set_delay` invocation carries `new_delay`. Of the two fields, the `queued` event carries `unlock_time` alone. The `DelaySet` event is the first event to carry the new value.
 
-## Storage
-
-| Key | Value | Class | Written by | Read by |
-|---|---|---|---|---|
-| `GovKey::Delay` | `u64` seconds | instance | `__constructor`, `apply_delay` | `queue`, `set_delay`, `apply_delay`, `get_delay` |
-| `GovKey::PendingDelay` | `PendingDelay` | persistent | `set_delay` (write), `apply_delay` (remove) | `apply_delay` |
-
-Both the write and the read of `GovKey::PendingDelay` extend that entry's TTL. `set_delay` and `apply_delay` also extend the instance TTL.
-
-## `DelaySet`
+## `DelaySet` carries the old and the new delay
 
 ```rust
 #[contractevent]
@@ -102,11 +116,21 @@ pub struct DelaySet {
 }
 ```
 
-The topic symbol is `delay_set`. The event carries one topic, the name symbol. No field is a `#[topic]`, so `old_delay` and `new_delay` both sit in the data map, and both are whole seconds. `apply_delay` publishes it after the write to `GovKey::Delay`.
+The event has one topic, the name symbol `delay_set`. No field is a `#[topic]`, so `old_delay` and `new_delay` both sit in the data map, and both are counts of seconds. `old_delay` is the value under `GovKey::Delay` before the write, and `new_delay` is the value after it. `apply_delay` publishes the event after the write to `GovKey::Delay`.
+
+## Four error codes cover these calls
+
+| Error | Code | Raised by | Condition |
+| --- | --- | --- | --- |
+| `OwnerNotSet` | 2100 | `set_delay` | The owner key is absent. |
+| `InvalidDelay` | 812 | `set_delay` | `new_delay` is `0` or above `5_184_000`. |
+| `NotQueued` | 810 | `apply_delay` | No `GovKey::PendingDelay` record exists. |
+| `NotUnlocked` | 811 | `apply_delay` | `unlock_time` is later than the ledger timestamp. |
 
 ## Invariants
 
-- At most one delay change is pending. A second `set_delay` replaces the first record and restarts its wait.
-- Every delay change waits the delay in force at the moment `set_delay` ran. That wait binds the owner as much as any other account.
-- A queued call keeps the unlock time it received at queue time, across any number of delay changes.
-- The delay in force stays inside `[1, 5_184_000]` seconds for the life of the contract.
+- At most one delay change is pending. A second `set_delay` replaces the first record and sets a fresh unlock time.
+- Every delay change takes the delay in force when `set_delay` ran as its own delay. That rule binds the owner as it binds any other account.
+- The delay in force stays between `1` and `5_184_000` seconds inclusive for the life of the contract.
+
+Only `__constructor` and `apply_delay` write `GovKey::Delay`.

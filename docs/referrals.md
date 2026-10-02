@@ -5,20 +5,28 @@ sidebar_position: 9
 
 # Referrals
 
-The referral program pays you a bonus on the points your referees earn from trading. A trader you bring to Zenex is your referee. Each attribution is recorded on chain.
+The referral program pays you a bonus on the points that the traders you bring to Zenex earn from trading. This page covers how you get a share link, how the app attributes a trader to you, and what each side earns.
 
-## Get your share link
+## Your share link comes from the app
 
-Connect your account to the app. The app gives you a share link, and that link is what you send out. The app also shows the number of referees attributed to you.
+Connect your account to the app. The app gives you a share link for that account. Send the link to a trader you want to bring. The app also shows how many referees are attributed to you.
 
-## How a referee is attributed
+## The first attribution fixes the referrer for good
 
-A referee opens your link and connects their account. That account signs one transaction, and the attribution holds once the transaction confirms. The app then shows the new referee on your side and shows you as the referrer on theirs.
+A trader opens your link and connects an account. That account signs one transaction, and the attribution counts once the network confirms the transaction. The record is an event on chain, so anyone can read it. The app then shows the trader as your referee, and it shows you as the referrer on the trader's side.
 
-Three rules hold. The first attribution an account signs sets the referrer of that account, and that referrer holds for the life of the account. A later attribution from the same account does not change its referrer. The referrer must be an account other than the referee.
+The app can trail the confirmation by a short time. It reads new attributions from the chain, and a background run repeats that read every hour.
 
-## What each side earns
+An account has one referrer, and the first attribution the account signs sets it. If the account opens a second link later, it keeps its first referrer. The contract does not block a second attribution, but the app counts only the first. You cannot move a referee to another referrer. A referee cannot switch either.
 
-You earn a bonus on every point your referees earn from trading. The bonus is a percentage on top of their points, and it adds to your own total. It pays for as long as they trade.
+The referrer must be a different account from the referee, and the contract rejects an attribution that names the signer as its own referrer. This rule means you cannot earn a bonus on your own trading.
 
-A referee keeps the full points their own trading earns. Your bonus takes nothing from that total.
+## You earn a percentage on top of your referees' points
+
+For every point a referee earns from trading, you earn a bonus. The bonus is a percentage of that point, and it adds to your own points. It continues for as long as the referee trades, because the attribution has no end date.
+
+The referee keeps every point that their own trading earns. Your bonus comes on top and takes nothing from the referee.
+
+## What this means for you
+
+A referee's first signed attribution decides the referrer, so the first link a trader uses is the link that counts. A trader who has already used another link stays with that referrer, and your link earns you nothing from that trader.

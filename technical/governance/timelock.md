@@ -5,11 +5,11 @@ sidebar_position: 2
 
 # Timelock
 
-The governance contract is a timelock. The owner queues a call to another contract, and the entry unlocks after a delay. Any account can then execute it. The owner can cancel the entry until it runs. One owner entry, `set_status`, reaches its target with no wait.
+The governance contract is a timelock. The owner queues a call to another contract, and the queued call unlocks after a delay. Any account can then execute it. The owner can cancel it until it runs. One owner function, `set_status`, reaches its target at once.
 
-This page holds the queue entries, the storage keys, the error codes, and the events. The delay value changes through the two calls on [Delay changes](./delay.md). The owner key surface is on [Ownership and upgrade](../ownership.md).
+This page covers the queue functions, the storage keys, the error codes, the events, and the `Ownable` surface. The [Delay changes](./delay.md) page covers the two functions that change the delay value.
 
-Every time value on this page is a unix timestamp in seconds. Every delay is a count of seconds. Every time-to-live is a count of ledgers. Every nonce is a dimensionless `u32` counter.
+Every time value is a unix timestamp in seconds. Every delay is a count of seconds. Every time-to-live (TTL) is a count of ledgers. Every nonce is a dimensionless `u32` counter. The word entry means one stored `QueuedCall`.
 
 ## Constructor
 
@@ -17,14 +17,14 @@ Every time value on this page is a unix timestamp in seconds. Every delay is a c
 pub fn __constructor(e: Env, owner: Address, delay: u64)
 ```
 
-`owner` becomes the `Ownable` owner. It is the only account that can queue a call, cancel one, queue a delay change, or forward a status. `delay` is the first value written under `GovKey::Delay`, in seconds. It sets the wait for every queue entry until `apply_delay` writes a new value. It must be in the range `(0, 5_184_000]`, which is 1 second to 60 days.
+`owner` becomes the `Ownable` owner. It is the only account that can queue a call, cancel one, queue a delay change, or forward a status. `delay` is the first value under `GovKey::Delay`, in seconds. It sets the wait for every entry until `apply_delay` writes a new value. Its range is `(0, 5_184_000]`, which is 1 second to 60 days.
 
-The call checks the range first. It then sets the owner through `set_owner`, writes `GovKey::Delay`, and extends the instance time-to-live. It publishes no event. The [Ownership and upgrade page](../ownership.md) covers `set_owner` and the errors it can raise.
+The gates run in this order:
 
-| Error | Code | Condition |
-| --- | --- | --- |
-| `InvalidDelay` | 812 | `delay` is `0`, or `delay` is above `5_184_000` seconds. |
-| `OwnerAlreadySet` | 2102 | `set_owner` finds an owner key. A constructor on a fresh instance never meets it. |
+1. The range check on `delay`. A value outside the range traps with `InvalidDelay` (812).
+2. The `set_owner` call. An existing owner key traps with `OwnerAlreadySet` (2102). A constructor on a fresh instance never meets it.
+
+The call then writes `GovKey::Delay` and extends the instance TTL. It publishes no event.
 
 ## Queue a call
 
@@ -32,17 +32,33 @@ The call checks the range first. It then sets the owner through `set_owner`, wri
 fn queue(e: Env, target: Address, fn_name: Symbol, args: Vec<Val>) -> u32
 ```
 
-Owner only. The owner must authorize the call, and `#[only_owner]` enforces it. The call stores one `QueuedCall` and returns its nonce.
+Owner only. The `#[only_owner]` check runs first. It traps with `OwnerNotSet` (2100) when the owner key is absent. A call signed by any other account fails host authorization and carries no contract error code. The call stores one `QueuedCall` and returns its nonce.
 
-The contract stores `target`, `fn_name`, and `args` as it receives them. It checks none of the three. It does not check that a contract lives at `target`, that the contract has a function named `fn_name`, or that `args` matches that function. When `execute` forwards the call, a mismatch traps.
+`queue` stores `target`, `fn_name`, and `args` exactly as received. Validation happens when `execute` forwards the call. A `target` with no contract, a `fn_name` that the contract lacks, or `args` that do not match its signature trap at that point. The entry stays queued until then, and the delay is already spent. Only `cancel` removes it.
 
-`queue` computes `unlock_time = ledger_timestamp + delay`. `unlock_time` is the `u64` unix timestamp in seconds that the entry stores. `ledger_timestamp` is the unix timestamp in seconds of the ledger that includes the call. `delay` is the `u64` value under `GovKey::Delay`, in seconds. Both terms are `u64`, and the contract adds them as integers. The entry keeps that `unlock_time` for its whole life.
+The unlock time comes from one addition.
 
-The nonce comes from `next_nonce`. It reads `GovKey::Nonce`, treats an absent key as `0`, writes the value plus one, and returns the value it read. The first nonce a contract ever issues is `0`. Each `queue` call takes the next one. `cancel` and `execute` do not return a nonce to the counter.
+```
+unlock_time = ledger_timestamp + delay
+```
 
-The same target, function, and argument list can be queued more than once. Each call gets its own nonce and its own entry, and the entries are independent.
+- `unlock_time`: `u64`, unix seconds. The first timestamp at which `execute` succeeds. The entry keeps this value for its whole life.
+- `ledger_timestamp`: `u64`, unix seconds. The timestamp of the ledger that includes the call.
+- `delay`: `u64`, seconds. The value under `GovKey::Delay` when the call runs.
 
-The call reads `GovKey::Delay`, reads and writes `GovKey::Nonce`, and writes `GovKey::Queued(nonce)`. It publishes `queued`. If the owner key is absent, the owner check traps with `OwnerNotSet` (2100).
+The addition is on integers, so no rounding applies. An entry unlocks exactly `delay` seconds after the ledger that queued it.
+
+| `ledger_timestamp` | `delay` | `unlock_time` |
+| --- | --- | --- |
+| `1_788_000_000` | `1` | `1_788_000_001` |
+| `1_788_000_000` | `172_800` (2 days) | `1_788_172_800` |
+| `1_788_000_000` | `5_184_000` (60 days) | `1_793_184_000` |
+
+The nonce comes from `next_nonce`. It reads `GovKey::Nonce`, treats an absent key as `0`, writes the value plus one, and returns the value it read. The first nonce is `0`, and each `queue` call takes the next one. `cancel` and `execute` return no nonce to the counter. The release profile has overflow checks on, so the call that would issue `4_294_967_295` traps with an arithmetic error. That value is the sentinel nonce that `set_delay` uses, so no queued call holds it.
+
+The same target, function, and argument list can be queued more than once. Each call gets its own nonce and its own independent entry.
+
+The call extends the instance TTL, reads `GovKey::Delay`, reads and writes `GovKey::Nonce`, and writes `GovKey::Queued(nonce)`. It publishes `queued`.
 
 ## Cancel a queued call
 
@@ -50,9 +66,12 @@ The call reads `GovKey::Delay`, reads and writes `GovKey::Nonce`, and writes `Go
 fn cancel(e: Env, nonce: u32)
 ```
 
-Owner only. The owner must authorize the call, and `#[only_owner]` enforces it. The call reads the entry under `nonce`, removes it, and publishes `cancelled`. If no entry exists under `nonce`, the call traps with `NotQueued` (810). That covers a nonce that was never issued, one that already executed, and one that was already cancelled. If the owner key is absent, the owner check traps with `OwnerNotSet` (2100).
+Owner only. The gates run in this order:
 
-Cancel works at any point before execution. The unlock time does not close the window, so the owner can still cancel an entry that is unlocked.
+1. The owner check. The owner key must exist (`OwnerNotSet` (2100)) and the owner must sign.
+2. The entry lookup. If no entry exists under `nonce`, the call traps with `NotQueued` (810). That covers a nonce that was never issued, one that executed, and one that was cancelled.
+
+The call then removes the entry and publishes `cancelled`. Cancel works at any point before execution. The unlock time does not close the window, so the owner can cancel an unlocked entry.
 
 ## Execute a queued call
 
@@ -60,17 +79,20 @@ Cancel works at any point before execution. The unlock time does not close the w
 fn execute(e: Env, nonce: u32)
 ```
 
-Permissionless. `execute` calls no `require_auth`, so the submitter needs no relationship with the owner. The submitter pays the transaction fee and earns no reward.
+Permissionless. Any account can submit it, and the submitter pays the transaction fee. The contract needs no relationship with the owner.
 
-If no entry exists under `nonce`, the call traps with `NotQueued` (810). The call then compares two `u64` unix timestamps in seconds. `unlock_time` is the field on the entry. `ledger_timestamp` is the timestamp of the ledger that includes the call. If `unlock_time > ledger_timestamp`, the call traps with `NotUnlocked` (811). Equality unlocks, so the entry becomes executable on the first ledger whose timestamp reaches `unlock_time`. It stays queued until an account submits `execute`.
+The gates run in this order:
 
-The call removes `GovKey::Queued(nonce)`, then invokes `fn_name` on `target` with the stored `args`. It reads the return value as `Val` and discards it. It publishes `executed` after the forwarded call returns, so the target's own events come first in the transaction.
+1. If no entry exists under `nonce`, the call traps with `NotQueued` (810).
+2. If `unlock_time > ledger_timestamp`, the call traps with `NotUnlocked` (811). Equality unlocks, so the entry becomes executable on the first ledger whose timestamp reaches `unlock_time`. It stays queued until an account submits `execute`.
 
-The forwarded call carries the governance contract address as the invoker. An owner-gated entry on the target accepts it when the governance contract is that target's owner.
+The call then removes `GovKey::Queued(nonce)` and invokes `fn_name` on `target` with the stored `args`. The removal comes first, so the target runs against state in which the entry is already consumed. The host also prohibits any call from the target back into the governance contract while `execute` runs. The call reads the return value as `Val` and discards it. It publishes `executed` after the forwarded call returns, so the target's own events come first in the transaction.
 
-An error from the target propagates and reverts the whole transaction. The removal of the entry reverts with it. A failed execution therefore leaves the entry queued and executable later.
+The forwarded call carries the governance contract address as the invoker. An owner-only function on the target accepts it when the governance contract is the owner of that target.
 
-Entries execute in any order. The contract enforces no order between nonces, and an entry queued later can execute first.
+An error from the target propagates and reverts the whole transaction, and the removal of the entry reverts with it. A failed execution leaves the entry queued and executable later.
+
+Entries execute in any order. The contract enforces no order between nonces, so an entry queued later can execute first.
 
 ## Forward a status at once
 
@@ -78,11 +100,16 @@ Entries execute in any order. The contract enforces no order between nonces, and
 fn set_status(e: Env, target: Address, status: u32)
 ```
 
-Owner only. The owner must authorize the call, and `#[only_owner]` enforces it. The call forwards exactly one function name, `set_status`, with exactly one argument, `status`, to `target`. It consumes no nonce, writes no queue entry, and waits for no delay.
+Owner only. The gates run in this order:
 
-`status` is a `u32` discriminant of the market `Status` enum. This contract passes it through without a check, and the target validates it. The [Market status page](../market/status.md) gives the values and what each one permits.
+1. The owner check. The owner key must exist (`OwnerNotSet` (2100)) and the owner must sign.
+2. The forwarded call to `target`.
 
-The `set_status` entry on the target is owner gated. The target accepts the forwarded call when the governance contract is that target's owner. If the owner key of the governance contract is absent, the owner check traps with `OwnerNotSet` (2100). An error from the target propagates and reverts the transaction. It publishes `status_set` after the forwarded call returns.
+The call takes effect in the same transaction as the owner's authorization. It is the only owner function that skips the queue and the delay. It forwards one function name, `set_status`, with one argument, `status`, and writes no entry and no nonce. If the forwarded call succeeds, `set_status` publishes `status_set`. If the target returns an error, the error propagates as on `execute`.
+
+`target` is any `Address`. The contract does not check that it is a market or that it exposes `set_status`, and the forwarded call traps when it does not. `status` is a `u32` discriminant of the market `Status` enum. The target validates it. The [Market status page](../market/status.md) gives the values and what each one permits.
+
+The owner-only `set_status` function on the target accepts the forwarded call when the governance contract is the owner of that target.
 
 ## Read a queued call
 
@@ -90,7 +117,7 @@ The `set_status` entry on the target is owner gated. The target accepts the forw
 fn get_queued(e: Env, nonce: u32) -> QueuedCall
 ```
 
-Permissionless. It returns the whole record under `nonce`, and traps with `NotQueued` (810) when no entry exists. The read extends the time-to-live of the persistent entry, so an on-chain call writes state. A simulation of the call commits nothing.
+Permissionless. It returns the whole entry under `nonce` and traps with `NotQueued` (810) when none exists. The read extends the TTL of the persistent entry, so a submitted transaction that calls it writes state. A simulation commits nothing. The call leaves the instance TTL as it is.
 
 ## The queued call record
 
@@ -105,7 +132,7 @@ Permissionless. It returns the whole record under `nonce`, and traps with `NotQu
 
 ## Storage
 
-The contract owns four `GovKey` variants. The `Ownable` mixin owns two more keys, `OwnableStorageKey::Owner` on the instance and `OwnableStorageKey::PendingOwner` in temporary storage, both covered by [Ownership and upgrade](../ownership.md).
+The contract owns four `GovKey` variants. The `Ownable` mixin owns two more keys. `OwnableStorageKey::Owner` sits on the instance. `OwnableStorageKey::PendingOwner` sits in temporary storage. Both hold what they hold on the [market](../market/storage.md#ledger-keys).
 
 | Key | Value | Class | Written by | Read by |
 | --- | --- | --- | --- | --- |
@@ -114,11 +141,11 @@ The contract owns four `GovKey` variants. The `Ownable` mixin owns two more keys
 | `GovKey::Queued(u32)` | `QueuedCall` | persistent | `queue`, and `cancel` and `execute` remove it | `cancel`, `execute`, `get_queued` |
 | `GovKey::PendingDelay` | `PendingDelay` | persistent | `set_delay`, and `apply_delay` removes it | `apply_delay` |
 
-`PendingDelay` and the two calls that touch it belong to [Delay changes](./delay.md). A removal of an absent entry is not an error.
+[Delay changes](./delay.md) covers `PendingDelay` and the two functions that touch it.
 
 ### Time-to-live
 
-A ledger lasts about 5 seconds. A threshold is the remaining time-to-live below which an access extends an entry. A bump is the time-to-live that the access extends the entry to.
+A ledger lasts about 5 seconds. A threshold is the remaining TTL below which an access extends an entry. A bump is the TTL to which the access extends it.
 
 | Constant | Ledgers | Time |
 | --- | --- | --- |
@@ -128,28 +155,28 @@ A ledger lasts about 5 seconds. A threshold is the remaining time-to-live below 
 | `LEDGER_THRESHOLD_QUEUED` | 1_728_000 | 100 days |
 | `LEDGER_BUMP_QUEUED` | 2_073_600 | 120 days |
 
-`extend_instance` applies `LEDGER_THRESHOLD_INSTANCE` and `LEDGER_BUMP_INSTANCE`. It opens the body of `queue`, `cancel`, `execute`, `set_status`, `set_delay`, and `apply_delay`, and it closes `__constructor`. On the four owner-gated entries the injected owner check runs before it. The host tests the threshold and extends the contract code entry apart from the instance entry. One entry can be extended while the other is not. `get_delay` and `get_queued` leave the instance time-to-live as it is.
+`extend_instance` applies the two instance constants. It runs in `queue`, `cancel`, `execute`, `set_status`, `set_delay`, and `apply_delay`, and at the end of `__constructor`. On the four owner-only functions it runs after the owner check. `get_delay` and `get_queued` leave the instance TTL as it is.
 
-`LEDGER_THRESHOLD_QUEUED` and `LEDGER_BUMP_QUEUED` govern the two persistent keys, `GovKey::Queued(u32)` and `GovKey::PendingDelay`. A read or a write of one of those keys extends that key when its remaining time-to-live is below the 100-day threshold. A removal extends nothing. The 120-day bump outlives the 60-day delay ceiling. An entry written at queue time survives the longest wait the contract permits, with no further traffic. An entry whose time-to-live still lapses is archived rather than deleted, and a restore brings it back.
+The instance entry holds the instance keys and the reference to the contract code. The code is a separate ledger entry. The extension call tests the threshold for each entry apart. The host can extend one and leave the other.
+
+`LEDGER_THRESHOLD_QUEUED` and `LEDGER_BUMP_QUEUED` govern the two persistent keys, `GovKey::Queued(u32)` and `GovKey::PendingDelay`. A read or a write of one of them extends it when its remaining TTL is below the 100-day threshold. A removal extends nothing. The 120-day bump outlives the 60-day delay ceiling, so an entry survives the longest wait the contract permits with no further traffic. An entry whose TTL lapses is archived, not deleted, and a restore brings it back.
 
 ## Errors
 
-`GovernanceError` is the contract error enum. Governance owns the 8xx range. The table is the complete set of codes and the calls that raise each one.
+`GovernanceError` is the contract error enum. Governance owns the 810 to 812 domain. The strategy vault uses 800 and 801 from the same 8xx range. The table is the complete set of `GovernanceError` codes.
 
 | Error | Code | Condition |
 | --- | --- | --- |
-| `Unauthorized` | 1 | Declared to match the shared access-control numbering. No path in the contract raises it. |
+| `Unauthorized` | 1 | The code sits outside the 810 to 812 domain and mirrors the shared access-control numbering. No function raises it. |
 | `NotQueued` | 810 | `cancel`, `execute`, and `get_queued` find no entry under `nonce`. `apply_delay` finds no pending delay change. |
 | `NotUnlocked` | 811 | `execute` runs before `unlock_time`. `apply_delay` runs before the unlock time of the pending change. |
 | `InvalidDelay` | 812 | `__constructor` or `set_delay` receives a delay of `0`, or one above `5_184_000` seconds. |
 
-A call to an owner-only entry from another account fails host authorization. The owner check raises no code from `GovernanceError`. After a renounce, the same entries trap with `OwnerNotSet` (2100). The [Ownership and upgrade page](../ownership.md) gives the `OwnableError` and `RoleTransferError` codes and their conditions.
-
-An error raised by the target of `execute` or `set_status` propagates unchanged and reverts the transaction.
+An owner-only function called by another account fails host authorization, and the failure carries no `GovernanceError` code. The Ownable codes come from `OwnableError`, not `GovernanceError`. After a renounce, the four owner-only functions trap with `OwnerNotSet` (2100). `__constructor` traps with `OwnerAlreadySet` (2102) when an owner key exists, as the constructor gates describe. The [Ownable codes](../market/errors.md#ownable-codes) table gives the `OwnableError` and `RoleTransferError` codes and their conditions. [Execute a queued call](#execute-a-queued-call) covers an error raised by a target.
 
 ## Events
 
-Every event derives `contractevent` from soroban-sdk 26.1.1. The first topic is the event name, which is the struct name in lower snake case. Each `#[topic]` field follows in declaration order, and every other field sits in the data map under its own field name.
+Every event derives `contractevent` from soroban-sdk 26.1.1. The first topic is the event name, which is the struct name in lower snake case. Each `#[topic]` field follows in declaration order. Every other field sits in the data map under its own field name.
 
 | Event | Topics after the name | Data | Published by |
 | --- | --- | --- | --- |
@@ -158,20 +185,39 @@ Every event derives `contractevent` from soroban-sdk 26.1.1. The first topic is 
 | `cancelled` | `nonce: u32` | an empty map, because the struct carries no data field | `cancel` |
 | `status_set` | `target: Address` | `status: u32`, a market `Status` discriminant | `set_status`, after the forwarded call returns |
 
-`set_delay` publishes a second form of `queued` for a delay change, and `apply_delay` publishes `delay_set`. Both forms are on [Delay changes](./delay.md).
-
-## Invariants
-
-A nonce is consumed once. `queue` issues it, and no later call reissues it. After `cancel` or `execute` on nonce `n`, every read of `n` traps with `NotQueued` for the life of the contract.
-
-An entry freezes its `unlock_time` when `queue` writes it. A later delay change moves no entry that is already in the queue. It governs only the entries that `queue` writes after it.
-
-`execute` needs no signature. Once an entry unlocks, any account can submit it, and the owner cannot stop it except by a `cancel` that lands first.
-
-`set_status` is the only owner action that reaches a target with no wait, and it can carry only one function name and one `u32` argument.
+`set_delay` publishes a second form of `queued` for a delay change, and `apply_delay` publishes `delay_set`. [Delay changes](./delay.md) covers both.
 
 ## Ownership
 
-The contract mixes in `Ownable` from stellar-access 0.7.2 and exposes `get_owner`, `transfer_ownership`, `accept_ownership`, and `renounce_ownership`. Four entries carry `#[only_owner]`: `queue`, `cancel`, `set_status`, and `set_delay`.
+The contract mixes in `Ownable` from stellar-access 0.7.2. It exposes `get_owner`, `transfer_ownership`, `accept_ownership`, and `renounce_ownership`, and these four extend no TTL. Four functions carry `#[only_owner]`:
 
-`renounce_ownership` removes the owner key, and nothing restores it. The four owner-only entries then trap with `OwnerNotSet` (2100) on every call, and so do `transfer_ownership` and `renounce_ownership`. A renounce traps while a live pending transfer exists, so no pending entry survives it. `accept_ownership` then traps with `NoPendingTransfer` (2200). `get_owner` keeps working and returns `None`. `execute`, `apply_delay`, `get_delay`, and `get_queued` keep working, so an entry queued before the renounce still executes at its unlock time. The [Ownership and upgrade page](../ownership.md) gives the signatures, the transfer window, the error codes, and the events.
+- `queue`
+- `cancel`
+- `set_status`
+- `set_delay`
+
+The Ownable surface is the same on every contract that carries it. These pages document it:
+
+- Signatures and the transfer rule: the [market dependency page](../market/dependencies.md#ownership-and-upgrade).
+- Codes: [Ownable codes](../market/errors.md#ownable-codes).
+- Payloads: [ownership events](../market/events.md#ownership-events).
+
+`renounce_ownership` removes the owner key, and nothing restores it. A renounce traps with `TransferInProgress` (2101) while an unexpired pending transfer exists. A renounce that succeeds therefore leaves no pending transfer, and `accept_ownership` then traps with `NoPendingTransfer` (2200). From then on the four owner-only functions, `transfer_ownership`, and `renounce_ownership` trap with `OwnerNotSet` (2100). `get_owner` returns `None`. `execute`, `apply_delay`, `get_delay`, and `get_queued` keep working, so an entry queued before the renounce still executes at its unlock time.
+
+The governance code is fixed at deploy. The contract exposes no `upgrade`, so the timelock rules and the delay range hold for the life of the contract. The market, oracle, and factory contracts expose `upgrade`.
+
+### The timelock becomes an owner by construction or by transfer
+
+A contract whose constructor takes an `owner` argument has the timelock as its owner when the deploy passes the timelock address there. The factory gives each new market the `admin` it receives as owner, so a market gets the timelock the same way.
+
+An existing owner hands a contract to the timelock in two steps. The owner calls `transfer_ownership` on the target with the timelock address and a `live_until_ledger`. The timelock then has to sign `accept_ownership` on the target, because the pending owner authorizes that call. The timelock signs only inside `execute`, where the forwarded call carries the timelock address as invoker. The transfer therefore completes through `queue` with the target, the function name `accept_ownership`, and an empty argument list, followed by `execute` once the delay has passed.
+
+The pending transfer expires after `live_until_ledger`. The value must reach past the unlock time of the queued `accept_ownership` entry, or the transfer lapses before the entry can run.
+
+## Rules that hold across calls
+
+A nonce is consumed once. `queue` issues it, and no later call reissues it. After `cancel` or `execute` on nonce `n`, every read of `n` traps with `NotQueued`.
+
+An entry freezes its `unlock_time` when `queue` writes it. A later delay change moves no entry already in the queue. It governs only the entries that `queue` writes after it.
+
+An unlocked entry stays executable by any account. The owner can stop it only with a `cancel` that lands before the `execute`.

@@ -5,9 +5,9 @@ title: Oracle
 
 # Oracle
 
-The oracle turns a signed Chainlink Data Streams V3 report into a `PriceData` value for the stream the caller names. Chainlink's deployed verifier checks the signatures of the decentralized oracle network (DON) on the report. It also checks that the signing configuration is active, and it traps when either check fails. It returns the raw report body. The constructor pins the verifier address. Every other check on the report is the oracle's own, and each one runs on that body, whether this call obtained it or an earlier call did. The pages below hold price verification and the owner's settings, one home per fact. For the Ownable entry points and `upgrade`, refer to [Ownership and upgrade](../ownership.md).
+The oracle is the Chainlink Data Streams adapter for the market. It turns a signed V3 report into a `PriceData` value for the stream the caller names. Chainlink's deployed verifier checks the signatures, and the oracle applies every other gate itself. The owner sets two staleness windows and one spread reduction factor.
 
 | Page | What it holds |
 | --- | --- |
-| [Price verification](./verify-price.md) | `verify_price` and its arguments, the permissionless call, the `PriceData` return, the report decode, the gate order, the two staleness classes, the spread reduction formula, the memo of a verified body, and the error codes. |
-| [Constructor and settings](./settings.md) | `__constructor`, `update_staleness`, `update_spread_reduction_factor`, the views, the bounds and constants, the instance storage keys, and the events. |
+| [Price verification](./verify-price.md) | `verify_price`, its arguments, the gate order, the staleness classes, the spread reduction formula, the `PriceData` return, and the error codes it raises. |
+| [Constructor and settings](./settings.md) | `__constructor`, the owner calls, the bounds, the views, the storage keys, and the events. The [ownership and upgrade](./settings.md#ownership-and-upgrade) section covers the Ownable entry points and `upgrade`. |
