@@ -1,1 +1,9 @@
-{"label":"Treasury","position":5,"collapsed":true}
+{
+  "label": "Treasury",
+  "position": 9,
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "treasury/overview"
+  }
+}

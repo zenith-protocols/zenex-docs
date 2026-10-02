@@ -1,184 +1,121 @@
 ---
 sidebar_position: 2
-title: Deployment Parameters
+title: Deployment parameters
 ---
 
-# Deployment Parameters
+# Deployment parameters
 
-Every Zenex deployment is configured through a set of constructor parameters that define the protocol's fee structure, risk limits, oracle settings, and vault behavior. These parameters are typically defined in `zenex-utils/deploy.json`, which serves as the single source of truth for deployment configuration. Before executing any deployment, operators must review the contents of this file and confirm that all values are correct. Fee rates, leverage limits, and market parameters are critical to protocol safety and should be verified every time.
+This page lists what each Zenex contract receives when it is deployed, and the limits the protocol puts on those values. It covers the factory, the market and its vault, the oracle, the treasury, and the timelock. [Market parameters](../markets/market-parameters.md) says what each market value does to your money and gives the values recorded for the testnet. [Contract addresses](./contract-addresses.md) gives the addresses. The contracts hold the values in force, so a value read from a contract outranks any figure in these pages.
 
-## Factory
+## The factory deploys a market and its vault as one pair
 
-The factory is the entry point for deploying new trading and vault pairs. Its constructor accepts a single `FactoryInitMeta` struct.
+Any account can ask the factory to deploy a pair. The account that authorizes the request becomes the owner of the market. The factory builds the pair from the market code, the vault code, and the treasury address that it holds at that moment. The factory has an owner of its own, and that owner can replace all three. A replacement reaches only the pairs deployed after it, because the factory keeps no authority over a pair once the pair exists.
 
-| Parameter | Type | Description |
-|---|---|---|
-| `trading_hash` | `BytesN<32>` | Compiled WASM hash for trading contracts |
-| `vault_hash` | `BytesN<32>` | Compiled WASM hash for vault contracts |
-| `treasury` | `Address` | Protocol-wide treasury contract address |
+A market that the factory lists was deployed by that factory, and the list says no more. The factory and the market do not check which settlement token or oracle the deployer names. Neither checks who owns the market. [Governance](../governance.md) covers what an owner holds.
 
-These values are immutable after construction. The WASM hashes determine which contract code every pool will run. The treasury address determines where protocol fees are routed. Changing any of these requires deploying a new factory entirely.
+A deployment request carries these inputs.
 
-## Trading Contract
+| Input | What it sets |
+| --- | --- |
+| Owner | The account that owns the market and holds its parameters, its state, and its code. |
+| Settlement token | The token the market takes as margin and pays out in. The vault holds the same token. |
+| Oracle | The oracle that checks the price reports of the market. One oracle can serve several markets. |
+| Price stream | The one price stream from Chainlink Data Streams that the market prices from. It must be a version 3 stream, the version the oracle decodes. |
+| Starting parameters | The full parameter set that the market opens with. The bounds in the next section apply to it. |
+| Share name and symbol | The labels of the vault share token. |
+| Extra share decimals | The decimals the share token carries beyond those of the settlement token. The limit is 10. |
 
-The trading contract is deployed through the factory's `deploy` function, which passes the following parameters to the trading constructor.
+The market opens in the active state. It keeps the settlement token, the vault, the oracle, the treasury, and the price stream from the moment it exists. [Markets](../markets/overview.md) says why those stay fixed under an open position.
 
-| Parameter | Type | Description |
-|---|---|---|
-| `owner` | `Address` | Admin address with permission to configure markets and parameters |
-| `token` | `Address` | SEP-41 collateral token (e.g., USDC) |
-| `vault` | `Address` | Paired strategy vault (precomputed by factory) |
-| `price_verifier` | `Address` | Pyth Lazer price verification contract |
-| `treasury` | `Address` | Protocol treasury (inherited from factory) |
-| `feed_id` | `u32` | Pyth Lazer feed id for the market, immutable for the life of the contract |
-| `exponent` | `i32` | Price exponent for the feed, immutable, sets `price_scalar = 10^-exponent`. Must be between -18 and 0 inclusive, rejected otherwise |
-| `config` | `Config` | Global trading configuration (see below) |
+## The market refuses a parameter set that breaks a bound
 
-`feed_id` and `exponent` anchor the contract to a single oracle feed and its precision for good. There is no function to change either after deployment. A new feed or a re-scaled exponent means a fresh trading contract.
+The market checks the starting parameters at deployment and checks every replacement that its owner makes later. A set that breaks a bound, or puts two related values in the wrong order, is refused whole. The bounds are part of the market code, so only a replacement of that code changes them. A market owner can choose any value inside them.
 
-## Trading Configuration
+### Ceilings and floors
 
-The `Config` struct carries the fee, sizing, risk, and vault-order parameters that govern a single market. It is set at construction and can later be replaced wholesale by the owner, subject to the same validation bounds described below. A borrowing-parameter change additionally requires a borrowing accrual in the same ledger, and a funding-parameter change first settles funding under the outgoing parameters.
+Every fee, rate, margin, and profit limit is zero or more. The table gives the range that the protocol accepts for each value with a fixed bound.
 
-### Sizing and Fees
+| Value | Range |
+| --- | --- |
+| Keeper share of fees | 0% to 50% |
+| Each of the two trade fee rates | 0% to 1% of the size a fill moves |
+| Each of the two vault fee rates | 0% to 1% of the assets a fill moves |
+| Impact fee rate on a fill | up to 10% of the size the fill moves |
+| Utilization cap for an increase, measured against half the vault balance | above 0% to 1000% |
+| Utilization cap for a redeem, measured against half the vault balance | the increase cap to 1000% |
+| Initial margin | 0.1% to 50%, which is 1000x down to 2x leverage |
+| Liquidation fee | 0% to 25% of the size that closes |
+| Decrease lock on new size | 15 seconds to 1 day |
+| Redeem cooldown | 0 seconds to 30 days |
+| Borrowing rate at full utilization | up to 1000% a year |
+| Funding cap | up to 1000% a year in either direction |
+| Auto-deleveraging trigger, as pending profit against half the vault balance | 45% to below 100% |
+| Auto-deleveraging clear target, on the same measure | 40% to the trigger |
+| Profit cap level, on the same measure | the trigger to below 100% |
 
-| Field | Scale | Bounds | Description |
-|---|---|---|---|
-| `keeper_rate` | SCALAR_18 | 0 to `MAX_KEEPER_RATE` (50%) | Keeper's share of trade fees and vault-order fill fees |
-| `min_position_notional` | token-dec | greater than 0, less than `max_position_notional` | Minimum notional size per position |
-| `max_position_notional` | token-dec | greater than `min_position_notional`, at most `max_open_interest` | Maximum notional size per position |
-| `max_open_interest` | token-dec | at least `max_position_notional` | Per-side open-interest ceiling across all positions on that side |
-| `min_order_notional` | token-dec | greater than 0, at most `min_position_notional` | Minimum absolute notional per order, a dust floor sized so a full position can still close in a single order |
-| `min_order_collateral` | token-dec | greater than 0 | Minimum absolute collateral per order, a dust floor |
-| `exec_fee` | token-dec | at least 0, no upper bound | Flat keeper execution fee escrowed with every trade and vault order at creation, paid to the keeper on fill and refunded on cancel, including the auto-cancel of resting decrease orders when a position fully closes |
-| `fee_dom` | SCALAR_18 | 0 to `MAX_FEE_RATE` (1%), at least `fee_non_dom` | Trade fee charged to the dominant side |
-| `fee_non_dom` | SCALAR_18 | 0 to `MAX_FEE_RATE` (1%) | Trade fee charged to the non-dominant side |
-| `impact_scalar` | token-dec | greater than 0 | Sets the size-quadratic price-impact fee: a fill pays its size squared divided by the scalar, at a rate capped at 10% of the fill |
+The size limits, the execution fee, the smallest deposit, and the vault balance cap have a floor and no protocol ceiling. The owner of a market can therefore set them as high as it chooses.
 
-### Utilization Caps
+### Ordering rules
 
-Utilization is measured per side: each side's reserved open interest against half the vault balance. Opens are blocked once either side's utilization would exceed `max_util_open`, and the same half-vault capacity is the denominator of that side's borrowing curve.
+Related values must keep a fixed order. Each rule below carries the reason that the protocol enforces it.
 
-| Field | Scale | Bounds | Description |
-|---|---|---|---|
-| `max_util_open` | SCALAR_18 | greater than 0, at most `MAX_UTIL` (1000%) | Opens are blocked once either side's utilization would exceed this cap. Also sets the per-side borrow-reserve denominator used by the borrowing curve |
-| `max_util_withdraw` | SCALAR_18 | at least `max_util_open`, at most `MAX_UTIL` (1000%) | Redeem fills are blocked once either side's utilization exceeds this higher cap, holding a buffer of vault liquidity above the open cap |
+- **Trade fees.** The fee on the part of a fill that widens the gap between the sides is at least the fee on the narrowing part. The side that pushes the market out of balance never pays less.
+- **Sizes.** The smallest position is above zero and below the largest position. The cap on the total size of one side is at least the largest position, so one full-size position always fits.
+- **Order floors.** The smallest order size is above zero and at most the smallest position size. A full position can then close in a single order.
+- **Execution fee.** The execution fee is at most the smallest order margin. No order carries a flat fee above the least margin it may post.
+- **Impact fee.** The impact fee on the smallest position stays at or under 0.1% of its size, whatever growth the owner sets. A minimum-size fill therefore never pays a steep rate.
+- **Margins.** The liquidation fee is below the maintenance margin, and the maintenance margin is below the initial margin. The gap leaves an equity band in which a liquidation returns a remainder.
+- **Fresh positions.** The initial margin is above the maintenance margin, plus the lower trade fee, plus 0.1%. A new position of the smallest size is never liquidatable at birth.
+- **Decrease lock.** The lower limit of the lock equals the longest strict age limit that the oracle accepts. One accepted price can therefore never open and close the same size.
+- **Utilization.** The cap for a redeem is at least the cap for an increase. The gap between them keeps vault liquidity behind the open positions.
+- **Borrowing curve.** The bend sits below full utilization. The rate at full utilization is at least the slope below the bend.
+- **Funding.** The wind-down level is at most the build-up level, and the build-up level is at most 100%. The minimum funding charge is at most the cap.
+- **Profit limits.** The clear target is at most the trigger, and the trigger is at most the profit cap level. Auto-deleveraging therefore starts before the profit cap applies. The redeem block level is above zero and at most the clear target, so a permitted redeem can neither arm auto-deleveraging nor keep it armed.
+- **Deposit floor.** The smallest deposit is above zero and at most 1% of the vault balance cap. A higher floor can then never block every deposit.
 
-### Margin and Liquidation
+### A change to interest or funding waits for an accrual
 
-| Field | Scale | Bounds | Description |
-|---|---|---|---|
-| `init_margin` | SCALAR_18 | `MIN_MARGIN` (0.1%) to `MAX_MARGIN` (50%), greater than `maintenance_margin` | Initial margin requirement. Maximum leverage is 1 divided by `init_margin` |
-| `maintenance_margin` | SCALAR_18 | greater than `liq_fee`, less than `init_margin` | Maintenance margin floor. A position becomes liquidatable once its equity falls below this fraction of notional |
-| `liq_fee` | SCALAR_18 | 0 to `MAX_LIQ_FEE` (25%), less than `maintenance_margin` | Fee charged on hard liquidations, where equity has fallen below this fraction of notional. Liquidations above that line charge no fee |
+A change to a borrowing value or a funding value lands only in a ledger in which the market has already accrued. Accrual charges the interest and funding owed up to that ledger. The open utilization cap counts as a borrowing value, because it sets the capacity that the borrowing rate is measured against. The time before the change is therefore priced at the old values. A frozen market skips this step. The first accrual after the freeze prices the whole frozen window at the new values.
 
-### Position Lifecycle
+## The vault takes one authorized caller at deployment
 
-| Field | Scale | Bounds | Description |
-|---|---|---|---|
-| `notional_lock` | seconds | `MIN_NOTIONAL_LOCK` (15s) to `MAX_NOTIONAL_LOCK` (1 day) | Decrease lock on newly added notional. The floor matches the price verifier's maximum staleness, so an accepted stale price can never open and close the same size |
+The vault is deployed in the same call as its market. It receives the values below. Read [Vault](../vault/overview.md) for how it holds liquidity and issues shares.
 
-### Borrowing
+| Input | What it sets |
+| --- | --- |
+| Name and symbol | The labels of the share token. |
+| Settlement token | The token the vault holds. It is the token of the market. |
+| Extra share decimals | The decimals of the share token beyond those of the settlement token. The limit is 10. The extra decimals make the share price hard to inflate with a direct donation of tokens. |
+| Authorized market | The one contract that can move the vault's assets. It is the market deployed with the vault. |
 
-Borrowing follows a kink model over reserve utilization: a flat slope below the kink, a steeper one above it.
+The vault carries no fee, no deposit floor, and no cooldown of its own. The market applies those from its own parameter set.
 
-| Field | Scale | Bounds | Description |
-|---|---|---|---|
-| `target_util` | SCALAR_18 | 0 to just under 100% | Kink utilization on the normalized reserve curve where the borrowing-rate slope steepens |
-| `borrow_rate` | SCALAR_18, per second | 0 to `increased_borrow_rate` | Borrowing-rate slope below the kink |
-| `increased_borrow_rate` | SCALAR_18, per second | `borrow_rate` to `MAX_BORROW_RATE` (1000% APR) | Borrowing rate at full utilization |
+## The oracle is deployed apart from the factory
 
-### Funding
+The oracle is deployed on its own, and any number of markets can name it. Every market that names it shares the settings below. [Prices](../markets/prices.md) covers how the market applies them to a report.
 
-Funding follows a velocity model: the rate accelerates as the skew between long and short open interest widens, and decays back once the skew narrows. See [funding rate](../trading/funding-rate.md) for the mechanics.
+| Input | What it sets |
+| --- | --- |
+| Owner | The account that can change the two age limits and the spread narrowing. |
+| Verifier | The Chainlink Data Streams verifier contract that holds the set of signing publishers. No oracle call changes it. Only an upgrade of the oracle code can. |
+| Strict age limit | The oldest price that a fill of a trade order or a vault order accepts. It ranges from 3 to 15 seconds. |
+| Wider age limit | The oldest price that a liquidation, an auto-deleveraging update or close, or an accrual accepts. A gap in the stream then cannot stop those calls. It ranges from the strict limit to 120 seconds. |
+| Spread narrowing | The share of the spread that the oracle removes from a quote, taken evenly from both sides. It ranges from 0% to 100%. |
 
-| Field | Scale | Bounds | Description |
-|---|---|---|---|
-| `funding_increase` | SCALAR_18, per second squared | 0 to `MAX_FUNDING_RATE` | Velocity acceleration as the skew widens |
-| `funding_decrease` | SCALAR_18, per second squared | 0 to `MAX_FUNDING_RATE` | Velocity decay once the skew sits inside the decay band |
-| `threshold_stable_funding` | SCALAR_18 | 0 to 100% | Skew band within which the funding rate holds steady |
-| `threshold_decrease_funding` | SCALAR_18 | 0 to `threshold_stable_funding` | Skew band within which the funding rate decays back toward zero |
-| `funding_min` | SCALAR_18, per second | 0 to `funding_max` | Floor on the rate actually charged |
-| `funding_max` | SCALAR_18, per second | `funding_min` to `MAX_FUNDING_RATE` (1000% APR) | Hard cap on the funding rate |
+## The treasury sets one fee share for every market
 
-### Risk and Auto-Deleveraging
+The treasury is deployed on its own, and the factory hands its address to each new market. It receives two inputs. The owner is the account that can change the share and withdraw the treasury's balance to any recipient. The share is the fraction of protocol fees that the treasury takes. It ranges from 0% to 50%.
 
-Every rung below is a side's pending PnL measured as a fraction of half the vault balance. See [auto-deleveraging](../trading/adl.md) for the mechanics.
+The owner can change the share at any time. The new share applies to the next fee that the market settles. [Fees](../trading/fees.md) says which charges the share covers and how the keeper and the vault split the rest.
 
-| Field | Scale | Bounds | Description |
-|---|---|---|---|
-| `adl_max_pnl` | SCALAR_18 | `MIN_ADL_TRIGGER` (45%) to `max_pnl_trader`, under 100% | Threshold that arms auto-deleveraging for the crowded side |
-| `adl_clear_target` | SCALAR_18 | `MIN_ADL_CLEAR` (40%) to `adl_max_pnl` | Target that auto-deleveraging closes positions down to once armed |
-| `max_pnl_trader` | SCALAR_18 | at least `adl_max_pnl`, under 100% | Realized-profit haircut threshold. While a side's pending PnL exceeds this fraction, close payouts on that side scale down proportionally. Also caps each side's pending profit in the net PnL used to price vault shares |
+## A timelock can own a market
 
-### Vault Orders
+The timelock is optional. It is deployed on its own and then made the owner of a market. It receives an owner and one wait. The wait ranges from 1 second to 60 days, and it sets how long every queued change waits before anyone can apply it. A change to the wait itself waits out the wait in force. A change of market state is the exception and skips the queue. [Governance](../governance.md) covers the queue and what it means for a market you trade in.
 
-A deposit order fills as soon as a keeper submits a verified price published strictly after the order's creation, subject to the order's own `min_out` bound, the `min_deposit` floor at creation, and the `max_vault_balance` ceiling. Only the redeem side has a cooldown, and redeem fills are additionally gated on pending trader PnL, with each side's pending profit measured against half the post-redeem vault balance. See [providing liquidity](../vault/depositing.md) for the mechanics.
+## The factory derives both addresses before either contract exists
 
-| Field | Scale | Bounds | Description |
-|---|---|---|---|
-| `redeem_lock` | seconds | 0 to `MAX_REDEEM_LOCK` (30 days) | Cooldown from a vault order's creation before a redeem can fill |
-| `deposit_fee` | SCALAR_18 | 0 to `MAX_FEE_RATE` (1%) | Fee charged on deposit fills, taken from the assets moved |
-| `redeem_fee` | SCALAR_18 | 0 to `MAX_FEE_RATE` (1%) | Fee charged on redeem fills, taken from the proceeds |
-| `min_deposit` | token-dec | greater than 0, at most `max_vault_balance` divided by 100 | Minimum assets per deposit order, enforced at creation. Redeems have no minimum amount |
-| `max_pnl_withdraw` | SCALAR_18 | greater than 0, at most `max_pnl_trader` | Redeem fills are blocked while either side's pending PnL exceeds this fraction of half the post-redeem vault balance |
-| `max_vault_balance` | token-dec | greater than 0, at least `min_deposit` times 100 | Vault balance ceiling enforced on deposit fills |
+The market needs the address of its vault at construction, and the vault needs the address of its market. Neither contract can exist first. The factory resolves this by deriving both addresses from the owner's address and a value the deployer picks, before it deploys anything. It then deploys the vault with the market address, and the market with the vault address. No linking step follows. Both contracts are fully configured from their first ledger, and the vault accepts asset movements from its market alone. The market address comes from the owner and the value the deployer picks. The vault address comes from the same owner and a second value that the factory computes from the first. [Contract addresses](./contract-addresses.md) says what the two inputs are and why no other account can take an address. The [factory pages](/technical/factory/deploy) give the exact derivation.
 
-A configuration that violates any bound, or that gets the relative ordering between two fields wrong (such as `fee_dom` below `fee_non_dom`, or `min_position_notional` above `max_position_notional`), is rejected at construction and on every later `set_config` call.
+## What the bounds mean for you
 
-## Strategy Vault
-
-The vault is also deployed through the factory, receiving its parameters from the same `deploy` call.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `name` | `String` | Vault share token name (e.g., "Zenex USDC Vault") |
-| `symbol` | `String` | Vault share token symbol (e.g., "zUSDC") |
-| `asset` | `Address` | Underlying collateral token (same as trading's `token`) |
-| `decimals_offset` | `u32` | Extra share-token decimals on top of the asset's own decimals, hardening the share price against donation-based inflation attacks. Capped at 10 by the token library |
-| `strategy` | `Address` | Authorized trading contract (precomputed by factory) |
-
-The `strategy` parameter is the only address authorized to call the vault's `strategy_deposit`, `strategy_redeem`, and `strategy_withdraw` entry points. It is set to the precomputed trading contract address, which the factory calculates before either contract exists. LP sizing rules, including the minimum deposit amount, the redeem cooldown, and the vault-order fee, are not vault constructor parameters. They live on the trading contract's `Config` and are documented above under Vault Orders.
-
-## Price Verifier
-
-The price verifier is deployed independently (not through the factory) and can be shared across multiple trading contracts.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `owner` | `Address` | Admin address for configuration updates |
-| `lazer` | `Address` | Deployed Pyth Lazer verification contract that holds the trusted-signer set |
-| `max_confidence_bps` | `u32` | Maximum allowed confidence interval in basis points |
-| `max_staleness` | `u64` | Maximum age of a price update in seconds (hard cap: 15s) |
-
-Signature verification is delegated entirely to the `lazer` contract, which checks the LE-ECDSA envelope against its own trusted-signer set and returns the verified inner payload. The price verifier only parses that payload and enforces confidence and staleness on it. The `max_confidence_bps` parameter rejects prices whose confidence interval exceeds the threshold, preventing the protocol from accepting highly uncertain oracle data. The `max_staleness` parameter rejects prices that are too old, ensuring the protocol operates on recent market data. The constructor and `update_max_staleness` both reject any value above `MAX_STALENESS_SECONDS = 15`. This cap is the floor for the trading contract's `notional_lock`, so an accepted stale price can never open and close the same size.
-
-## Treasury
-
-The treasury is also deployed independently and referenced by the factory.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `owner` | `Address` | Admin with permission to adjust rate and withdraw funds |
-| `rate` | `i128` (SCALAR_18) | Fraction of protocol fees directed to treasury, bounded to 0 to 50% |
-
-The treasury rate determines what percentage of protocol revenue (base fees, impact fees, borrowing fees, vault-order fill fees, and forfeited liquidation remainders) is retained by the protocol versus flowing to vault depositors. A rate of `100_000_000_000_000_000` (10% in SCALAR_18) means the treasury keeps 10% of all protocol fees. This rate can be adjusted after deployment by the treasury owner via `set_rate`.
-
-## Governance
-
-The governance contract is an optional timelock proxy deployed independently and assigned as the owner of a trading contract.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `owner` | `Address` | Admin who can queue parameter changes |
-| `delay` | `u64` | Minimum seconds between queuing and executing a change |
-
-The `delay` must be non-zero and at most 60 days (`60 * 24 * 3600` seconds). Values outside this range cause the constructor to panic. The delay can be changed after deployment via `set_delay`, and the new value takes effect only after the current delay has elapsed, so the timelock cannot be shortened instantly.
-
-The delay parameter enforces a timelock on all configuration updates. When the owner queues a parameter change (such as updating `Config`), it specifies the target contract address at call time. The change cannot be executed until `delay` seconds have passed. This gives traders and LPs time to react to upcoming parameter changes. `set_status` is exempt from the timelock, allowing immediate emergency pauses.
-
-## Circular Dependency Resolution
-
-The factory resolves a fundamental circular dependency between the trading contract and the vault. The trading contract needs the vault address at construction (to call `total_assets` and `strategy_withdraw`), while the vault needs the trading address at construction (to authorize `strategy_withdraw` calls from the trading contract).
-
-The factory solves this by precomputing both addresses using deterministic salt derivation before deploying either contract. The vault is deployed first with the precomputed trading address as its `strategy`. The trading contract is deployed second with the precomputed vault address. No post-deployment linking or initialization step is required. Both contracts are fully configured from the moment they are instantiated.
+The bounds cap the worst case and do not fix a value. Two markets can sit at opposite ends of the same range. The owner of a market can replace its values at any time inside the bounds. A timelock delays that replacement when the market has one.

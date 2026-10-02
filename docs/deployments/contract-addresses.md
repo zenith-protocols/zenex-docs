@@ -1,46 +1,34 @@
 ---
 sidebar_position: 1
-title: Contract Addresses
+title: Contract addresses
 ---
 
-# Contract Addresses
+# Contract addresses
 
-Zenex contracts are deployed through the factory contract, which deterministically computes addresses for each trading and vault pair. This means that given the same admin address and salt, the resulting contract addresses are predictable before the deployment transaction is submitted. Integrators can verify any trading contract's legitimacy by calling `is_deployed` on the factory, which returns `true` for every trading contract address the factory has deployed.
+This page lists the contracts of the Zenex mainnet deployment. It shows how you check where a market came from and says which contracts can change their own code. The addresses are live state, so each record carries its stack name and date. Testnet deployments are not listed here.
 
-## Address Derivation
+## The factory creates every market
 
-The factory uses Soroban's `with_address` deployer to precompute both the trading and vault addresses before either contract is instantiated. Each address is derived from the admin's address and a salt, not from the factory contract itself, so the same admin and salt always produce the same pair of addresses regardless of which factory instance is asked to deploy them. Soroban also requires the address passed to `with_address` to authorize the call, so the admin's own signature is what unlocks a deployment at a given address. A salt alone cannot be front-run by another caller. The caller supplies a 32-byte salt for the trading address, and the vault address uses the same salt with a single bit flipped, so one salt deterministically yields both addresses. The exact derivation is documented on the [technical factory page](/technical/factory/overview).
+The factory is the contract that creates each market together with its vault. Any account can call it, and the account that signs the call becomes the owner of the new market. The deployer chooses the market's parameters within the bounds the market accepts.
 
-Because the WASM hashes are immutable within a factory instance (set at construction and never modifiable), every pool deployed by the same factory runs identical contract code. A new factory must be deployed to use updated WASM.
-
-## Testnet
-
-The following contracts are deployed on Stellar testnet (`https://soroban-testnet.stellar.org`).
-
-| Contract | Address | Notes |
-|---|---|---|
-| Factory | _TBD_ | Canonical deployment registry |
-| Trading | _TBD_ | Deployed via factory |
-| Strategy Vault | _TBD_ | Deployed via factory (paired with trading) |
-| Price Verifier | _TBD_ | Pyth Lazer oracle verification |
-| Treasury | _TBD_ | Protocol fee accumulator |
-| Governance | Not deployed | Timelock that queues and executes owner actions after a delay. Not part of the current testnet deployment. |
-| Trading Router | _TBD_ | Stateless call router for batched and atomic flows |
-
-These addresses will be populated after the current testnet deployment cycle is finalized.
+Both addresses of a pair follow from two inputs. The first is the account that owns the market. The second is a 32-byte number that the deployer picks, called the salt. The vault address comes from the same salt, so one salt fixes both addresses before either contract exists. The address of the factory takes no part in the derivation. Because the owning account must sign the deployment, no other account can deploy to an address that belongs to that account and salt. The [factory pages](/technical/factory/overview) give the exact derivation.
 
 ## Mainnet
 
-Mainnet deployment details will be added after launch. The same factory-based deployment model will be used, and addresses will be deterministic given the admin address and salt used for each deployment.
+Zenex has no mainnet deployment yet. When it launches, this section records the stack name and date, the factory, oracle, treasury, market router, referral, and governance addresses, the settlement token, the owner of each contract, and one row per market with its market contract and vault. Every market goes through the factory, so the check below applies to it from the first day.
 
-## Verifying Deployed Contracts
+## A factory answer shows where a market came from
 
-The factory serves as the canonical registry for all legitimately deployed trading contracts. To verify that a given address is an authentic Zenex trading contract, call the factory's `is_deployed` function with the trading address. It returns `true` if the address was deployed through that factory instance and `false` otherwise. Only trading contract addresses are registered in the factory. Vault addresses are not tracked directly, but each trading contract stores its paired vault address, readable through the trading contract's `get_vault` function.
+To check a market, ask the factory whether it deployed that address. The factory answers yes for a market it deployed and no for any other address. It remembers each market it created, but only as a yes or no for an address you give it. It cannot give you a list of its markets, and it does not store vault addresses. To find the vault of a market, ask the market, which reports its vault address. If the factory's record of a market has expired from the ledger, the call fails instead of answering no, so a failed call proves nothing. Restoring the record makes the factory answer yes again.
 
-Discovery of deployed pools relies on indexing the `Deploy` events emitted by the factory at deployment time, since the factory contract itself exposes no enumeration function to list them.
+To find the markets of a factory, read its deployment events from the chain. Each event names the market and the vault of one pair.
 
-## WASM Hash Immutability
+A yes shows that the factory created the pair. It does not show who owns the market, because any account can deploy through the factory. The factory installs the market and vault code, and sets the treasury, that its own owner has recorded at the moment of the deployment. That owner can replace the record at any time, and the change reaches later deployments only. **A yes therefore does not vouch for the market's rules.** The owner of the market holds them.
 
-The WASM hashes stored in the factory at construction time cannot be changed. This is an intentional security property: it guarantees that every pool deployed by a given factory runs the same contract code. If a security fix or feature upgrade is needed, a new factory must be deployed with the updated WASM hashes. Existing pools deployed by the old factory continue running their original code.
+## Three contracts can change their own code
 
-No Zenex contract exposes an upgrade function. Trading, vault, factory, treasury, price-verifier, governance, and the trading router all keep their code immutable once deployed. Configuration values remain adjustable through each contract's owner-gated setters, but no contract can swap out its logic. A logic change to any of them means deploying a fresh instance, and for a market, that means a fresh trading contract and vault pair through a new factory carrying the updated WASM hashes.
+The owner of a market, of the oracle, and of the factory can each replace the code of that contract in place. The stored state survives the replacement. If the governance timelock owns one of them, every replacement waits out the delay of the timelock. [Governance](../governance.md) covers the timelock.
+
+The vault, the treasury, the market router, and the governance contract have no way to replace their code. The vault answers only to its market, so the code that holds the liquidity cannot change under the providers.
+
+A pair that is already deployed does not depend on the factory's record of code. Its own owner holds the right to replace the code of the market from the moment of the deployment.

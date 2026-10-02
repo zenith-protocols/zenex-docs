@@ -1,47 +1,89 @@
 ---
-sidebar_position: 4
 title: Fees
+sidebar_position: 5
 ---
 
 # Fees
 
-An order on Zenex carries five itemized costs: the trade fee, the impact fee, borrowing interest, funding, and a flat execution fee. Two of them (borrowing and funding) accrue continuously over the life of a position and are covered on their own pages. The trade fee and impact fee are charged at each fill and come out of your collateral. The execution fee is escrowed when you create an order and goes to the keeper that fills it. Together these costs compensate the vault, reward the keepers that run the protocol, fund the treasury, and keep long and short exposure balanced.
+A fill pays up to five charges. Two of them, the trade fee and the impact fee, scale with the size the fill moves. The execution fee is one flat amount per order. Borrowing interest and any funding you owe settle on every fill. Each transaction you sign also pays a network fee. This page itemizes each charge, says who pays it and when, and says where it goes. The [Keepers](../keepers.md) page describes the keeper that submits a fill.
 
-Fees are computed at the moment of the fill from the market's current rates and deducted from the collateral escrowed with your order. If the escrowed collateral cannot cover the fees and the margin requirement, the fill is rejected and the order rests until it can fill or expires. You can cancel a resting order at any time and recover the full escrow.
+## Costs come out of your margin, and profit pays first on a close
 
-All rates described below are per-market parameters and may change through the protocol's [parameter-change process](../governance/parameter-changes.md). Current values can be found in [Market Parameters](../markets/market-parameters.md#current-testnet-values).
+The market computes the trade fee and the impact fee at the fill, from the market's rates and the book at that moment. On an open, both come out of the margin you posted with the order. If they are larger than that margin, the rest comes out of the margin already behind the position. On a close, your realized profit pays them first, and the margin behind the position pays what the profit did not cover. The borrowing interest and any funding you owe come off the same way.
 
-## 1. Trade Fee (skew-split)
+Each market sets its two trade fee rates, its execution fee, how fast its impact fee grows, and its keeper share. The treasury share is one rate held by the treasury, not by the market. The protocol caps each trade fee rate at 1% of the size a fill moves and caps the impact fee at 10% of that size. For how a value changes, see the [parameter-change process](../governance.md). For the values in use, see [Market parameters](../markets/market-parameters.md#current-testnet-values).
 
-The trade fee is charged on every fill that changes your position size, and is split by how your trade affects the market's balance. A fill that only adds or removes collateral pays no trade fee. The market compares the total long size and total short size (measured in tokens). The leg of your trade that pushes those two further apart is the worsening leg, and the leg that brings them closer is the improving leg.
+## The trade fee is lower on the thinner side
 
-- The worsening leg pays the higher, dominant-side rate.
-- The improving leg pays the lower, non-dominant rate.
+The trade fee applies to the size a fill moves, on an open and on a close alike. A fill that only adds or removes collateral moves no size and pays no trade fee.
 
-A trade that lands entirely on the crowded side pays the higher rate on its whole notional, while a trade that helps balance the book pays the lower rate. This makes it slightly cheaper to take the underrepresented side and encourages balance between long and short open interest. Which side is dominant is decided by the token imbalance, not by notional.
+Each market carries two trade fee rates, and your fill can pay both. The higher rate applies to the part of the fill that pushes long and short exposure further apart. The lower rate applies to the part that brings them closer together. The market weighs the tokens held long against the tokens held short, so a price move alone never decides which side is crowded.
 
-## 2. Impact Fee
+A fill that adds to the crowded side pays the higher rate on its whole size. A fill out of a balanced book pays the higher rate too, whichever side it takes. A fill that brings the two sides closer together pays the lower rate, and a close on the crowded side is such a fill. If your fill carries the book past balance onto the other side, the two rates divide it. The part that runs the imbalance down to zero pays the lower rate, and the part beyond zero pays the higher rate. The gap between the two rates makes the thinner side cheaper to take.
 
-The impact fee reflects the cost that a large trade would impose on pricing in a traditional order book. Every fill that moves size pays it on the full size of the fill, and the fee rate grows with that size: doubling the fill quadruples the fee. The rate is capped at 10% of the fill's size.
+The rates in this example are an illustration and not rates in use. Take a market with a higher rate of 0.10% and a lower rate of 0.04%. Longs hold 2,000 USDC more than shorts at the fill price.
 
-How quickly the rate grows is set by the market's impact scalar, a per-market parameter tuned to the liquidity of the asset. A larger scalar means a gentler curve.
+| Your fill | Part at the higher rate | Part at the lower rate | Trade fee |
+| --- | --- | --- | --- |
+| Open a long of 5,000 USDC | 5,000 USDC | 0 | 5.00 USDC |
+| Open a short of 1,000 USDC | 0 | 1,000 USDC | 0.40 USDC |
+| Open a short of 5,000 USDC | 3,000 USDC | 2,000 USDC | 3.80 USDC |
+| Close 1,000 USDC of a long | 0 | 1,000 USDC | 0.40 USDC |
+| Close 1,000 USDC of a short | 1,000 USDC | 0 | 1.00 USDC |
 
-For example, a market with an impact scalar of 100,000 USDC charges 10 USDC on a 1,000 USDC fill (a 1% rate) and 40 USDC on a 2,000 USDC fill (a 2% rate). Larger fills pay a higher rate on a larger size, which discourages oversized trades and protects vault depositors from the risk they create, while splitting the same size across smaller fills over time pays less.
+The third row carries the book past balance. The first 2,000 USDC runs the imbalance to zero, and the other 3,000 USDC lands on the short side.
 
-## 3. Borrowing and Funding
+## The impact fee grows with the square of the size
 
-In addition to the per-fill fees above, an open position carries two continuous costs.
+Every fill that moves size pays the impact fee on the full size of the fill, whichever way the fill moves the balance. The rate grows with the size, so the fee grows faster than the size does. Below the ceiling, double the size of a fill and the fee is four times as large. The rate stops at 10% of the fill, and above that point the fee grows in step with the size. Each market sets how fast the rate grows.
 
-Borrowing interest is charged to the crowded side of the market: the side holding the larger token exposure pays, the smaller side pays nothing (a dead-even book charges both sides). The rate follows a kink model tied to how much of the vault's capacity that side reserves. See [Borrowing Interest](./borrowing-interest.md).
+The numbers below are an illustration and not a rate in use. Take a market where a 1,000 USDC fill pays 10 USDC.
 
-Funding is a transfer between longs and shorts driven by the market's imbalance. The crowded side pays it, and the payment counts against the position like any other cost. The other side earns it, and earned funding accrues to a claimable balance you withdraw separately rather than being credited to your position. See [Funding Rate](./funding-rate.md).
+| Size of the fill | Impact fee | Rate on the fill |
+| --- | --- | --- |
+| 1,000 USDC | 10 USDC | 1% |
+| 2,000 USDC | 40 USDC | 2% |
+| 5,000 USDC | 250 USDC | 5% |
+| 10,000 USDC | 1,000 USDC | 10% |
+| 20,000 USDC | 2,000 USDC | 10% |
 
-## 4. Keeper Reward and Treasury Cut
+An order fills in one piece, so the fee follows the whole size the fill moves. That size is the size your order asks for, unless a decrease closes your position in full. The fee then follows the whole position, and [Positions](./positions.md) says which decreases close in full. Below the ceiling, several smaller orders pay less impact fee in total than one large order. In the table, two fills of 5,000 USDC pay 500 USDC together, and one fill of 10,000 USDC pays 1,000 USDC. Once every part sits at or above the ceiling, a split saves nothing.
 
-The fees you pay are shared among the parties that keep the market running.
+## The execution fee is flat and goes to the keeper
 
-The keeper that submits the price and executes your fill receives a cut of the trade fee (base plus impact) at a per-market rate, plus the flat execution fee that was escrowed with your order. The execution fee is a per-market amount, held alongside your collateral from the moment you create the order rather than deducted from your collateral at the fill, and refunded in full if you cancel. Together these two pieces are what pay permissionless keepers to fill orders. Liquidations and auto-deleveraging involve no order and carry no execution fee, so the keeper that performs them earns only the trade-fee cut.
+Each order carries one flat execution fee, and each market sets the amount. You escrow it when you create the order, on top of any margin you post. [Orders](./orders.md) gives what each kind of order escrows. The market copies the fee in force at creation into the order, so a later change to the market's fee leaves a resting order alone.
 
-The treasury takes its own cut of the trade fee and of the borrowing fee (and of any forfeited remainder on a hard liquidation). The treasury rate is read from the treasury contract and bounded by the protocol.
+A fill pays the fee in full to the keeper. Whoever submits the fill names the account that receives it. If you cancel the order, you get the fee back in full. A full close of the position also cancels a resting decrease order and refunds its fee, as [Positions](./positions.md) describes.
 
-Whatever remains after the keeper and treasury cuts is retained by the vault as yield for liquidity providers, and the vault is also what funds realized profit and absorbs any bad debt.
+A liquidation and a forced close under auto-deleveraging consume no order, so neither carries an execution fee. For what the liquidation fee is and what it costs you, see [Liquidation](./liquidation.md).
+
+## The network fee is paid in the token you trade with
+
+Every transaction you sign costs a network fee. The token you trade with pays it, so you do not need to hold the network's own asset. Your signature names that token, names the account that receives the fee, and fixes a ceiling on the amount. A relayer sends your signed transaction to the network. The relayer picks the amount inside your ceiling. A fee above your ceiling fails the whole transaction.
+
+**A transaction that fails as a whole charges you no relayer fee.** The relayer bears the network's own charge for the failed attempt. A transaction that creates your order and lands, but whose fill fails, still charges the network fee. The order rests.
+
+## Fees divide between the keeper, the treasury, and the vault
+
+The trade fee and the impact fee divide three ways at the fill. The keeper takes a share of both at the market's rate. The treasury, the contract that collects the protocol's share, takes its own share of both. The vault keeps the rest. A liquidation adds the liquidation fee to the amount the three divide. The borrowing interest divides two ways. The treasury takes its share, the keeper takes none, and the vault keeps the rest.
+
+| Charge | Keeper | Treasury | Vault |
+| --- | --- | --- | --- |
+| Trade fee and impact fee | A share | A share | The rest |
+| Liquidation fee | A share | A share | The rest |
+| Execution fee | All of it | None | None |
+| Borrowing interest | None | A share | The rest |
+| Funding you pay | None | None | None |
+| Network fee | None | None | None |
+
+Funding you pay is banked for the traders on the earning side of the market, who claim it as credit. See [Funding rate](./funding-rate.md) and [Claimable credit](./claimable-credit.md). The network fee goes to the account your signature names.
+
+Each of the two shares has a ceiling of half, so the keeper and the treasury together can leave the vault nothing. What the vault keeps is yield for the liquidity providers who deposited into it. The vault is the counterparty on the other side of your trade. It also pays out your profit, and it absorbs a loss too large for your margin to cover.
+
+## Interest and funding accrue between fills
+
+An open position carries two more costs, and both accrue with time and not at a fill. Borrowing interest falls on the crowded side of the market. Funding moves between longs and shorts with the market's imbalance. The market settles each the next time a fill changes your position. For the borrowing rate and what it charges, see [Borrowing interest](./borrowing-interest.md). For the funding rate and which side pays it, see [Funding rate](./funding-rate.md).
+
+## What this means for you
+
+An open takes its fees out of your margin at once. The margin behind a new position is the margin you posted less those costs. The trade fee and the impact fee follow the size and the imbalance at the moment of the fill. The rate your fill pays can differ from the rate you saw when you signed. A cancel returns your execution fee in full, and only the network fee stays spent.

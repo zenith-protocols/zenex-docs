@@ -1,1 +1,9 @@
-{"label":"Governance","position":7,"collapsed":true}
+{
+  "label": "Governance",
+  "position": 10,
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "governance/overview"
+  }
+}

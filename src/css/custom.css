@@ -670,7 +670,7 @@ blockquote {
   opacity: 0.05;
   pointer-events: none;
   z-index: -1;
-  background-image: url('/static/img/Zenex\ Brand\ LogoAssets\ \(2\).svg');
+  background-image: url('/img/zenex-mark.svg');
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;

@@ -1,118 +1,117 @@
 ---
-slug: /technical
 sidebar_position: 1
-title: Architecture Overview
+title: Architecture overview
 ---
 
-# Architecture Overview
+# Architecture overview
 
-Zenex is a leveraged perpetual futures protocol built on [Stellar Soroban](https://soroban.stellar.org/). Each market is an isolated pair of contracts, a trading engine and a strategy vault, deployed atomically through a factory. The contracts interact through well-defined, one-directional interfaces.
+This page covers the contracts that make up a Zenex deployment and who calls them. It also covers how a call and a token move between the contracts, and how a new market comes into existence. The pages under each contract hold the entry points, storage, events, and errors in full. The [units page](./units.md) defines token-dec, feed precision, and the other scales used below.
 
-## System Contracts
+Zenex is a leveraged perpetual futures protocol on [Stellar Soroban](https://soroban.stellar.org/). Each market is an isolated pair of contracts, the `market` and its strategy vault, deployed together through the factory. The `market` takes orders, holds positions and their margin, and settles every fill. The vault holds the liquidity that stands on the other side of every position in that market. The contracts call each other through small, one-directional interfaces. The call graph is therefore explicit, and each piece of state has one writer.
 
-| Contract | Role |
-|---|---|
-| **Trading** | Single-market perpetual futures engine handling orders, netted positions, PnL, fees, funding, borrowing, liquidation, and ADL |
-| **Strategy Vault** | Tokenized vault acting as the liquidity pool and counterparty to traders, with all mutations gated to the registered strategy (the trading contract) |
-| **Treasury** | Protocol fee accumulator with a configurable rate |
-| **Factory** | Deterministic deployer for trading + vault pairs |
-| **Governance** | Optional timelock proxy for governance-controlled parameter changes |
-| **Price Verifier** | Pyth Lazer oracle adapter that verifies signed price updates against a market's feed |
-
-Each trading contract serves exactly one market, identified by its immutable `(feed_id, exponent)` oracle anchors set in the constructor: a deployment is the market. To run BTC and ETH perps you deploy two independent trading + vault pairs through the factory. The trading contract is immutable. Shipping a logic change means deploying a fresh contract and vault pair through the factory.
-
-Users interact with the perp engine through any Stellar wallet. The optional [`soroban-smart-account`](https://github.com/zenith-protocols/soroban-smart-account) repo provides a smart account, signature verifiers, a session policy, and a stateless fee-forwarder for gasless relays. See [Smart Account](./account/overview) for the full breakdown.
-
-## Roles
-
-Four roles interact with a trading contract.
-
-| Role | Authorization | What it does |
-|---|---|---|
-| **Admin** (owner) | `#[only_owner]` | `set_config`, `set_status`, `set_terminal_price`, and the Ownable transfer surface |
-| **Trader** | The user's own signature | Creates and cancels price-free trade orders, claims funding |
-| **LP Depositor** | The user's own signature | Creates and cancels vault orders (deposit and redeem) |
-| **Keeper** | Permissionless | Fills orders, liquidations, vault orders, and ADL at a verified price for a reward, and runs the unrewarded maintenance pokes (`accrue`, `accrue_funding`, `update_adl_state`) |
-
-A trader only ever creates and cancels intents. A permissionless keeper is what actually fills an order against a verified Pyth Lazer price. The keeper is not authenticated: it is simply the reward recipient the caller names, and the trader consented to the fill through the collateral and execution fee escrowed at order creation.
-
-## Data Flow
+## Every user call enters through the market
 
 ```mermaid
 flowchart TB
-    subgraph Actors["External Actors"]
+    subgraph Actors["External actors"]
         direction LR
         Trader["Trader"]
-        LP["LP Depositor"]
-        Keeper["Keeper Bot"]
-        Admin["Owner"]
+        LP["Liquidity provider"]
+        Keeper["Keeper"]
+        Owner["Owner"]
     end
 
-    subgraph Contracts["On-Chain Contracts (Zenex in green, Pyth in blue)"]
-        Trading["Trading"]
-        Vault["Strategy Vault"]
-        PV["Price Verifier"]
+    subgraph Contracts["On-chain contracts (Zenex in green, Chainlink in blue)"]
+        Market["Market"]
+        Vault["Strategy vault"]
+        Oracle["Oracle"]
         Treasury["Treasury"]
-        Lazer["Pyth Lazer"]
-        Executor["Wormhole Executor"]
+        Verifier["Chainlink Data Streams verifier"]
     end
 
-    Trader -->|"create_order / cancel_order / claim_funding"| Trading
-    LP -->|"create_vault_order / cancel_vault_order"| Trading
-    Keeper -->|"execute_order / execute_liquidation / execute_vault_order / execute_adl"| Trading
-    Keeper -->|"accrue / accrue_funding / update_adl_state (unrewarded)"| Trading
-    Admin -->|"set_config / set_status / set_terminal_price"| Trading
+    Trader -->|"create_order / cancel_order / claim_credit"| Market
+    LP -->|"create_vault_order / cancel_vault_order"| Market
+    Keeper -->|"execute_order / execute_liquidation / execute_vault_order / execute_adl"| Market
+    Keeper -->|"accrue / update_adl_state (unrewarded)"| Market
+    Owner -->|"set_config / set_status / set_terminal_price"| Market
 
-    Trading -->|"verify_price"| PV
-    PV -->|"verify_update"| Lazer
-    Trading -->|"strategy_withdraw / strategy_deposit / strategy_redeem"| Vault
-    Trading -->|"get_rate"| Treasury
+    Market -->|"verify_price"| Oracle
+    Oracle -->|"verify"| Verifier
+    Market -->|"strategy_deposit / strategy_redeem / strategy_withdraw"| Vault
+    Market -->|"get_rate"| Treasury
 
-    Executor -->|"update_trusted_signer / upgrade"| Lazer
-    Treasury ~~~ Executor
-    Vault ~~~ Executor
-    PV ~~~ Executor
-
-    style Trading fill:#0f2e24,stroke:#29a383,stroke-width:2px
+    style Market fill:#0f2e24,stroke:#29a383,stroke-width:2px
     style Vault fill:#0f2e24,stroke:#29a383
-    style PV fill:#0f2e24,stroke:#29a383
+    style Oracle fill:#0f2e24,stroke:#29a383
     style Treasury fill:#0f2e24,stroke:#29a383
-    style Lazer fill:#0d2847,stroke:#3b82f6
-    style Executor fill:#0d2847,stroke:#3b82f6
+    style Verifier fill:#0d2847,stroke:#3b82f6
 ```
 
-The trading contract is the only contract directly admin-controlled in the diagram. The price verifier and treasury both have their own owners that can update configuration (`update_max_staleness`, `update_max_confidence_bps`, `update_lazer` on the price verifier, `set_rate` and `withdraw` on the treasury). Those owners may be the same account, separate accounts, or a governance contract per deployment. See the dedicated [Governance](./governance/overview), [Treasury](./treasury/overview), and [Price Verifier](./price-verifier/overview) pages for the full owner-only surface on each contract.
+Every trader, liquidity provider, and keeper call lands on the `market`. On the trade path the `market` alone calls the vault, the oracle, and the treasury. It is the only caller that can deposit, redeem, or withdraw vault assets, and the only caller that mints or burns shares. It sends each keeper-supplied report to the oracle for checking. It asks the treasury for the rate that sets the protocol's share of each fee. Once the owner stores a terminal price on a delisted market, the `market` prices flat at that price and verifies no report. The oracle hands the signature check to Chainlink's verifier, whose address the oracle constructor sets and no entry point changes.
 
-LP deposits and redeems flow through the trading contract as vault orders, not by calling the vault directly. The vault's only mutations are the strategy-gated `strategy_deposit`, `strategy_redeem`, and `strategy_withdraw`, authorized to the registered strategy (the trading contract), so the trading engine is the single writer of vault share supply. The trading contract calls the vault through a minimal interface (`strategy_deposit`, `strategy_redeem`, `preview_redeem`, `strategy_withdraw`, `total_assets`, and the share token's `balance` and `transfer` for redeem escrow). The dependency is one-directional, which keeps the call graph and storage ownership easy to reason about.
+The diagram omits the router, the factory, and governance. The router batches calls to the `market` and holds no privilege. The factory deploys market and vault pairs, and its owner calls `set_init_meta`. The treasury owner calls `set_rate` and `withdraw`. Governance stands in for an owner and delays the owner calls that pass through it, except `Governance::set_status`.
 
-Every price-bearing call verifies its price through the same `verify_price` cross-contract call, which validates the submitted Pyth Lazer bytes against the market's immutable `(feed_id, exponent)` anchors. The exception is a delisted market with a stored terminal price, which prices flat and skips verification. Price-free maintenance (`accrue_funding`) and trader intents (`create_order`) carry no price at all.
+## Seven contracts make up a deployment
 
-The signature trust behind `verify_price` roots outside Zenex. The price verifier delegates the ECDSA check to Pyth's own Lazer contract on Stellar via `verify_update`, and that contract's trusted-signer set is governed by Pyth through Wormhole-signed governance messages. How those signers are managed is described on the [Price Verifier](./price-verifier/overview) page.
-
-The governance contract is an independent, optional contract. It is not deployed by the factory and is not bound to any specific target. It can be set as the owner of any admin-controlled contract (trading, treasury, price verifier, or even a separate governance instance) and adds a configurable timelock delay to parameter changes on whatever it owns. Owner-only calls flow through `queue` then `execute`, where `execute` is itself permissionless once the delay has elapsed. The one bypass is `set_status`, which lets the governance owner immediately set the status of a target trading contract without going through the queue, so a market can be frozen in an emergency without waiting for the delay.
-
-## Token Flow
-
-All collateral flows through a single SEP-41 token (e.g., USDC). The trading contract acts as custodian for active position margin and for escrowed vault-order assets and shares. Every order and vault order also escrows a flat execution fee (`exec_fee`, a `Config` field) at creation, paid to the keeper at fill and refunded on cancel. Protocol fees (trade, impact, borrowing, liquidation) are debited from the position's margin inside the trading contract, rather than charged on top of posted collateral, and split between the vault, the treasury, and the keeper. Funding is likewise debited from margin but flows into an internal funding pool credited to the opposing side, paid out through `claim_funding`.
-
-| Flow | Direction | When |
+| Contract | Symbol | Role |
 |---|---|---|
-| Trader to Trading | Escrowed collateral plus exec fee (increase) or exec fee only (decrease) | `create_order` |
-| LP Depositor to Trading | Escrowed deposit assets or redeem shares, plus exec fee | `create_vault_order` |
-| Trading to Vault | LP share of fees, trader losses, forfeits, and deposit-fill principal (`strategy_deposit`) | Fills, liquidations, deposit fills |
-| Trading to Treasury | Protocol share of trade, borrowing, and vault fill fees and forfeits | Fills, liquidations, vault-order fills |
-| Trading to Keeper | Keeper reward: a cut of the trade or vault fill fee, plus the order's escrowed exec fee on order and vault-order fills (liquidation and ADL pay the fee cut only) | Order, liquidation, ADL, and vault-order fills |
-| Vault to Trading | Trader profit payout, bad-debt coverage (`strategy_withdraw`), and redeem-fill assets (`strategy_redeem`) | Profitable or underwater closes, redeem fills |
-| Trading to Trader | Withdrawal, realized profit, funding claim, liquidation remainder, or trade-order escrow refund | Decrease fills, `claim_funding`, soft-tier liquidations, `cancel_order` |
-| Trading to LP Depositor | Redeem payout or vault-order escrow refund | Redeem fills, `cancel_vault_order` |
-| Treasury to Recipient | Protocol revenue withdrawal (destination chosen by owner) | `withdraw` (owner-only) |
+| **[Market](./market/overview.md)** | `MarketContract` | Orders, netted positions, profit and loss (PnL), fees, funding, borrowing, liquidation, and auto-deleveraging (ADL) for one perpetual futures market. Also the entry point for vault deposits and redemptions |
+| **[Strategy vault](./vault/overview.md)** | `StrategyVaultContract` | Tokenized liquidity pool and counterparty to every position in its market. Its registered strategy, the `market`, is the only caller that can deposit, redeem, or withdraw assets. Shares are a standard fungible token |
+| **[Oracle](./oracle/overview.md)** | `Oracle` | Decodes a signed Chainlink Data Streams V3 report, checks it against the caller's feed, and applies the freshness and sanity gates |
+| **[Treasury](./treasury/overview.md)** | `TreasuryContract` | Holds the protocol fee rate, bounded to 0 through 50 percent, and the collected fees. Its owner changes the rate and withdraws fees |
+| **[Factory](./factory/overview.md)** | `FactoryContract` | Deploys market and vault pairs at deterministic addresses |
+| **[Governance](./governance/overview.md)** | `GovernanceContract` | Optional timelock. Its owner queues admin calls on the contracts it owns, and anyone executes them after the delay. `set_status` bypasses the delay |
+| **[Market router](./router/overview.md)** | `RouterContract` | Stateless batcher with no privilege. It runs several trader calls and an optional keeper fill in one transaction. The `_with_fee` entries also collect a relayer fee |
 
-Every order escrows at creation: an increase order transfers `collateral + exec_fee` from the trader to the trading contract when `create_order` runs, a decrease order transfers `exec_fee`, and a vault order transfers the LP depositor's assets (or redeem shares) plus `exec_fee`. Cancelling refunds the escrow. Fees are deducted from the escrowed collateral at fill and the resulting margin must still meet the initial-margin requirement, so a fee change between creation and fill at worst makes the fill revert instead of leaving the position under-margined.
+One `market` serves one perpetual market, identified by the immutable `feed_id` set in its constructor. A BTC market and an ETH market are two independent pairs. Each pair has its own vault, its own `Config`, and its own risk.
 
-## Deployment Model
+## Four roles call the market
 
-The factory deploys a trading contract and its strategy vault as an atomic pair with deterministic, precomputed addresses. Each contract's wiring (dependency addresses, ownership, the immutable feed anchors, the full trading config, vault share metadata) is set in its constructor, so neither needs a separate `initialize` call. Because one contract is one market, deployment itself is the market's registration: its parameters are the `Config` passed to `deploy`, and the feed is the `(feed_id, exponent)` pair.
+| Role | Authorization | What it does |
+|---|---|---|
+| **Owner** | The owner's signature | Calls `set_config`, `set_status`, `set_terminal_price`, `upgrade`, and the ownership entries `transfer_ownership`, `accept_ownership`, and `renounce_ownership`. Behind a governance contract, these calls queue and wait for the delay. `Governance::set_status` reaches the `market` at once |
+| **Trader** | The trader's own signature | Creates and cancels orders with `create_order` and `cancel_order`. Collects earned funding and parked payouts with `claim_credit`. A trader call carries no price report |
+| **Liquidity provider** | The liquidity provider's own signature | Creates and cancels vault orders with `create_vault_order` and `cancel_vault_order`. A vault order deposits assets or redeems shares |
+| **Keeper** | None, any account may call | Calls `execute_order`, `execute_vault_order`, `execute_liquidation`, and `execute_adl` at a verified price for a reward. Also calls `accrue` and `update_adl_state`, which carry a price and pay no reward |
 
-The initial `Config` is a constructor argument, so it takes effect at deployment regardless of who the owner is. Subsequent parameter changes go through the owner, and through the timelock when the owner is a governance contract.
+A trader creates and cancels orders. A keeper fills an order at a price it proves against the market's oracle feed. The `keeper` argument names the reward recipient and authorizes nothing. The trader consents to a fill through the escrow funded at creation and through the `trigger_price` and `price_bound` signed into the order. Anyone can run a keeper, including the trader. The [router](./router/overview.md) lets a trader create and fill an order in one transaction.
 
-Implementation detail (salt derivation, deploy ordering, address precomputation) lives on the [Factory](./factory/overview) page.
+## Every settlement leg moves through the market
+
+All collateral in a market is one token that implements the Stellar Ecosystem Proposal 41 (SEP-41) interface, the settlement token. The `market` is custodian of position margin and of the assets, shares, and fees escrowed behind pending orders. Every order and vault order escrows a flat execution fee at creation. The fee is `exec_fee`, a `Config` field (token-dec). It pays the keeper at fill and refunds on cancel.
+
+The `market` debits each protocol fee from the position's margin at fill, so the fill takes no token from the trader's account beyond the escrow funded at creation. The fee types are trade, impact, borrowing, and liquidation. The [Position lifecycle](./market/position-lifecycle.md) page gives the increase and decrease paths and the checks that follow the debit. The [Fees and settlement](./market/fee-system.md) page gives the fee legs.
+
+Funding is also debited from margin, but it stays inside the `market`. When a position settles, a paying position adds its funding to `credit_pool`, a ledger of tokens the `market` holds for claims. A receiving position adds its earned funding to its claimable credit and to `credit_owed`. The trader collects the credit with `claim_credit`. A payout whose token transfer fails parks as the same kind of credit. A dropped trustline for the settlement token is one cause. A failed transfer therefore never stalls a fill. The [funding rate page](./market/funding-rate.md) describes the pool.
+
+| Flow | What moves | Entry |
+|---|---|---|
+| Trader to market | Margin plus `exec_fee` for an increase, `exec_fee` alone for a decrease | `create_order` |
+| Liquidity provider to market | Deposit assets or redeem shares, plus `exec_fee` | `create_vault_order` |
+| Market to vault | The positive vault leg, which is the fees left after the keeper and treasury cuts plus realized trader losses. Also deposit principal through `strategy_deposit` | Fills, liquidations, deposit fills |
+| Market to treasury | The treasury rate of the trade, impact, and liquidation fees, of the borrowing fee, and of the vault fill fee | Order fills, ADL closes, liquidations, vault-order fills |
+| Market to keeper | The `keeper_rate` cut of the fee, plus the escrowed `exec_fee` on an order or vault-order fill. The [Fees and settlement](./market/fee-system.md#each-keeper-entry-returns-its-keeper-leg) page gives the payout of each entry | Order, liquidation, ADL, and vault-order fills |
+| Vault to market | The negative vault leg, which is net trader profit plus bad-debt coverage, through `strategy_withdraw`. Redeem-fill assets through `strategy_redeem` | Profitable or underwater closes, redeem fills |
+| Market to trader | Withdrawal, realized profit, credit claim, liquidation remainder, or escrow refund | Decrease fills, `claim_credit`, liquidations, `cancel_order` |
+| Market to liquidity provider | Redeem payout or escrow refund. A rejected vault order returns its principal, and a deposit refund that fails parks as claimable credit | Redeem fills, `cancel_vault_order`, `execute_vault_order` rejection |
+| Vault to liquidity provider | Redeem assets, paid at once with no order and no `exec_fee` | `create_vault_order` redeem on a `Retired` market, which returns id `0` |
+| Treasury to recipient | Collected fees, sent to the address the owner names | `withdraw` |
+
+## One order passes through six steps
+
+Every order follows one path through the contracts. This path shows who signs each call and which contract touches which state.
+
+1. **Create.** The trader signs `create_order` on the `market` with `is_long`, `kind`, `notional`, `margin`, `trigger_price`, `price_bound`, and `expiration`. `notional` and `margin` are token-dec. `trigger_price` and `price_bound` use the feed's native precision. `expiration` is a ledger sequence. The `market` pulls the `exec_fee`, plus the margin for an increase, into its own balance and stores the order under the trader's next id.
+2. **Observe.** A keeper watches the chain, sees the pending order, and fetches a signed report for the market's feed from Chainlink Data Streams.
+3. **Fill.** The keeper calls `execute_order` with the order id and the report bytes. The `market` calls `verify_price` on the oracle. The oracle calls `verify` on the Chainlink verifier unless it holds a memo of that report, and it returns `bid`, `ask`, and `publish_time`. The `market` then runs the fill gates. The [Orders page](./market/orders.md#execute_order-fills-one-order-at-the-submitted-report) gives their order and their error codes. The trigger and the bound are judged on the execution-side price, which is `PriceData::entry` for an increase and `PriceData::exit` for a decrease. The [Pricing page](./market/pricing.md) defines both. The `market` then charges the trade and impact fees. It settles the funding and borrowing owed since the last fill and folds the fill into the trader's netted position on that side.
+4. **Settle.** The fill settles four legs through `Settlement::settle`. The keeper gets its cut and `exec_fee`. The treasury gets its cut. The vault leg is the remaining fees plus realized losses, less realized profit and bad debt. A positive vault leg is a token transfer to the vault. A negative one is a `strategy_withdraw`. A trader payout that fails parks as claimable credit.
+5. **Hold.** Every price-bearing call advances the borrowing and funding indices. A position charges its accrued borrowing and funding to its margin when it next settles. A keeper can liquidate the position with `execute_liquidation` once its settled equity falls under the maintenance requirement. A keeper can deleverage a winning position with `execute_adl` while `update_adl_state` holds the ADL flag of its side.
+6. **Close.** A decrease order runs `Position::decrease` on the same fill path. It pays the trader the withdrawn margin and the realized profit, less fees. A fully closed position persists as a zeroed row. Any decrease orders still pending on that side are cancelled, and their escrow is refunded.
+
+The router runs steps 1 and 3 in one transaction through `create_and_fill` and `create_and_try_fill`. A failed fill reverts the whole `create_and_fill` batch. `create_and_try_fill` keeps the created order pending instead. The [Batches and fills page](./router/batching.md) describes both. The `_with_fee` variants let a relayer submit the transaction and collect a fee in `fee_token`, an argument the trader signs. The [Fee abstraction page](./router/fee-abstraction.md) describes them.
+
+## The factory deploys each market as an atomic pair
+
+The factory deploys the `market` and its vault together through `deploy`. Their addresses are deterministic and derive from the deploying `admin` and a salt. The `admin` must authorize the call and becomes the `market` owner. The market constructor stores the token, vault, oracle, and treasury addresses, the owner, the immutable `feed_id`, and the initial `Config`. The vault constructor stores its share metadata, the token, its decimals offset, and the `market` as its strategy. Both contracts are live as soon as `deploy` returns.
+
+Later parameter changes go through the owner, or through the timelock when the owner is a governance contract. The [Governance page](./governance/overview.md) describes the timelock. Salt derivation, deploy order, and address precomputation are on the [Factory page](./factory/overview.md). The owner replaces the WebAssembly (WASM) hashes and the treasury address that future deploys use with `set_init_meta`, which emits `init_meta_update`. The [Init meta page](./factory/init-meta.md) describes that call.
