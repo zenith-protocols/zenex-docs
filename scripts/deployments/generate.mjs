@@ -74,20 +74,21 @@ async function view(contractId, method, ...args) {
   return scValToNative(sim.result.retval);
 }
 
+/**
+ * A view that may not exist: undefined when the contract rejects the call,
+ * for example because it has no such function. A transport failure still
+ * throws, so an RPC outage never reads as an empty answer.
+ */
 async function tryView(contractId, method) {
-  try {
-    const tx = new TransactionBuilder(new Account(READER, '0'), {
-      fee: BASE_FEE,
-      networkPassphrase: record.network.passphrase,
-    })
-      .addOperation(new Contract(contractId).call(method))
-      .setTimeout(0)
-      .build();
-    const sim = await server.simulateTransaction(tx);
-    return rpc.Api.isSimulationError(sim) ? undefined : scValToNative(sim.result.retval);
-  } catch {
-    return undefined;
-  }
+  const tx = new TransactionBuilder(new Account(READER, '0'), {
+    fee: BASE_FEE,
+    networkPassphrase: record.network.passphrase,
+  })
+    .addOperation(new Contract(contractId).call(method))
+    .setTimeout(0)
+    .build();
+  const sim = await server.simulateTransaction(tx);
+  return rpc.Api.isSimulationError(sim) ? undefined : scValToNative(sim.result.retval);
 }
 
 /** The hash of the code the chain holds for a contract, or null for a Stellar asset contract. */
@@ -431,6 +432,20 @@ async function main() {
     check((await codeHash(contract.id)) === expected, `the ${contract.name.toLowerCase()} runs code other than ${record.util.tag}`);
     contract.hash = expected;
   }
+  // The page says these contracts have no owner. Each one's code is pinned to
+  // a reviewed build above, and each must also leave the usual owner and admin
+  // getters unanswered on chain, so a new build with an admin stops the run.
+  const ownerless = [...markets.map((m) => ({ name: `${m.label} vault`, id: m.vault })), ...app];
+  for (const contract of ownerless) {
+    for (const getter of ['get_owner', 'owner', 'get_admin', 'admin']) {
+      const who = await tryView(contract.id, getter);
+      check(
+        who === undefined || who === null,
+        `the ${contract.name.toLowerCase()} ${contract.id} answers ${getter} with ${who}. Rewrite the ownership section first.`,
+      );
+    }
+  }
+
   const walletVerifiers = [
     { name: 'Passkey verifier', id: config.smartAccount.verifiers.webauthn, does: 'Checks a passkey signature for a smart wallet. It comes with the smart-account kit the wallets are built on.' },
     { name: 'Ed25519 verifier', id: config.smartAccount.verifiers.ed25519, does: 'Checks a key signature for a smart wallet. It comes with the same kit.' },
@@ -621,7 +636,7 @@ The fee forwarder pays the fees it takes to the account ${accountLink(d.config.f
 
 ${d.ownerLines.join('\n\n')}
 
-The vaults, ${list(d.app.map((c) => `the ${c.name.toLowerCase()}`))} have no owner. [Governance](./governance.md) covers what an owner can change.`);
+${capital(list([d.markets.length === 1 ? 'the vault' : 'the vaults', ...d.app.map((c) => `the ${c.name.toLowerCase()}`)]))} have no owner. [Governance](./governance.md) covers what an owner can change.`);
 
   for (const m of d.markets) {
     sections.push(`## ${m.label} parameters
@@ -660,6 +675,6 @@ ${
   return `${sections.join('\n\n')}\n`;
 }
 
-const data = await main();
+const data = await main().catch((error) => fail(error.message));
 writeFileSync(OUT, render(data));
 console.log(`deployments: wrote ${path.relative(ROOT, OUT)} at ledger ${data.ledger.sequence} (${data.markets.length} market${data.markets.length === 1 ? '' : 's'})`);

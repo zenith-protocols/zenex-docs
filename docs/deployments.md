@@ -10,7 +10,7 @@ hide_table_of_contents: true
 
 This page lists every contract of the live Zenex deployment on Stellar mainnet and the values those contracts run with. Check an address here before you approve a transaction that names it. Anyone can deploy a market through the factory, so a contract that carries a familiar name proves nothing on its own. The addresses below are the ones the Zenex app uses.
 
-A script writes this page from the chain. It read every value at ledger 64,737,113 on 2 October 2026, and it checked that the contracts report the same addresses about each other. An owner can change a value at any moment, so the contracts hold the value in force.
+A script writes this page from the chain. It read every value at ledger 64,737,253 on 2 October 2026, and it checked that the contracts report the same addresses about each other. An owner can change a value at any moment, so the contracts hold the value in force.
 
 ## Markets
 
@@ -54,7 +54,7 @@ The fee forwarder pays the fees it takes to the account [`GA3E5GCBNYXFC4PEOVC5KA
 
 The account [`GBDCXZDDDJWW2OOZ7LDS7AECDFJXUAXXW6U3YM2QJPRIAXONV5SOQNDX`](https://stellar.expert/explorer/public/account/GBDCXZDDDJWW2OOZ7LDS7AECDFJXUAXXW6U3YM2QJPRIAXONV5SOQNDX) owns the factory, the oracle, the treasury, and the XLM-USD market. It is one account and not a timelock, so a change it makes applies at once, with no wait.
 
-The vaults, the market router, the fee forwarder, the wallet factory, and the session policy have no owner. [Governance](./governance.md) covers what an owner can change.
+The vault, the market router, the fee forwarder, the wallet factory, and the session policy have no owner. [Governance](./governance.md) covers what an owner can change.
 
 ## XLM-USD parameters
 
