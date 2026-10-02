@@ -11,7 +11,7 @@ A fill pays up to five charges. Two of them, the trade fee and the impact fee, s
 
 The market computes the trade fee and the impact fee at the fill, from the market's rates and the book at that moment. On an open, both come out of the margin you posted with the order. If they are larger than that margin, the rest comes out of the margin already behind the position. On a close, your realized profit pays them first, and the margin behind the position pays what the profit did not cover. The borrowing interest and any funding you owe come off the same way.
 
-Each market sets its two trade fee rates, its execution fee, how fast its impact fee grows, and its keeper share. The treasury share is one rate held by the treasury, not by the market. The protocol caps each trade fee rate at 1% of the size a fill moves and caps the impact fee at 10% of that size. For how a value changes, see the [parameter-change process](../governance.md). For the values in use, see [Market parameters](../markets/market-parameters.md#current-testnet-values).
+Each market sets its two trade fee rates, its execution fee, how fast its impact fee grows, and its keeper share. The treasury share is one rate held by the treasury, not by the market. The protocol caps each trade fee rate at 1% of the size a fill moves and caps the impact fee at 10% of that size. For how a value changes, see the [parameter-change process](../governance.md). For the values in use, see [Deployments](../deployments.md).
 
 ## The trade fee is lower on the thinner side
 

@@ -42,6 +42,6 @@ Losses therefore stay inside the market that produced them. A run of trader prof
 | Get a short answer to a common question | [FAQ](../faq.md) |
 | Look up a term | [Glossary](./glossary.md) |
 | See the audit status of the contracts | [Audits](../audits.md) |
-| Find a deployed address or a live parameter | [Deployments](../deployments/contract-addresses.md) |
+| Find a deployed address or a live parameter | [Deployments](../deployments.md) |
 | Check a claim against the contracts | [Architecture overview](/technical) |
 | Call the contracts from your own code | [Integrations](/integrations/overview) |

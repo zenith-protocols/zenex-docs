@@ -218,7 +218,7 @@ const factory = new FactoryContract(FACTORY_ADDRESS);
 | `getInitMeta()` / `setInitMeta(initMeta)` | Read or (owner-only) replace the `FactoryInitMeta { market_hash, vault_hash, treasury }` that future deploys install. |
 | `upgrade(newWasmHash, operator)` | Owner-only WASM replacement for the factory itself. |
 
-The factory deploys the vault first, then the market contract, wiring the vault as the market contract's collateral vault and the market contract as the vault's immutable strategy. Both addresses derive from `admin` and the salts, so a salt alone cannot be front-run. The `admin` argument becomes the new market contract's owner. `feedId` must be a 32-byte V3 stream id (its first two bytes `0x00 0x03`), else the market constructor traps `InvalidConfig`. Always review the [deployed addresses and parameters](/deployments/contract-addresses) before deploying.
+The factory deploys the vault first, then the market contract, wiring the vault as the market contract's collateral vault and the market contract as the vault's immutable strategy. Both addresses derive from `admin` and the salts, so a salt alone cannot be front-run. The `admin` argument becomes the new market contract's owner. `feedId` must be a 32-byte V3 stream id (its first two bytes `0x00 0x03`), else the market constructor traps `InvalidConfig`. Always review the [deployed addresses and parameters](/deployments) before deploying.
 
 ## Other bindings
 

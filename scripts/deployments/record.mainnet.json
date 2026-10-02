@@ -1,0 +1,37 @@
+{
+  "$comment": "Reviewed record of the live Zenex mainnet deployment, read by generate.mjs. It holds only what nothing on chain points to: the factory, the wallet factory, and the code each contract must run. Copied from the zenex-ops stack mainnet-shadow-20260929 (initial manifest 2026-09-29, util contracts 2026-10-02). Everything else on the page is read from the chain and from configUrl.",
+  "network": {
+    "name": "Stellar mainnet",
+    "passphrase": "Public Global Stellar Network ; September 2015",
+    "explorer": "https://stellar.expert/explorer/public"
+  },
+  "configUrl": "https://api.zenex.trade/v1/config",
+  "core": {
+    "commit": "644a4c4c1b4ab78dda5f9efae80d2f44d8f6fa32",
+    "deployedOn": "2026-09-29",
+    "factory": "CDFEZPO7ZMXMZUMOIT2CZF5FUEIGD3CC5VOROUKF4KZEQQEDZBGSQYPQ",
+    "releaseBuilds": {
+      "market": "wasm/market.wasm",
+      "vault": "wasm/strategy_vault.wasm",
+      "oracle": "wasm/oracle.wasm",
+      "treasury": "wasm/treasury.wasm",
+      "factory": "wasm/factory.wasm"
+    }
+  },
+  "util": {
+    "repo": "https://github.com/zenith-protocols/zenex-util-contracts",
+    "tag": "v0.0.2",
+    "commit": "d99d0139922efbd1bc6df9e4c940dba71782367f",
+    "deployedOn": "2026-10-02",
+    "walletFactory": "CBOKFCC24264FHSAK2PZ5U6VYMDMJWU55FORXE7ZT6EWBOLVK3TBLAOI",
+    "codeHashes": {
+      "CDOF5KRURJ7RRBPORHYSSKT727X3IBNF3LGOFHZND4HBTS5FRUZRJEZT": "19032576681e48afab44bde4560c156a69fe5c94037f48cc7ceb418f3719b125",
+      "CDOAKNTCQZSBQJY7FFQI7RUURJKY37KYI6GV464H2YHTDJ7DBI27F4J5": "d501d20cfea6676b51ff341b408bbe4e406a17e4a21516064d8ea9663994088e",
+      "CBOKFCC24264FHSAK2PZ5U6VYMDMJWU55FORXE7ZT6EWBOLVK3TBLAOI": "a7f32705c1ceeda07496520a3b16a1c6a64f1d68e4425752e892633d6009f035",
+      "CDIFOB7JFHWKIWDTMCFWTV2EMYPSLT77KPSXESMZT5W7OSLDAMCAEOTV": "7c25590eb09bcf93065840df7d59dbeafbfc0648731068d5b0fad3b12603dfad"
+    }
+  },
+  "knownIssuers": {
+    "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN": "Circle"
+  }
+}

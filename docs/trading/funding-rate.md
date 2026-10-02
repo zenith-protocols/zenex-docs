@@ -49,7 +49,7 @@ The charge falls on the size you entered with. The table below uses a position o
 | 40,000 USDC | 40,000 USDC | cap, about 20% | about 2,000 USDC a year | about 2,000 USDC a year |
 | 40,000 USDC | 10,000 USDC | cap, about 20% | about 2,000 USDC a year | about 8,000 USDC a year |
 
-The percentages are the testnet values on [Market parameters](../markets/market-parameters.md), recorded on stack `testnet-v3-20260929` on 2026-09-29. At the cap, a payer of 10,000 USDC pays about 5.5 USDC a day. In the last row the receiving side holds a quarter of the paying side's value, so each unit on it earns four times what each unit on the paying side pays.
+The percentages are an example. [Deployments](../deployments.md) lists the minimum charge and the cap each live market runs with. At the cap, a payer of 10,000 USDC pays about 5.5 USDC a day. In the last row the receiving side holds a quarter of the paying side's value, so each unit on it earns four times what each unit on the paying side pays.
 
 ## What you earn
 
