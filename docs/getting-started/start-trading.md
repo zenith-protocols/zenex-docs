@@ -63,6 +63,6 @@ Check the market, the side, the order type, any trigger, the collateral, the lev
 
 ## What happens next
 
-The trade form can send your order and its fill in one transaction, so a market order often fills at once. If that fill fails, the trade form has chosen one of two outcomes when it built the transaction. In the first, the whole transaction unwinds and nothing leaves your wallet. In the second, the order rests until a keeper fills it or you cancel it, on the escrow terms in step 5.
+The trade form can send your order and its fill in one transaction, so a market order often fills at once. If that fill fails, the trade form has chosen one of two outcomes when it built the transaction. In the first, the whole transaction unwinds, your escrow never leaves your wallet, and you pay no relayer fee. In the second, the order rests until a keeper fills it or you cancel it, on the escrow terms in step 5.
 
 You control the side, the collateral, the leverage, the order type, the bound, the expiry, and the cancel. You do not control who fills your order, at what moment, or at which verified price inside your bound. For the costs a fill settles, refer to [Fees](../trading/fees.md). For the life of the position after it opens, refer to [Positions](../trading/positions.md).

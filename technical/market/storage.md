@@ -77,7 +77,7 @@ Class is the Soroban storage type. Tier is the TTL tier from the previous sectio
 
 The [units page](../units.md) defines token-dec, base-dec, feed precision, `SCALAR_18`, and seconds.
 
-`create_order` stores the target `Position` row whenever it is missing, so the trader pays the rent for it and the fill does not. A decrease order always rewrites the row, because its id joins the side's decrease list. An increase order leaves an existing row untouched. `Position::store` covers every other write, the fills, the liquidation, and the ADL fill included. A closed position persists as the zeroed row.
+`create_order` stores the target `Position` row whenever it is missing, so the transaction that creates the order pays the rent for it and the fill does not. Rent falls on the transaction's fee payer, which under the router's fee abstraction is the relayer rather than the trader. A decrease order always rewrites the row, because its id joins the side's decrease list. An increase order leaves an existing row untouched. `Position::store` covers every other write, the fills, the liquidation, and the ADL fill included. A closed position persists as the zeroed row.
 
 Eight keys exist from the constructor onward. They are the seven instance keys it writes and `MarketData`. The other keys are lazy, and the contract creates each one on its first write. Exactly one lazy write sits on a read path. When `PriceCache` is absent, `Market::load` stores the verified report. `get_position` writes nothing on a miss and returns the zeroed row.
 
@@ -144,7 +144,7 @@ The network archives an entry in the instance, shared, or user tier when its TTL
 
 The instance tier is one ledger entry. It carries the ten instance `DataKey` entries, `OwnableStorageKey::Owner`, `UpgradeableStorageKey::SchemaVersion`, and the reference to the contract code. `extend_instance` extends that single entry and not one key at a time. If the instance is archived, no entry point runs at all, the views included, until a restoration brings it back.
 
-An archived position still counts in the market totals. It must be restored before it can be closed or liquidated. A fill restores an archived order, and the keeper that submits the fill pays for the restoration. `Order.expiration` is a ledger sequence and a pure validity gate, so it is independent of the entry's TTL.
+An archived position still counts in the market totals. It must be restored before it can be closed or liquidated. A fill restores an archived order, and the fee payer of the transaction that submits the fill, the keeper or its relayer, pays for the restoration. `Order.expiration` is a ledger sequence and a pure validity gate, so it is independent of the entry's TTL.
 
 Archival never removes an order or its escrow. Only a fill, a cancel, or a closure sweep removes the row. The cancel and the closure sweep refund `Order::escrow_amount`, and a fill spends it.
 

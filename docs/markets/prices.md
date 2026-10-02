@@ -17,7 +17,7 @@ The publishers of the stream sign every report. Chainlink's verifier contract ch
 - The observation time and the start of the report's validity may not run ahead of the network clock by more than the strict age limit. The network clock trails real time, so a fresh report can sit slightly ahead of it. The strict age limit bounds that gap.
 - The quote must be usable. The bid and the ask must be positive, and the bid must not exceed the ask. The stream's reference price, which the market uses for nothing else, must be positive too. A crossed or zero quote has no sensible price to fill at.
 
-**A report that fails any check fails the whole transaction.** No price reaches the market, so no fill, no fee, and no change to your position happens. Your order keeps resting, and its escrow stays with the market.
+**A report that fails any check fails the whole transaction.** No price reaches the market, so no fill, no market fee, and no change to your position happens. Your order keeps resting, and its escrow stays with the market.
 
 The oracle keeps each report it has verified for a short time. If the same report arrives again in that time, the oracle skips the signature check and still runs every check above. A report whose signing configuration is retired in that time can therefore still price a call. It can do so only while it is fresh enough for that call, which is at most the wider age limit after its observation time.
 

@@ -22,7 +22,7 @@ Every order belongs to one of two families. An increase adds size or margin to a
 | Limit decrease | Takes profit | The price rises to your level for a long, or falls to it for a short |
 | Stop decrease | Stops a loss | The price falls to your level for a long, or rises to it for a short |
 
-A market order, a limit order, and a stop order name the fill rule. An increase and a decrease name the family. A take profit is a limit decrease, and a stop loss is a stop decrease. Each one rests on chain as an order of its own and escrows its own execution fee. A side holds at most eight resting decrease orders. The market refuses a ninth at creation until one of the eight is filled or cancelled.
+A market order, a limit order, and a stop order name the fill rule. An increase and a decrease name the family. A take profit is a limit decrease, and a stop loss is a stop decrease. Each one is created on chain as an order of its own and escrows its own execution fee. A side holds at most eight resting decrease orders. The market refuses a ninth at creation until one of the eight is filled or cancelled.
 
 You can place a decrease order before your position on that side exists. It can fill only once the position does. When a close empties the side, the market cancels every decrease order still resting there, as the [Positions](./positions.md) page describes.
 

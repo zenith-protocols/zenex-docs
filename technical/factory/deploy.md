@@ -143,6 +143,6 @@ The sign check covers 24 of the 34 fields. Two of the other ten are `u64` fields
 
 ## Invariants
 
-A `deploy` either creates both contracts, writes the registry entry, and publishes the event, or it changes nothing. A constructor rejection, a host trap, and a failed authorization each revert the whole call, including a vault that already exists in that call. A failed call leaves the ledger unchanged and publishes no event. The same `(admin, salt)` is still free, so a corrected retry succeeds.
+A `deploy` either creates both contracts, writes the registry entry, and publishes the event, or it changes nothing. A constructor rejection, a host trap, and a failed authorization each revert the whole call, including a vault that already exists in that call. A failed call leaves the ledger unchanged and publishes no event. Unless the failure was a contract already standing at a derived address, the same `(admin, salt)` is still free, so a corrected retry succeeds.
 
 Both addresses are fixed by `(admin, salt)` alone, so a caller knows them before the call runs. The market and the vault each hold the address of the other from the moment of creation.

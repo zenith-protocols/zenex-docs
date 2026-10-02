@@ -13,7 +13,7 @@ The protocol bounds most values and keeps related ones in a fixed order, so no f
 
 ## Two margin lines set your leverage and your liquidation point
 
-The initial margin is the share of a position's size that you must hold as collateral whenever you change the position. One divided by it is the leverage ceiling of the market. The fees of a fill come out of the collateral you post, so the leverage you reach sits a little under that ceiling.
+The initial margin is the share of a position's size that you must hold as collateral whenever you change the position. It sets the leverage ceiling of the market: a 10% initial margin allows 10x, and a 2% initial margin allows 50x. The fees of a fill come out of the collateral you post, so the leverage you reach sits a little under that ceiling.
 
 The maintenance margin is the lower line. A position whose equity falls under it can be liquidated. Equity is what the position would return if it closed now, so it counts your unrealized profit and loss. The liquidation fee is the rate that a liquidation charges on the size that closes.
 

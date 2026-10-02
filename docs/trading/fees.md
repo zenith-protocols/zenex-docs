@@ -61,7 +61,7 @@ A liquidation and a forced close under auto-deleveraging consume no order, so ne
 
 Every transaction you sign costs a network fee. The token you trade with pays it, so you do not need to hold the network's own asset. Your signature names that token, names the account that receives the fee, and fixes a ceiling on the amount. A relayer sends your signed transaction to the network. The relayer picks the amount inside your ceiling. A fee above your ceiling fails the whole transaction.
 
-**A transaction that fails as a whole charges you nothing.** A transaction that creates your order and lands, but whose fill fails, still charges the network fee. The order rests.
+**A transaction that fails as a whole charges you no relayer fee.** The relayer bears the network's own charge for the failed attempt. A transaction that creates your order and lands, but whose fill fails, still charges the network fee. The order rests.
 
 ## Fees divide between the keeper, the treasury, and the vault
 

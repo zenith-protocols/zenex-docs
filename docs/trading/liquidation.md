@@ -67,7 +67,7 @@ Funding you are owed does not join that payout. The market banks it as claimable
 | 30 USDC | 30 USDC | 0 USDC |
 | 0 USDC or less | 0 USDC | 0 USDC |
 
-The second row is the cap at work. The rated fee of 50 USDC is larger than the 30 USDC that survived, so the fee takes the 30 USDC and stops. A position caught while it still holds real equity keeps most of that remainder. A position caught after a violent move keeps none of it.
+The second row is the cap at work. The rated fee of 50 USDC is larger than the 30 USDC that survived, so the fee takes the 30 USDC and stops. A position caught while it still holds real equity keeps part of that remainder. A position caught after a violent move keeps none of it.
 
 ## The vault absorbs a loss beyond your margin
 

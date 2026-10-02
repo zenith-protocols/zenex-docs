@@ -49,7 +49,7 @@ A redeem waits out a cooldown before any keeper can fill it. The cooldown runs f
 
 Two gates then protect the open positions, and your order needs both to pass. The liquidity gate needs enough liquidity to stay behind the positions the vault backs. The profit gate looks at what remains in the vault after your payout. Half of that amount is the base, and the pending profit of the long traders and of the short traders must each stay within a set part of it. A fill checks the cooldown first, then your minimum, then the two gates.
 
-**A redeem can stay unfilled for as long as either gate holds, so you may be unable to exit for a while.** The order keeps waiting, and you can cancel it to get your shares back. The [market parameters](../markets/market-parameters.md) page carries the current cooldown and the current redeem block. [Risks](../risks.md) covers why a redeem is refused.
+**A redeem can stay unfilled for as long as either gate holds, so you may be unable to exit for a while.** The order keeps waiting, and you can cancel it to get your shares back as long as the market is not frozen. The [market parameters](../markets/market-parameters.md) page carries the current cooldown and the current redeem block. [Risks](../risks.md) covers why a redeem is refused.
 
 On a retired market a redeem pays out inside your own transaction. It needs no keeper and no cooldown, and it carries no execution fee and no vault fee. Your minimum does not bound that payout. A deposit or redeem that still rests there never fills, and you can cancel it. For that path, see [Deposits and redeems](../vault/depositing.md).
 

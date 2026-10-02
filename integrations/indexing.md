@@ -37,7 +37,7 @@ Every market event is a `#[contractevent]`. Its topics are the snake_case event 
 
 ## Market events
 
-There are 17 market events.
+There are 18 market events.
 
 | Event (name symbol) | Topics after the name | Data fields |
 |---|---|---|
@@ -57,9 +57,10 @@ There are 17 market events.
 | `increase_fill` | `user`, `id`, `is_long` | `keeper`, `price`, `notional`, `tokens`, `margin`, `base_fee`, `impact_fee`, `funding`, `borrowing` |
 | `decrease_fill` | `user`, `id`, `is_long` | `keeper`, `price`, `notional`, `tokens`, `margin`, `pnl`, `base_fee`, `impact_fee`, `funding`, `borrowing`, `returned` |
 | `close_fill` | `user`, `id`, `is_long` | `keeper`, `price`, `notional`, `tokens`, `margin`, `pnl`, `base_fee`, `impact_fee`, `funding`, `borrowing`, `bad_debt`, `returned` |
+| `reject_vault_order` | `user`, `id` | `keeper`, `quoted`, `net_pnl` |
 | `liquidation` | `user`, `is_long` | `keeper`, `price`, `notional`, `tokens`, `margin`, `pnl`, `base_fee`, `impact_fee`, `funding`, `borrowing`, `bad_debt`, `returned`, `liq_fee` |
 
-Topic types are `user: Address`, `id: u32`, `is_long: bool`. Every data field is `i128` except `keeper` (`Address`), `order` (`Order` or `VaultOrder`), `config` (`Config`), `long` and `short` (`bool`), and `status` (`u32`). The decoded event fields are camelCase (`orderId`, `isLong`, `baseFee`, `impactFee`, `badDebt`, `liqFee`, `netPnl`), and nested `order` / `config` structs decode into the same typed mirrors the view parsers return.
+Topic types are `user: Address`, `id: u32`, `is_long: bool`. Every raw data field is `i128` except `keeper` (`Address`), `order` (`Order` or `VaultOrder`), `config` (`Config`), `long` and `short` (`bool`), and `status` (`u32`). The SDK adds one derived property that is not in the contract payload: `source` on `redeem_fill` (`'order' | 'instant'`) and on `decrease_fill` and `close_fill` (`'order' | 'adl'`), derived from the order id, where `0` marks an ADL close or a retired-market instant redeem. The decoded event fields are camelCase (`orderId`, `isLong`, `baseFee`, `impactFee`, `badDebt`, `liqFee`, `netPnl`), and nested `order` / `config` structs decode into the same typed mirrors the view parsers return.
 
 ## Fill receipts and position state
 

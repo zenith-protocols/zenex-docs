@@ -47,7 +47,7 @@ const view = estimateMarket(market, price);
 | `market.loadUser(user)` | A `MarketUser` against an already-loaded market. |
 | `loadTreasuryRate(network, treasury)` | The live treasury rate; attach with `market.withTreasuryRate(rate)` for the exact fee split. |
 
-`Market` also carries the exact mirrored math as methods returning `bigint`: `accrue(price)` (the snapshot advanced to now, mirroring the contract's on-load accrual), `utilization`, `openCapacity`, `sidePnl`, `netPnl`, `borrowingRate`, `fundingRate`, `adlState`, and the share conversions `assetsToShares` / `sharesToAssets`.
+`Market` also carries the exact mirrored math. `accrue(price)` returns a new `Market` snapshot advanced to now, mirroring the contract's on-load accrual. The rest return `bigint`: `utilization`, `openCapacity`, `sidePnl`, `netPnl`, `borrowingRate`, `fundingRate`, `adlState`, and the share conversions `assetsToShares` / `sharesToAssets`.
 
 ### Estimates (floats, display only)
 
@@ -251,7 +251,7 @@ Parsers decode into the SDK's typed mirrors: `Order`, `VaultOrder`, `Position`, 
 
 ## Event types
 
-The SDK ships the event shapes as types. `MarketEventType` enumerates the topic-0 symbols, and the `MarketEvent`, `VaultEvent`, `FactoryEvent`, and `GovernanceEvent` unions carry one interface per event, discriminated on `eventType` and tagged by `contractType` with `ZenexContractType`. The full catalog of 17 market events, their topic layouts, and their fields is in [Indexing](./indexing).
+The SDK ships the event shapes as types. `MarketEventType` enumerates the topic-0 symbols, and the `MarketEvent`, `VaultEvent`, `FactoryEvent`, and `GovernanceEvent` unions carry one interface per event, discriminated on `eventType` and tagged by `contractType` with `ZenexContractType`. The full catalog of 18 market events, their topic layouts, and their fields is in [Indexing](./indexing).
 
 ## Parsing errors
 

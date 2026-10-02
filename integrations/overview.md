@@ -47,7 +47,7 @@ The [market router](./sdk#marketroutercontract) is a stateless batching contract
 
 ## Events for indexing
 
-Every state change emits a typed event. The 17 market events carry itemized fill receipts (`open_fill`, `increase_fill`, `decrease_fill`, `close_fill`, `liquidation`) with both lifecycle boundaries chain-attested: `open_fill` marks an empty side opening and `close_fill` a position zeroing, so an indexer keys lifecycles on the event kind alone. The SDK ships the event shapes as typed interfaces you decode against. See [Indexing](./indexing) for the full event catalog.
+Every state change emits a typed event. The 18 market events carry itemized fill receipts (`open_fill`, `increase_fill`, `decrease_fill`, `close_fill`, `liquidation`) with both lifecycle boundaries chain-attested: `open_fill` marks an empty side opening and `close_fill` a position zeroing, so an indexer keys lifecycles on the event kind alone. The SDK ships the event shapes as typed interfaces you decode against. See [Indexing](./indexing) for the full event catalog.
 
 ## What's next
 

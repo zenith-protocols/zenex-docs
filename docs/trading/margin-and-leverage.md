@@ -30,7 +30,7 @@ Auto-deleveraging is the one forced path that skips this floor. **A position tha
 
 ## The initial margin sets the leverage ceiling
 
-The ceiling is one divided by the initial margin. Each market sets its own initial margin through the [parameter-change process](../governance.md), so the ceiling differs by market. The table shows the margin that a 1,000 USDC position needs at three settings.
+The initial margin sets the ceiling: a 10% initial margin allows 10x, and a 2% initial margin allows 50x. Each market sets its own initial margin through the [parameter-change process](../governance.md), so the ceiling differs by market. The table shows the margin that a 1,000 USDC position needs at three settings.
 
 | Initial margin | Margin behind 1,000 USDC of size | Leverage ceiling |
 | --- | --- | --- |

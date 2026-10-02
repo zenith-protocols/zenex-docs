@@ -5,7 +5,7 @@ title: Factory
 
 # Factory
 
-The `FactoryContract` deploys one strategy vault and one market together in a single call, so the vault's only strategy is the market it was deployed with. The call creates both contracts or neither, and each one stores the address of the other at construction. A separate factory owner controls the deploy inputs and the factory's own code. The [owner surface](./init-meta.md#owner-surface) gives that role.
+The `FactoryContract` deploys one strategy vault and one market together in a single call, so the vault's only strategy is the market it was deployed with. The call creates both contracts or neither, and each one stores the address of the other at construction. A separate factory owner controls the code hashes the factory installs, the treasury address it wires, and the factory's own code. Every other deploy input comes from the caller. The [owner surface](./init-meta.md#owner-surface) gives that role.
 
 | Page | What it holds |
 | --- | --- |
