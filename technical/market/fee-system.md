@@ -1,6 +1,7 @@
 ---
 sidebar_position: 10
 title: Fees and settlement
+description: Trade and impact fees, execution fees, settlement legs, and payout fallback.
 ---
 
 # Fees and settlement
@@ -93,6 +94,10 @@ An escrowed fee leaves the market by one of four routes.
 | A vault-order rejection in `execute_vault_order` | Paid to the keeper as the only non-zero leg. The principal returns to `user`. |
 
 A vault order is rejected when its quote falls below `min_out`. The `RejectVaultOrder` event carries the quote, and [Rejection](./vault-orders.md#rejection) gives the path. `execute_liquidation` and `execute_adl` consume no order, so they pay no execution fee. A redeem on a `Retired` market runs inside `create_vault_order` through `instant_redeem`. That path escrows no execution fee, stores no order, and pays no keeper.
+
+:::info Execution and relay fees have different recipients
+The market's `exec_fee` pays the keeper when an order resolves by execution. A fee forwarder can separately collect a token fee for transaction submission. The [fee-forwarder reference](../router/fee-abstraction.md) defines that authorization and collection flow.
+:::
 
 ## Four legs hold every settlement
 

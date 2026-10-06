@@ -1,16 +1,16 @@
 ---
-title: Audits
-sidebar_position: 11
+title: Audit reports
+description: Check published security review coverage and its limits.
 ---
 
-# Audits
+# Audit reports
 
-An audit is a review of the Zenex contracts by an independent security firm. This page lists the report from each finished audit, with the date it finished and the contracts it covered.
+An audit report records an independent review of specified code. Its scope and reviewed version determine what it covers.
 
-## Completed audits
+## Published reports
 
-No independent firm has finished an audit of the Zenex contracts. Each report appears here, with its date and scope, when its audit finishes.
+This site currently lists no published independent audit report for the Zenex contracts. A report should identify the reviewer, date, code version, covered contracts, and remaining findings. Compare the reviewed version with [Deployments](./deployments.md). Read [Risks](./risks.md) before committing funds.
 
-## What an audit covers
-
-A report covers the contract code as it stands on the date of the report. A change made to the code after that date sits outside the report. **Code that passes an audit can still contain defects, so the contracts can lose your money whether or not a report covers them.** For the risks that stay with you, see [Risks](./risks.md).
+:::warning A report covers a specific scope
+Market code, app contracts, wallet components, backend services, and later upgrades can have different review coverage. An audit cannot guarantee that funds are safe.
+:::

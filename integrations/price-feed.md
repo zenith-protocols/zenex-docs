@@ -1,128 +1,76 @@
 ---
-sidebar_position: 3
-title: Price feed
+title: Signed price reports
+sidebar_label: Execution prices
+description: Fetch a signed Data Streams report, obtain the oracle-adjusted price, and submit keeper actions.
 ---
 
-# Price feed
+# Signed price reports
 
-A trader's `create_order` is price-free. The price arrives later, at fill time, from whoever fills the order: a keeper calling `execute_order`, `execute_liquidation`, `update_adl_state`, `execute_adl`, `execute_vault_order`, or `accrue`, or an integrator opening atomically through the router's `create_and_fill`. This page matters once you run fills yourself or open atomically. If your application only creates orders and leaves fills to public keepers, you can skip it.
+Execution uses a signed Chainlink Data Streams report. The oracle verifies it, checks its feed and time window, and returns the effective bid and ask.
 
-## How the price is verified on-chain
+Most interfaces can use [the hosted relay](./relay) for immediate execution. A keeper or direct executor needs access to signed reports.
 
-Each market contract carries an immutable 32-byte `feed_id` anchor set at deployment, the Chainlink Data Streams V3 stream id for its market. When a filler submits a signed report, the contract hands the bytes to the oracle, which passes them verbatim to Chainlink's deployed verifier contract for the DON signature check, then decodes the returned report body and rejects a mismatched or non-V3 stream, an expired report, an observation outside the call's staleness window, and a non-positive or crossed bid/ask pair. A rejected report traps the whole call, so a fill can only ever land on a verified price.
+## Fetch the full report
 
-The staleness window depends on the call. The two fill paths (`execute_order`, `execute_vault_order`) use the oracle's strict `trade_staleness`, at most 15 seconds and set lower in practice (10 seconds on the current testnet deployment). The gap-closing paths (`execute_liquidation`, `execute_adl`, `update_adl_state`, `accrue`) use the wider `close_staleness`, at most 120 seconds (60 seconds on testnet). Both windows are readable from the oracle (`tradeStaleness`, `closeStaleness`), and the forward allowance on a future-stamped report is `trade_staleness` on every path. Budget your submission latency against the strict window: a report that ages past it while the transaction is in flight fails with `PriceStale` (782).
+Use the market's `feedId` from configuration. Fetch the report from the Data Streams service with your own server-side credentials. Pass the report's complete `fullReport` bytes to the market call. Keep the signed envelope intact. A decoded price is not a replacement.
 
-Execution prices off the verified bid and ask, not a single mid price:
+For report access and schema details, follow [Chainlink's fetch and decode guide](https://docs.chain.link/data-streams/tutorials/ts-sdk-fetch). The Zenex ticker endpoint exposes decoded display fields. It does not provide the full signed report.
 
-- An **increase** enters at the entry price: the ask for a long, the bid for a short.
-- A **decrease** exits at the exit price: the bid for a long, the ask for a short.
+:::warning Keep price credentials on your server
+Browser clients use display-price endpoints. Never ship Data Streams credentials in a frontend bundle.
+:::
 
-A trigger and a `priceBound` are both judged on that same execution-side price, so a stop or a limit fires on the price the fill actually touches.
+## Get an effective price for an estimate
 
-The verified report also carries a `publish_time`, the observation timestamp in seconds. To prevent replay, it must not predate the order (`publish_time >= order.created_at`) or the position's last mark (`publish_time >= position.priced_at`), with one exception: a market order (no trigger) filling in its own creation ledger is an atomic create-and-fill and accepts any oracle-accepted price. When a delisted market has a terminal price stored, the market prices flat (bid and ask both equal the terminal price) and submitted report bytes are ignored entirely.
+The oracle can narrow the report's spread. Use its verified return for a preview that includes the deployed spread setting. Use `network` and `market` from [Quickstart](./quickstart.md). The input `reportBytes` is the complete signed report from your Data Streams response.
 
-## Get Data Streams credentials
+```ts
+import {
+  OracleContract, Price, simulateAndParse,
+} from "@zenith-protocols/zenex-sdk";
 
-Data Streams is a subscription product. Chainlink issues a client id and an HMAC secret for your account, which authenticate every REST call. Both are server-side secrets. Never ship either to the browser.
-
-## The Data Streams request
-
-The API exposes `GET /api/v1/reports/latest?feedID=0x…` on `https://api.dataengine.chain.link`. One request returns the latest report for one stream, and the stream id you request must equal the `feed_id` the target market was deployed with (read it from `getFeed`). Reports publish once per second upstream, so a one-second poll tracks the stream.
-
-Every request carries three headers, an HMAC-SHA256 signature over a canonical string built from the method, the path including its query string, the hex SHA-256 of the body (the empty-string digest for a GET), the client id, and a millisecond timestamp:
-
-```text
-Authorization:                     <client id>
-X-Authorization-Timestamp:         <unix milliseconds>
-X-Authorization-Signature-SHA256:  hex(hmac_sha256(secret,
-    "GET {path} {sha256_hex(body)} {client id} {timestamp_ms}"))
-```
-
-Sign each attempt at the moment you send it. The timestamp has to land inside the API's clock-skew window, so a signature reused across a retry after a slow first attempt can fall outside it.
-
-The response wraps one report:
-
-```json
-{ "report": { "feedID": "0x0003…", "validFromTimestamp": 1786461747,
-              "observationsTimestamp": 1786461747, "fullReport": "0x…" } }
-```
-
-`fullReport` is the only field the chain cares about. Hex-decode it and pass the bytes straight through as the `price` argument on the fill. It is the ABI-encoded signed envelope, so do not unwrap it, re-encode it, or trim it to the report body: the verifier checks the signatures over the envelope as delivered.
-
-## Minimum working proxy
-
-If your client is a browser, front the API with a small backend proxy so the HMAC secret never reaches the client. A Cloudflare Worker using [Hono](https://hono.dev/) gets you there in about thirty lines, and the same shape works on any Node-style runtime.
-
-```typescript
-import { Hono } from 'hono';
-
-const HOST = 'https://api.dataengine.chain.link';
-const enc = new TextEncoder();
-const hex = (b: ArrayBuffer) =>
-  [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
-
-const app = new Hono<{ Bindings: { DS_CLIENT_ID: string; DS_HMAC_SECRET: string } }>();
-
-app.get('/reports/:feedId', async (c) => {
-  const path = `/api/v1/reports/latest?feedID=${c.req.param('feedId')}`;
-  const ts = Date.now();
-  const bodyHash = hex(await crypto.subtle.digest('SHA-256', enc.encode('')));
-  const key = await crypto.subtle.importKey(
-    'raw', enc.encode(c.env.DS_HMAC_SECRET),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
-  );
-  const canonical = `GET ${path} ${bodyHash} ${c.env.DS_CLIENT_ID} ${ts}`;
-  const signature = hex(await crypto.subtle.sign('HMAC', key, enc.encode(canonical)));
-
-  const res = await fetch(`${HOST}${path}`, {
-    headers: {
-      Authorization: c.env.DS_CLIENT_ID,
-      'X-Authorization-Timestamp': String(ts),
-      'X-Authorization-Signature-SHA256': signature,
-    },
-  });
-  if (!res.ok) return c.json({ error: 'data streams request failed' }, 502);
-
-  const json = await res.json() as { report?: { fullReport?: string; observationsTimestamp?: number } };
-  const report = json.report;
-  if (!report?.fullReport) return c.json({ error: 'no report' }, 502);
-  return c.json({ data: report.fullReport, timestamp: report.observationsTimestamp ?? 0 });
-});
-
-export default app;
-```
-
-Your keeper (or `create_and_fill` flow) hits `GET /reports/0x0003…`, decodes `data` from hex into a `Uint8Array`, and passes that as the `price` argument on the fill:
-
-```typescript
-const { data } = await (await fetch(`${PROXY}/reports/${feedId}`)).json();
-const report = Uint8Array.from(Buffer.from(data.replace(/^0x/, ''), 'hex'));
-
-const fillOp = market.executeOrder(keeper, user, orderId, report);
-```
-
-## Previewing a verified price off-chain
-
-To inspect what the oracle would accept without submitting a fill, simulate `OracleContract.verifyPrice`. It returns the verified `OraclePriceData` (`bid`, `ask`, `publish_time`), which is handy for showing an expected fill price or checking staleness before a keeper commits gas. For the expected fill price, read the execution side: the `ask` for a long increase, the `bid` for a short increase. The `feedId` argument must equal the market's `getFeed` anchor, and `protective` should match the class of the call you are previewing (`false` for a fill, `true` for a liquidation, ADL, or accrual).
-
-```typescript
-import { OracleContract, simulateAndParse } from '@zenith-protocols/zenex-sdk';
-
-const oracle = new OracleContract(ORACLE_ADDRESS);
-const { result } = await simulateAndParse(
-  network,
-  oracle.verifyPrice(report, feedId, false),
+const oracle = new OracleContract(market.oracle);
+const verified = await simulateAndParse(
+  network, oracle.verifyPrice(reportBytes, market.feedId),
   OracleContract.parsers.verifyPrice,
 );
+const { bid, ask, publish_time } = verified.result;
+const price = new Price(bid, ask, publish_time);
 ```
 
-`verifyPrice` is not a view: the verifier authorizes the oracle as its caller and both contracts bump storage TTLs, so simulate it rather than expecting a free read.
+`reportBytes` is the complete signed report as a `Buffer` or `Uint8Array`. The market's feed ID is 32 bytes. The SDK's estimate layer expects 18-decimal prices. Check stream precision when you add a market.
 
-## Caching
+A successful simulation checks that report against the current oracle. The transaction must still verify its report at execution.
 
-A short in-memory cache per stream (a second or so, matching the upstream publish cadence) absorbs rapid polling without ever serving a report outside the strict staleness window. Key the cache by stream id, store the observation timestamp alongside the blob, and drop an entry once its age passes the window you are filling under. On Cloudflare Workers the map persists across requests inside a single isolate.
+:::warning Preserve bid, ask, and observation time
+`Price.from` creates a zero-spread display approximation. It cannot reproduce a spread-aware execution price or validate a report.
+:::
 
-## When to skip the proxy
+## Submit a keeper action
 
-If your integration is a backend service (a keeper, a market maker, an automation) you can call the API directly with your client id and HMAC secret. The proxy pattern exists to keep the secret server-side when the client is a browser. Choose accordingly.
+Use the appropriate `MarketContract` operation:
+
+| Operation | Inputs beyond the price report |
+| --- | --- |
+| `executeOrder` | Keeper recipient, owner, order ID |
+| `executeVaultOrder` | Keeper recipient, owner, order ID |
+| `executeLiquidation` | Keeper recipient, owner, side |
+| `executeAdl` | Keeper recipient, owner, side, amount |
+| `updateAdlState` | No additional input |
+| `accrue` | No additional input |
+
+The operation builder accepts report bytes as its price input. The transaction source signs and pays the network fee on a direct submission. The `keeper` address receives the execution reward. It is not an authorizer.
+
+Use strict router batches when every call must succeed. Use isolated outcomes when the caller can handle individual failures. For complete signatures and gates, read [market orders](/technical/market/orders), [liquidation](/technical/market/liquidation), and [auto-deleveraging](/technical/market/auto-deleveraging).
+
+## Handle time and price gates
+
+| Condition | What to do |
+| --- | --- |
+| Wrong feed | Correct the report source |
+| Stale or expired report | Fetch a fresh report before another attempt |
+| Report too far ahead | Check report and ledger clocks |
+| Trigger or price bound not met | Leave the order pending |
+| Market gate blocks execution | Refresh market state and show the specific reason |
+
+Order fills use the strict trade window. Protective liquidation, auto-deleveraging, and accrual use the protective window. Both enforce the forward-time allowance. Positions and vault orders also impose report-time conditions. A report accepted by the oracle can still fail a market gate. Read [oracle verification](/technical/oracle/verify-price) for exact time rules and errors. Read [Deployments](/deployments) for current settings.

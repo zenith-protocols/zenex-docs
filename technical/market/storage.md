@@ -1,6 +1,7 @@
 ---
 sidebar_position: 16
 title: Storage
+description: Market storage keys, records, TTL tiers, archival, and restoration.
 ---
 
 # Storage
@@ -77,7 +78,9 @@ Class is the Soroban storage type. Tier is the TTL tier from the previous sectio
 
 The [units page](../units.md) defines token-dec, base-dec, feed precision, `SCALAR_18`, and seconds.
 
-`create_order` stores the target `Position` row whenever it is missing, so the transaction that creates the order pays the rent for it and the fill does not. Rent falls on the transaction's fee payer, which under the router's fee abstraction is the relayer rather than the trader. A decrease order always rewrites the row, because its id joins the side's decrease list. An increase order leaves an existing row untouched. `Position::store` covers every other write, the fills, the liquidation, and the ADL fill included. A closed position persists as the zeroed row.
+`create_order` stores the target `Position` row whenever it is missing, so the creation transaction funds its initial rent. The transaction's fee payer pays the network charge. A relayer can pay that charge and collect a separate token fee through the fee forwarder.
+
+A decrease order always rewrites the row, because its id joins the side's decrease list. An increase order leaves an existing row untouched. `Position::store` covers every other write, the fills, the liquidation, and the ADL fill included. A closed position persists as the zeroed row.
 
 Eight keys exist from the constructor onward. They are the seven instance keys it writes and `MarketData`. The other keys are lazy, and the contract creates each one on its first write. Exactly one lazy write sits on a read path. When `PriceCache` is absent, `Market::load` stores the verified report. `get_position` writes nothing on a miss and returns the zeroed row.
 
@@ -151,3 +154,9 @@ Archival never removes an order or its escrow. Only a fill, a cancel, or a closu
 The price cache is the one `DataKey` entry meant to lapse. With no `TerminalPrice` stored, `Market::load` reads a lapsed cache as absent and prices the call from the verified report alone. It stores that report as the new cache. Under a stored `TerminalPrice` the cache is neither read nor written.
 
 Archival therefore changes what the contract can reach and never what it holds. Every archived entry returns unchanged on restoration, except the price cache, which the next verified report rebuilds.
+
+:::info Archived state needs restoration
+Archival preserves persistent state and order escrow. Restoration adds a network cost before that state can be accessed again.
+
+Order expiration is independent of storage time-to-live. It does not remove escrow or refund it.
+:::

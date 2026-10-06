@@ -1,5 +1,6 @@
 ---
 title: Constructor and settings
+description: Oracle constructor, freshness bounds, spread settings, ownership, storage, and receipts.
 sidebar_position: 3
 ---
 
@@ -109,10 +110,10 @@ A valid factor reaches the rest of the call. The call extends the instance TTL, 
 
 | Function | Returns | Unit or scale | Reads |
 |---|---|---|---|
-| `verifier` | `Address` | | `DataKey::Verifier` |
-| `trade_staleness` | `u64` | seconds | `DataKey::TradeStaleness` |
-| `close_staleness` | `u64` | seconds | `DataKey::CloseStaleness` |
-| `spread_reduction_factor` | `i128` | `SCALAR_18` | `DataKey::SpreadReductionFactor` |
+| `fn verifier(env: Env) -> Address` | `Address` | | `DataKey::Verifier` |
+| `fn trade_staleness(env: Env) -> u64` | `u64` | seconds | `DataKey::TradeStaleness` |
+| `fn close_staleness(env: Env) -> u64` | `u64` | seconds | `DataKey::CloseStaleness` |
+| `fn spread_reduction_factor(env: Env) -> i128` | `i128` | `SCALAR_18` | `DataKey::SpreadReductionFactor` |
 
 All four are permissionless and take `Env` as their only argument. The constructor writes all four keys, so each view returns a value on a deployed contract.
 

@@ -1,6 +1,7 @@
 ---
 sidebar_position: 3
 title: Config
+description: All market configuration fields, validation rules, change effects, and protocol constants.
 ---
 
 # Config
@@ -90,6 +91,10 @@ Each mechanism has its own page: [Fee system](./fee-system.md), [Margin and leve
 Two fields are copied into a stored row. `exec_fee` is copied into each `Order` and `VaultOrder` at creation, so a resting order keeps the fee it escrowed. `notional_lock` sets the `unlocks_at` deadline of a position on each fill that adds notional, so an existing deadline keeps its length.
 
 The market reads every other field when it uses it. That includes `redeem_lock`, which is measured from `created_at` at fill time and not fixed at creation. A change to such a field applies to every open position and resting order at its next fill, accrual, or check.
+
+:::warning Most parameters apply to existing state
+The market reads most settings when an action executes. A change can affect open positions and resting orders.
+:::
 
 ## Twenty rules validate every Config {#validation-rules}
 

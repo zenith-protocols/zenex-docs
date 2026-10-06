@@ -1,6 +1,7 @@
 ---
 sidebar_position: 15
 title: Vault orders
+description: Deposit and redeem orders, escrow, locks, minimum output, rejection, and capacity.
 ---
 
 # Vault orders
@@ -63,6 +64,10 @@ The checks run before the status split, so a redeem on a `Retired` market meets 
 The path transfers `amount` shares from `user` to the market. It then calls `strategy_redeem` for those shares, with `user` as the receiver, the market as the owner, and a `net_pnl` of `0`. Retirement needs a cleared book, which `set_status` enforces with `MarketNotCleared` (706). A `net_pnl` of `0` is therefore the exact mark. An error from the vault or the token contract propagates.
 
 The path publishes `RedeemFill` with `shares` as `amount` and `assets` as the assets the vault paid. The `id` is `0`, `keeper` is `user`, and `fee` and `net_pnl` are `0`. The call returns `0`.
+
+:::warning The retired path ignores minimum output
+This path ignores `min_out` after validation. It also bypasses the redeem lock and charges no execution or redeem fee.
+:::
 
 ## `cancel_vault_order`
 
@@ -166,6 +171,10 @@ In words, a redeem may leave each side's pending profit at no more than the `max
 
 Step 10 compares the allowance with `MarketData::side_pnl` on each side, at `maximize = true`. The [PnL and the profit cap](./pnl-calculation.md) page defines `side_pnl`, and the [Units and scales](../units.md#truncating-halves) page defines `half_factor`. `Config::check_valid` rejects a `Config` with `InvalidConfig` (700) unless `0 < max_pnl_withdraw <= adl_clear_target`, and with `NegativeValueNotAllowed` (710) first when `max_pnl_withdraw` is negative. A permitted redeem therefore leaves both sides at or below the auto-deleveraging (ADL) clear target. It cannot arm ADL, and it cannot leave an armed flag above the clear target. The [Config](./config.md) page numbers the rule, and the [auto-deleveraging](./auto-deleveraging.md) page defines the clear target.
 
+:::info A mature redeem can remain pending
+The current lock duration, utilization gates, and pending-profit gate all apply at execution. The lock deadline alone does not establish fill eligibility.
+:::
+
 ### A quote below `min_out` rejects the order {#rejection}
 
 `reject` runs when step 3 of either fill finds the quote under `min_out`. It runs before any asset moves, so the escrow is intact. A redeem reaches it after the `redeem_lock` check, so only a mature redeem rejects.
@@ -178,6 +187,12 @@ Step 10 compares the allowance with `MarketData::side_pnl` on each side, at `max
 A rejection charges no vault fee, and the user keeps the whole principal. The `exec_fee` is the cost of the rejected attempt. It pays the keeper, so a rejection never costs the keeper. The first fill attempt after maturity settles the order either way. `min_out` therefore bounds slippage and cannot hold an order for a better price.
 
 The capacity gates trap instead. These are the size cap of a deposit and the two exit gates of a redeem. A trap reverts the whole call, so the order stays in place and fills later.
+
+:::warning Rejection consumes the execution fee
+A below-minimum quote removes the order and refunds its principal. The keeper receives `exec_fee`. The order does not wait for a better quote.
+
+A capacity failure traps instead, reverts the attempt, and leaves the order stored.
+:::
 
 ## One vault fee rounds down and splits three ways
 

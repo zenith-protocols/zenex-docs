@@ -1,5 +1,6 @@
 ---
 title: Constructor and share token
+description: Vault constructor, share decimals, token methods, allowances, events, and storage.
 sidebar_position: 2
 ---
 
@@ -100,9 +101,7 @@ Any caller can call `total_supply`, `balance`, `allowance`, `decimals`, `name`, 
 
 `transfer` needs authorization from `from`. It moves `amount` from `from` to the address inside `to`. `transfer_from` needs authorization from `spender`. It spends the allowance from `from` to `spender` first, then moves `amount` from `from` to `to`. The allowance write inside `transfer_from` emits no `Approve` event.
 
-`approve` needs authorization from `owner`, and it replaces any allowance that `owner` already granted to `spender`. It writes the temporary allowance entry. The stored `live_until_ledger` is the last ledger sequence on which `allowance` still reads the stored amount.
-
-A call without the required authorization fails at the host as an authorization error, not as a contract error code.
+`approve` needs authorization from `owner`, and it replaces any allowance that `owner` already granted to `spender`. It writes the temporary allowance entry. The stored `live_until_ledger` is the last ledger sequence on which `allowance` still reads the stored amount. A call without the required authorization fails at the host as an authorization error, not as a contract error code.
 
 **Share transfers depend on authorization, balance, and allowance alone.** Any holder can move shares with `transfer` or `transfer_from` at any market status. The redeem lock is a market rule. `create_vault_order` moves the redeemed shares to the market, and `execute_vault_order` traps `VaultOrderLocked` (751) until the ledger timestamp reaches `created_at` plus `redeem_lock`. A share transfer changes neither value. The [Vault orders](../market/vault-orders.md) page gives the lock.
 

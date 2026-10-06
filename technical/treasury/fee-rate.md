@@ -1,5 +1,6 @@
 ---
 title: Fee rate and withdrawal
+description: Treasury construction, protocol fee rates, authorized withdrawals, events, and storage.
 sidebar_position: 2
 ---
 
@@ -35,9 +36,7 @@ pub fn __constructor(e: Env, owner: Address, rate: i128)
 fn get_rate(e: Env) -> i128
 ```
 
-Permissionless. Any account or contract may call it. It extends the instance time to live (TTL), then returns the stored `Rate`, a `SCALAR_18` fraction inside `[0, SCALAR_18 / 2]` on a deployed treasury. An unset `Rate` key reads as `0`, so the call raises no error code. It publishes no event.
-
-The market calls `get_rate` once per settlement. [Fees and settlement](../market/fee-system.md) gives the legs the rate splits. [Constructor and dependencies](../market/dependencies.md) lists the market entries that make the call.
+Permissionless. Any account or contract may call it. It extends the instance time to live (TTL), then returns the stored `Rate`, a `SCALAR_18` fraction inside `[0, SCALAR_18 / 2]` on a deployed treasury. An unset `Rate` key reads as `0`, so the call raises no error code. It publishes no event. The market calls `get_rate` once per settlement. [Fees and settlement](../market/fee-system.md) gives the legs the rate splits. [Constructor and dependencies](../market/dependencies.md) lists the market entries that make the call.
 
 ## `set_rate` replaces the rate at once
 
@@ -89,6 +88,7 @@ The treasury implements `Ownable` from stellar-access and exposes `get_owner`, `
 | --- | --- | --- |
 | `InvalidRate` | 900 | `rate` is outside `[0, SCALAR_18 / 2]` in `__constructor` or `set_rate`. |
 | `OwnerNotSet` | 2100 | `set_rate` or `withdraw` runs after `renounce_ownership`. |
+| `OwnerAlreadySet` | 2102 | Constructor writes an owner when the key already exists. A fresh deployment cannot meet this condition. |
 
 `OwnerNotSet` comes from stellar-access, and [Ownable codes](../market/errors.md#ownable-codes) gives the full code table for that module. A call that the owner did not sign fails host authorization and carries no contract error code. A `withdraw` that the token contract rejects carries that contract's error.
 

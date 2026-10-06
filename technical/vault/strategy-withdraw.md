@@ -1,6 +1,7 @@
 ---
 sidebar_position: 4
 title: Strategy withdraw
+description: Strategy authorization, vault payout draws, receipts, and effects on share backing.
 ---
 
 # Strategy withdraw

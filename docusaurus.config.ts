@@ -23,7 +23,7 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://docs.zenex.trade',
+  url: process.env.DOCS_SITE_URL ?? 'https://docs.zenex.trade',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/',
@@ -32,12 +32,15 @@ const config: Config = {
   organizationName: 'zenith-protocols', // Your GitHub org name
   projectName: 'zenex-docs', // Your repo name (adjust as needed)
 
-  clientModules: ['./src/clientModules/copyButtonNudge.ts'],
+  clientModules: [
+    './src/clientModules/copyButtonNudge.ts',
+    './src/clientModules/searchAccessibility.ts',
+  ],
 
   markdown: {
     mermaid: true,
     hooks: {
-      onBrokenMarkdownLinks: 'warn',
+      onBrokenMarkdownLinks: 'throw',
     },
   },
 
@@ -46,9 +49,6 @@ const config: Config = {
     [
       '@easyops-cn/docusaurus-search-local',
       {
-        // Index the visible docs plugin instances. The default instance is
-        // served at the site root. Integrations is temporarily hidden from
-        // the navbar, so keep it out of the search index too.
         docsRouteBasePath: ['/', 'technical'],
         docsDir: ['docs', 'technical'],
         indexDocs: true,
@@ -59,7 +59,7 @@ const config: Config = {
         searchResultLimits: 8,
         language: ['en'],
         removeDefaultStopWordFilter: true,
-        searchBarPosition: 'left',
+        searchBarPosition: 'right',
       },
     ],
   ],
@@ -100,25 +100,32 @@ const config: Config = {
 
   plugins: [
     [
+      '@docusaurus/plugin-client-redirects',
+      {
+        // Integration guides are unpublished; retain their existing URLs.
+        redirects: [{
+          from: [
+            '/integrations',
+            '/integrations/overview',
+            '/integrations/quickstart',
+            '/integrations/sdk',
+            '/integrations/agent-wallet',
+            '/integrations/relay',
+            '/integrations/data-api',
+            '/integrations/price-feed',
+            '/integrations/indexing',
+          ],
+          to: '/technical',
+        }],
+      },
+    ],
+    [
       '@docusaurus/plugin-content-docs',
       {
         id: 'technical',
         path: 'technical',
         routeBasePath: 'technical',
         sidebarPath: './sidebarsTechnical.ts',
-        editUrl:
-          'https://github.com/zenith-protocols/zenex-docs/tree/main/',
-        remarkPlugins: [remarkMath],
-        rehypePlugins: [rehypeKatex],
-      },
-    ],
-    [
-      '@docusaurus/plugin-content-docs',
-      {
-        id: 'integrations',
-        path: 'integrations',
-        routeBasePath: 'integrations',
-        sidebarPath: './sidebarsIntegrations.ts',
         editUrl:
           'https://github.com/zenith-protocols/zenex-docs/tree/main/',
         remarkPlugins: [remarkMath],
@@ -191,17 +198,11 @@ const config: Config = {
           position: 'left',
           label: 'Technical',
         },
-        // Integrations is temporarily hidden while its docs catch up to v2.
-        // The plugin still builds the pages, so direct /integrations URLs
-        // keep working. Restore this item (and the search-local entries
-        // above) to bring it back.
-        // {
-        //   type: 'docSidebar',
-        //   sidebarId: 'integrationsSidebar',
-        //   docsPluginId: 'integrations',
-        //   position: 'left',
-        //   label: 'Integrations',
-        // },
+        {
+          href: 'https://app.zenex.trade',
+          label: 'Open app',
+          position: 'right',
+        },
         {
           type: 'html',
           position: 'right',

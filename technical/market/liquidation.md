@@ -1,6 +1,7 @@
 ---
 sidebar_position: 13
 title: Liquidation
+description: Liquidation eligibility, gate order, full-close outcomes, fees, and bad debt.
 ---
 
 # Liquidation
@@ -78,7 +79,7 @@ A stored terminal price runs on its own clock. `set_terminal_price` (owner only)
 fn liquidate(&mut self, e: &Env, market: &mut Market, user: &Address, is_long: bool, force: bool) -> Liquidation;
 ```
 
-`user` and `is_long` address the same row. `market` is the loaded working set. The path reads its price and its `Config`. It writes the banked funding and the freed notional, tokens, and margin back to `MarketData`. `user` receives earned funding as a claimable credit. `force` waives the eligibility gate alone. The return is the `Liquidation` outcome struct, which differs from the `liquidation` event that step 6 publishes.
+`user` and `is_long` address the same row. `market` is the loaded working set. The path reads its price and its `Config`. The path writes the banked funding and the freed notional, tokens, and margin back to `MarketData`. `user` receives earned funding as a claimable credit. `force` waives the eligibility gate alone. The return is the `Liquidation` outcome struct, which differs from the `liquidation` event that step 6 publishes.
 
 `Position::liquidate` runs four steps in this order.
 
@@ -87,9 +88,17 @@ fn liquidate(&mut self, e: &Env, market: &mut Market, user: &Address, is_long: b
 3. If `force` is false and `Position::is_liquidatable` returns false, the call traps `NotLiquidatable` (722).
 4. `Position::close_settled` closes the row against those numbers and returns a `Decrease`.
 
-The predicate of step 3 is `settled.equity < ceil(notional * maintenance_margin / SCALAR_18)`. `settled.equity` is signed (token-dec), and `notional` is the row's size (token-dec). `maintenance_margin` is a `SCALAR_18` fraction from `Config`. `Position::margin_requirement` computes the right side through `math::apply_factor_ceil`. A row whose settled equity equals the requirement is healthy. Because `settled.equity` uses the haircut `pnl`, a winner can fall below the line while its side's profit is above the haircut allowance. `Position::decrease` and `Position::require_valid` apply the same predicate and trap `PositionLiquidatable` (723), so liquidation is the only legal transition for a row below the line.
+The predicate of step 3 is `settled.equity < ceil(notional * maintenance_margin / SCALAR_18)`. `settled.equity` is signed (token-dec), and `notional` is the row's size (token-dec). `maintenance_margin` is a `SCALAR_18` fraction from `Config`. `Position::margin_requirement` computes the right side through `math::apply_factor_ceil`. A row whose settled equity equals the requirement is healthy. Because `settled.equity` uses the haircut `pnl`, a winner can fall below the line while its side's profit is above the haircut allowance.
+
+`Position::decrease` applies the same predicate before a close. It traps `PositionLiquidatable` (723) while the row remains below maintenance.
+
+An increase can add enough margin to rescue that row. Its resulting position must pass `Position::require_valid`, including the initial and maintenance requirements.
 
 The `Decrease` of step 4 carries `notional`, `tokens`, `margin` (gross), `pnl` (post-haircut), `bad_debt`, and `fees`. Its `returned` field is `max(settled.equity, 0)`. This page names that amount `equity`. `Position::liquidate` copies the other fields into the `Liquidation` outcome and sets `bad_debt` to `max(-settled.equity, 0)`. It computes `liq_fee` and sets the outcome's `returned` to `equity` less the fee.
+
+:::warning Eligibility uses settled equity
+The liquidation check includes accrued costs, full-close trade fees, and the profit cap. Stored margin alone does not determine eligibility. Liquidation closes the whole position and bypasses the decrease lock.
+:::
 
 ### The fee is capped at equity
 

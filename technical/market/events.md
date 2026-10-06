@@ -1,5 +1,6 @@
 ---
 title: Events
+description: Market event topics, data maps, units, fill receipts, and emission order.
 sidebar_position: 17
 ---
 

@@ -1,6 +1,7 @@
 ---
 sidebar_position: 12
 title: Borrowing rate
+description: Side reserves, utilization, the borrowing curve, and per-second index accrual.
 ---
 
 # Borrowing rate
@@ -44,7 +45,7 @@ The opposite side is not checked. A price move or a config change can leave it a
 pub fn side_reserved(&self, e: &Env, price: &PriceData, is_long: bool) -> i128;
 ```
 
-`MarketData::side_reserved` returns the value the vault stands behind on one side (token-dec). It raises no `MarketError`. An arithmetic overflow traps. The two sides measure it differently:
+`MarketData::side_reserved` returns the value the vault stands behind on one side (token-dec). `MarketData::accrue_borrowing` advances the two side indices. It raises no `MarketError`. An arithmetic overflow traps. The two sides measure it differently:
 
 ```text
 long  = to_notional_ceil(tokens.long, price.ask)
@@ -124,7 +125,7 @@ pub fn accrue_borrowing(
 );
 ```
 
-`MarketData::accrue_borrowing` advances the two side indices. It raises no `MarketError`. An arithmetic overflow traps. `elapsed` is the window in seconds. `price` is the mark `Market::load` carries. `config` holds the four fields above. `vault_balance` is token-dec. If `elapsed` is zero, the call returns at once. The caller still stamps `accrued_at`. Otherwise the method visits the long side and then the short side.
+It raises no `MarketError`. An arithmetic overflow traps. `elapsed` is the window in seconds. `price` is the mark `Market::load` carries. `config` holds the four fields above. `vault_balance` is token-dec. If `elapsed` is zero, the call returns at once. The caller still stamps `accrued_at`. Otherwise the method visits the long side and then the short side.
 
 `accrue_borrowing` skips a side whose `MarketData.tokens` count is strictly less than the other side's, and that side accrues nothing. Every other side computes its own `side_reserved` at the loaded `price`, its own utilization against `max_util_open` and `vault_balance`, and its own rate. A token tie charges both sides, each at the rate from its own utilization. `rate` below is that per-second `SCALAR_18` value from `borrowing_rate`. The accrual then adds to that side of `MarketData.borrowing_idx`:
 
@@ -133,6 +134,10 @@ borrowing_idx[side] += rate * elapsed   (SCALAR_18)
 ```
 
 `borrowing_idx` never falls. A skipped side keeps its value, and a zero rate holds the index flat. Zero utilization gives a zero rate, and so does a configured `borrow_rate` and `increased_borrow_rate` of zero. An empty market ties at zero tokens and reserves nothing on both sides. Both rates then come out of zero utilization, so neither index moves.
+
+:::info A token tie charges both sides
+The side selection compares base-token exposure. Equal token counts accrue both side indices, each at its own reserve-utilization rate.
+:::
 
 ## What this means for a position
 

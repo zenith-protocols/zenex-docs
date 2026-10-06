@@ -1,108 +1,62 @@
 ---
-sidebar_position: 5
-title: Indexing
+title: Index events
+sidebar_label: Build an event index
+description: Decode contract receipts, preserve event order, and reconstruct orders and position lifecycles.
 ---
 
-# Indexing
+# Index events
 
-Every state change on a Zenex market emits a typed Soroban event. An indexer reconstructs positions, fills, and vault activity by decoding these events in order. The SDK ships the event shapes as TypeScript interfaces, so a decoder written against the topic layout below stays in step with the contracts.
+An index turns contract receipts into history. Use [the public data API](./data-api) when you need existing projections. This guide covers your own pipeline. The Zenex indexer reads Stellar RPC events, archives them, and projects them into PostgreSQL. Its backend serves those projections.
 
-## The indexing path
+## Establish coverage
 
-Zenex runs a hosted indexer built on a Goldsky Turbo pipeline: contract events flow through a Goldsky webhook into a Node.js receiver, which decodes them against the SDK's event types and writes position and fill state to Postgres. A separate backend serves the decoded data over a REST API (base URL TBD). To run your own, point a Goldsky pipeline at a market's market contract, decode the webhook payloads, and persist whatever shape your application needs. The reference receiver lives at [`zenex-indexer`](https://github.com/zenith-protocols/zenex-indexer).
+Track a deployment's market addresses and the ledger where your coverage starts. Preserve the network with that registry.
 
-## Decoding
+Read `getEvents` in cursor order. Store the cursor only after the batch and its projections commit. Replayed events must not create duplicate rows. Persist the RPC event ID, contract address, ledger, close time, transaction hash, topics, and value. Keep the raw receipt for a rebuild. For RPC pagination and filters, consult [Stellar getEvents](https://developers.stellar.org/docs/data/apis/rpc/api-reference/methods/getEvents).
 
-The SDK exports the `MarketEventType` enum (whose members are the topic-0 symbols below), the `ZenexContractType` tag, and one interface per event under the `MarketEvent`, `VaultEvent`, `FactoryEvent`, and `GovernanceEvent` unions. Write the decode against the topic layout below and type the result with these interfaces.
+:::warning RPC history has a retention window
+A cursor outside that window needs an archive or backfill. An empty response does not prove complete historical coverage.
+:::
 
-```typescript
-import { MarketEventType } from '@zenith-protocols/zenex-sdk';
-import type { MarketEvent } from '@zenith-protocols/zenex-sdk';
+## Decode the wire format
 
-function apply(decoded: MarketEvent) {
-  switch (decoded.eventType) {
-    case MarketEventType.OpenFill:
-      // itemized receipt for a fill that opened the side
-      break;
-    case MarketEventType.CloseFill:
-      // itemized receipt for a full close
-      break;
-  }
-}
-```
+Use Stellar SDK `scValToNative` to decode each topic and the data value. The first topic identifies the event. Market topics then carry the owner, order ID, and side where applicable. Data maps use contract field names in snake case. The SDK exports event types, enums, and row parsers. Your decoder validates the wire data and maps it to those types.
 
-## Topic layout
+| Wire receipt | Projected effect |
+| --- | --- |
+| `create_order`, `create_vault_order` | Add the immutable pending row |
+| `cancel_order`, `cancel_vault_order` | Remove the pending row |
+| `open_fill` | Start a position lifecycle |
+| `increase_fill`, `decrease_fill` | Record a change within that lifecycle |
+| `close_fill`, `liquidation` | Finalize the lifecycle |
+| `deposit_fill`, `redeem_fill` | Record a vault receipt |
+| `reject_vault_order` | Remove the order and record its rejection |
+| `claim_credit` | Record the paid credit |
+| `accrual_update` | Refresh market accrual state |
+| `status_update`, `config_update`, `terminal_price_update`, `adl_update` | Update the corresponding market state |
 
-Every market event is a `#[contractevent]`. Its topics are the snake_case event name symbol first, then the `#[topic]` fields in declaration order. Every remaining field lands in the data, which crosses the wire as a `Map<Symbol, Val>` keyed by field name and sorted by that name's bytes, so the declaration order the tables below list is documentation rather than wire layout. An event with no non-topic fields carries an empty map. Amounts carry units: token decimals for quote-side values, base decimals for `tokens`, the feed's native price precision for prices, and `SCALAR_18` for indices and rates.
+Validate topic count, value keys, value types, and source contract. Decode only events from successful contract calls. Keep invalid or unknown receipts for inspection. Keep amounts as `bigint` or exact decimal text. A JSON serializer must convert `bigint` deliberately. The complete field catalog lives in [market events](/technical/market/events). Use [units and scales](/technical/units) when you normalize values.
 
-## Market events
+:::warning Receipts do not replace current state
+Fill payloads describe the amounts for that action. Read the resulting position from chain when you need its current row.
+:::
 
-There are 18 market events.
+## Identify orders and positions
 
-| Event (name symbol) | Topics after the name | Data fields |
-|---|---|---|
-| `create_order` | `user`, `id` | `order` (the stored `Order` row) |
-| `cancel_order` | `user`, `id` | `refund` (escrow returned by this cancel) |
-| `create_vault_order` | `user`, `id` | `order` (the stored `VaultOrder` row) |
-| `cancel_vault_order` | `user`, `id` | (empty map) |
-| `deposit_fill` | `user`, `id` | `keeper`, `assets`, `shares`, `fee`, `net_pnl` |
-| `redeem_fill` | `user`, `id` | `keeper`, `shares`, `assets`, `fee`, `net_pnl` |
-| `claim_credit` | `user` | `amount` |
-| `adl_update` | (none) | `long`, `short` (per-side ADL enabled flags) |
-| `accrual_update` | (none) | (empty map) |
-| `status_update` | (none) | `status` (the `Status` discriminant) |
-| `config_update` | (none) | `config` (the new `Config`) |
-| `terminal_price_update` | (none) | `price` (the flat settlement price) |
-| `open_fill` | `user`, `id`, `is_long` | `keeper`, `price`, `notional`, `tokens`, `margin`, `base_fee`, `impact_fee` |
-| `increase_fill` | `user`, `id`, `is_long` | `keeper`, `price`, `notional`, `tokens`, `margin`, `base_fee`, `impact_fee`, `funding`, `borrowing` |
-| `decrease_fill` | `user`, `id`, `is_long` | `keeper`, `price`, `notional`, `tokens`, `margin`, `pnl`, `base_fee`, `impact_fee`, `funding`, `borrowing`, `returned` |
-| `close_fill` | `user`, `id`, `is_long` | `keeper`, `price`, `notional`, `tokens`, `margin`, `pnl`, `base_fee`, `impact_fee`, `funding`, `borrowing`, `bad_debt`, `returned` |
-| `reject_vault_order` | `user`, `id` | `keeper`, `quoted`, `net_pnl` |
-| `liquidation` | `user`, `is_long` | `keeper`, `price`, `notional`, `tokens`, `margin`, `pnl`, `base_fee`, `impact_fee`, `funding`, `borrowing`, `bad_debt`, `returned`, `liq_fee` |
+Key an order by market, owner, and ID. Trade orders and vault orders share the owner's order counter. Key a position by market, owner, and side. A lifecycle starts at `open_fill` and ends at `close_fill` or `liquidation`.
 
-Topic types are `user: Address`, `id: u32`, `is_long: bool`. Every raw data field is `i128` except `keeper` (`Address`), `order` (`Order` or `VaultOrder`), `config` (`Config`), `long` and `short` (`bool`), and `status` (`u32`). The SDK adds one derived property that is not in the contract payload: `source` on `redeem_fill` (`'order' | 'instant'`) and on `decrease_fill` and `close_fill` (`'order' | 'adl'`), derived from the order id, where `0` marks an ADL close or a retired-market instant redeem. The decoded event fields are camelCase (`orderId`, `isLong`, `baseFee`, `impactFee`, `badDebt`, `liqFee`, `netPnl`), and nested `order` / `config` structs decode into the same typed mirrors the view parsers return.
+A fill with ID zero can come from auto-deleveraging. Do not require a created order for every decrease or close receipt. Preserve receipt order within a transaction. A full close can emit cancel receipts for pending decrease orders on the same side.
 
-## Fill receipts and position state
+## Keep financial history exact
 
-A fill emits one receipt (`open_fill`, `increase_fill`, `decrease_fill`, `close_fill`, or `liquidation`) carrying the itemized economics of what happened: the execution price, the size and base tokens moved, the margin leg, realized PnL, the fee items, and any bad debt. Both lifecycle boundaries are chain-attested: `open_fill` fires when a fill takes an empty side to size, `close_fill` (or `liquidation`) when the stored row zeroes. An indexer opens and closes position lifecycles on the event kind alone, without inferring them from its own accumulated state. Read the resulting position row through `getPosition` or from the transaction's ledger entry changes, which carry every stored row the transaction wrote.
+A funding debit is positive. Earned funding is negative and becomes claimable credit. Borrowing is a non-negative cost. Use the receipt's realized profit, fees, and payout fields for that action. Avoid reconstructing realized results from a later ticker price.
 
-A few details worth encoding in an indexer:
+A vault rejection returns the order's principal and pays its execution fee to the keeper. Its create receipt supplies those escrow amounts.
 
-- `price` is the execution price the fill settled at: the entry side on `open_fill` and `increase_fill`, the exit side on the close receipts. On a close receipt, `notional` and `tokens` are the closed size at entry pricing, so `notional * SCALAR_18 / tokens` gives the entry price of the closed chunk.
-- `open_fill` carries no `funding` or `borrowing`. Accruals settle over the notional held before the fill, which is zero when the side opens.
-- On the receipts that carry `funding`, the sign tells you where funding went: positive was paid from margin, negative was credited to the trader's claimable balance.
-- `liquidation` charges `liq_fee` on every liquidation, capped at the position's equity. `returned` is the remainder paid to the trader net of that fee, zero exactly where the fee saturates it.
-- A `decrease_fill` or `close_fill` with `orderId` of `0` is an auto-deleveraging close, not a user-submitted order. The keeper force-decreased the position through the ADL path. A `redeem_fill` with `orderId` of `0` is a retired market's instant redeem, where the redeeming user stands in as `keeper`.
-- `close_fill` and `liquidation` arrive alongside one `cancel_order` per decrease order still resting on the side, each carrying its own `refund`. Those refunds ride the closure payout transfer, so the tokens the trader actually receives exceed `returned` by their sum.
-- `accrual_update` comes only from `accrue` and carries no payload. It marks that the accrual indices advanced. The post-accrual state (indices, rate, timestamp) is read from `get_market_data`. Fills, liquidations, and ADL advance the same indices silently.
-- A trader's claimable credit balance holds earned funding plus any payout whose direct token transfer failed (the market parks it as claimable credit instead of trapping the fill). `claim_credit` pays it out, capped at the market's credit pool.
+An `accrual_update` marker has no financial payload. Your projection needs a chain observation for rates and market totals. For vault receipt amounts and cancellation order, consult [the event catalog](/technical/market/events).
 
-## Factory events
+## Publish honest freshness
 
-Market deployment emits one factory event.
+Commit a ledger watermark with the projected batch. Return the first covered ledger and the last fully projected ledger with query results. Treat a gap, failed decoder, or failed projection as a coverage problem. Preserve the source receipt so you can repair and replay it.
 
-| Event (name symbol) | Topics after the name | Data fields |
-|---|---|---|
-| `deploy` | `trading`, `vault` | (empty map) — the `trading` topic keeps its pre-rename name so historical `Deploy` events stay decodable; the SDK's decoded `FactoryDeployEvent` exposes it as `market` |
-
-Index `deploy` to discover new markets and their paired strategy vaults, then subscribe each new market address to your pipeline.
-
-## Vault, governance, and router events
-
-| Contract | Event (name symbol) | Topics after the name | Data fields |
-|---|---|---|---|
-| vault | `deposit` | `operator`, `from`, `receiver` | `assets`, `shares` |
-| vault | `withdraw` | `operator`, `receiver`, `owner` | `assets`, `shares` |
-| vault | `strategy_withdraw` | `strategy` | `amount` |
-| governance | `queued` | `nonce` | `target`, `fn_name`, `unlock_time` |
-| governance | `executed` | `nonce` | `target`, `fn_name` |
-| governance | `cancelled` | `nonce` | (empty map) |
-| governance | `status_set` | `target` | `status` |
-| governance | `delay_set` | (none) | `old_delay`, `new_delay` |
-| router | `fee_collected` | `user`, `recipient` | `token`, `amount` |
-
-`operator` on the vault pair is always the market contract, and a mint or burn publishes nothing of its own, so `deposit` / `withdraw` plus the ledger entry changes are the whole record of a supply move. Shares are an ordinary fungible token on top of that, and two of its events publish under the same `transfer` symbol, one with a bare `i128` in data and one with a map of `amount` and `to_muxed_id`, so a share-balance decoder branches on the data shape. The oracle and the treasury emit nothing, and the market router's batched calls surface under the market contract's id rather than the router's, whose own id carries only the `fee_collected` its three `_with_fee` entry points emit. The market, governance, treasury, and oracle contracts each implement Ownable and emit `ownership_transfer`, `ownership_transfer_completed`, and `ownership_renounced`, all of whose addresses ride the data map rather than topics.
-
-## Running your own indexer
-
-The reference receiver ([`zenex-indexer`](https://github.com/zenith-protocols/zenex-indexer)) receives a Goldsky webhook, decodes each event, and writes to Postgres. Deploy it under your own Goldsky pipeline and database if you want full control over the schema, custom enrichment, or to track a private market the hosted indexer does not cover. Because the shapes above are the on-chain topic layout, an indexer in any language can read the same events directly from Soroban RPC.
+Readers need to distinguish a confirmed transaction from an index that has not reached its ledger. The [public API freshness model](./data-api#check-freshness) shows that boundary.

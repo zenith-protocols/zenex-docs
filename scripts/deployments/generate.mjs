@@ -416,13 +416,13 @@ async function main() {
     {
       name: 'Fee forwarder',
       id: config.feeForwarder.contract,
-      does: `Takes the network fee in ${tokenSymbol} when the app sends a transaction for you.`,
+      does: `Collects the relay fee in ${tokenSymbol} before it invokes the requested action.`,
     },
     { name: 'Wallet factory', id: record.util.walletFactory, does: 'Creates the smart wallet the app sets up for you.' },
     {
       name: 'Session policy',
       id: config.smartAccount.session,
-      does: 'Holds the limits of one-click trading: the contracts a session key may call and the spending limit you choose.',
+      does: 'Restricts a one-click session to configured markets, token transfers into those markets, and relay fees to the pinned recipient. It has no spending cap.',
     },
   ];
   for (const contract of app) {
@@ -588,7 +588,7 @@ hide_table_of_contents: true
 
 This page lists every contract of the live Zenex deployment on Stellar mainnet and the values those contracts run with. Check an address here before you approve a transaction that names it. Anyone can deploy a market through the factory, so a contract that carries a familiar name proves nothing on its own. The addresses below are the ones the Zenex app uses.
 
-A script writes this page from the chain. It read every value at ledger ${d.ledger.sequence.toLocaleString('en-US')} on ${date}, and it checked that the contracts report the same addresses about each other. An owner can change a value at any moment, so the contracts hold the value in force.`);
+These values were checked on ${date}. The chain reads began at ledger ${d.ledger.sequence.toLocaleString('en-US')} and can span several ledgers. The generator cross-checks contract addresses and code hashes. Settings can change after this check, so the contracts hold the values in force.`);
 
   // One two-column table per market: a full address fits a column, two do not.
   sections.push(`## Markets

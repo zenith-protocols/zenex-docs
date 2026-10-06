@@ -1,5 +1,6 @@
 ---
 title: Constructor and dependencies
+description: Market constructor bindings, dependency interfaces, ownership, and upgrades.
 sidebar_position: 2
 ---
 
