@@ -10,7 +10,7 @@ hide_table_of_contents: true
 
 This page lists every contract of the live Zenex deployment on Stellar mainnet and the values those contracts run with. Check an address here before you approve a transaction that names it. Anyone can deploy a market through the factory, so a contract that carries a familiar name proves nothing on its own. The addresses below are the ones the Zenex app uses.
 
-These values were checked on 4 October 2026. The chain reads began at ledger 64,757,411 and can span several ledgers. The generator cross-checks contract addresses and code hashes. Settings can change after this check, so the contracts hold the values in force.
+These values were checked on 6 October 2026. The chain reads began at ledger 64,805,963 and can span several ledgers. The generator cross-checks contract addresses and code hashes. Settings can change after this check, so the contracts hold the values in force.
 
 ## Markets
 

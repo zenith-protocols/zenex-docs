@@ -77,4 +77,4 @@ The market owner can change configuration and upgrade market code while retainin
 
 ## Find a reference
 
-Use [Units and scales](./units.md) before interpreting contract amounts. The contract links above lead to their complete references. [Deployments](/deployments) identifies current addresses, owners, code hashes, and parameters. Source: [protocol contracts](https://github.com/zenith-protocols/zenex-contracts) and [utility contracts](https://github.com/zenith-protocols/zenex-util-contracts).
+Use [Units and scales](./units.md) before interpreting contract amounts. The contract links above lead to their complete references. [Deployments](/deployments) identifies current addresses, owners, code hashes, and parameters. The [utility contracts](https://github.com/zenith-protocols/zenex-util-contracts) are published on GitHub.

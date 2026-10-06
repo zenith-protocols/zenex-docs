@@ -16,15 +16,17 @@ A contract's owner controls its administrative actions. Different owners can con
 | Treasury | Change its fee share and withdraw collected funds. |
 | Factory | Change the metadata used for future deployments and upgrade factory code. |
 
-Parameter bounds apply to the deployed code. They constrain ordinary changes made through that code. The market is also its vault's strategy. Its authority over vault assets makes market control relevant to liquidity providers.
+Parameter bounds apply to the deployed code. They constrain ordinary changes made through that code. The market is also its vault's strategy. Its authority over vault assets makes market control relevant to liquidity providers. No owner call can replace a market's settlement token, vault, oracle, treasury, or price stream.
+
+An owner can transfer ownership to a new account, which must accept it. An owner can also give up ownership for good. Nobody can change that contract afterwards, so a market given up while frozen stays frozen.
 
 :::warning An upgrade changes the rules
-The market and oracle owners can replace their contract code. Existing positions rely on those contracts. Parameter bounds alone do not protect against the behavior of replacement code.
+The market and oracle owners can replace their contract code. Existing positions rely on those contracts. Parameter bounds alone do not protect against the behavior of replacement code. New oracle code can change the price that every market on that oracle receives.
 :::
 
 ## When a change takes effect
 
-An account owner can apply an authorized change directly. A governance timelock can queue ordinary changes for a public delay. A freeze or delisting can therefore arrive without the delay used for a parameter change.
+An account owner can apply an authorized change directly. A governance timelock can queue ordinary changes for a public delay of one second to 60 days. A freeze or delisting can therefore arrive without the delay used for a parameter change. A change to the delay itself waits out the current delay.
 
 :::info A timelock depends on its deployed delay
 A queue helps only when the owner actually uses a timelock and its delay gives you time to act. Market status changes bypass the ordinary queue and can take effect immediately.

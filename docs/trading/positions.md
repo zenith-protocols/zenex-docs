@@ -29,7 +29,7 @@ If a decrease reaches the whole position or leaves less than the minimum positio
 
 ## The decrease lock {#the-decrease-lock}
 
-New size is locked against decreases for a short period. The position can contain both locked and unlocked size. A partial close can take only unlocked size. A full close waits until all the size is unlocked. The current lock and size limits are on [Deployments](../deployments.md).
+New size is locked against decreases for a short period. Each fill that adds size restarts the lock on all size still locked, so scaling in can delay a full close. The position can contain both locked and unlocked size. A partial close can take only unlocked size. A full close waits until all the size is unlocked. The current lock and size limits are on [Deployments](../deployments.md).
 
 :::info A stop loss follows the same lock
 An exit order can trigger while its size remains locked. It must wait until a fill passes the lock and other checks. Liquidation can close locked size.
