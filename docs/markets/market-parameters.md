@@ -1,74 +1,28 @@
 ---
 title: Market parameters
-sidebar_position: 4
+description: Find the settings that affect a trade or vault action.
 ---
 
 # Market parameters
 
-Every market carries a set of values that decides what you pay and how much risk you can take. This page groups those values, says what each group does to your money, and links to the page that explains the mechanism. [Deployments](../deployments.md) lists the values each live market runs with, read from the chain, next to the limit the protocol puts on each one.
+A market's settings determine its costs, limits, and waiting periods. Use [Deployments](../deployments.md) for the current values and owners. This page identifies which settings matter to your action. Each linked page explains the behavior.
 
-The owner of a market sets its values, so each market has its own set. Two markets for the same asset pair can charge different fees and allow different leverage. The owner replaces the whole set in one step. Four values have other owners. The treasury owner sets the protocol's share of each fee. The oracle owner sets the price rules, and the oracle is the contract that checks each price report. [Governance](../governance.md) covers who those owners are and how much warning a change gives you.
+| Setting group | What it changes | Read |
+| --- | --- | --- |
+| Initial and maintenance margin | Required collateral and liquidation threshold. | [Margin and leverage](../trading/margin-and-leverage.md). |
+| Position, order, and side limits | Accepted amounts and available exposure. | [Positions](../trading/positions.md). |
+| Trade, impact, execution, and liquidation fees | Costs at creation and settlement. | [Fees](../trading/fees.md). |
+| Funding parameters | Rate movement and payments between sides. | [Funding rate](../trading/funding-rate.md). |
+| Borrowing curve and utilization limits | Ongoing interest and liquidity capacity. | [Borrowing interest](../trading/borrowing-interest.md). |
+| Profit cap and ADL levels | Reduced profit and forced reductions. | [Profit and payouts](../trading/pnl.md), [Auto-deleveraging](../trading/adl.md). |
+| Vault fees, minimums, cap, and cooldown | Deposit acceptance and withdrawal behavior. | [Deposits and withdrawals](../vault/depositing.md). |
+| Price windows and spread reduction | Accepted reports and effective execution quotes. | [Prices](./prices.md). |
+| Decrease lock | How soon added size can close. | [Positions](../trading/positions.md#the-decrease-lock). |
 
-The protocol bounds most values and keeps related ones in a fixed order, so no fee rate can pass its ceiling. The size limits and the vault balance cap have no fixed maximum, so an owner can raise them. An owner can change any value inside its bounds, so a value always comes from the contract that holds it.
+## Settings can reach existing positions
 
-## Two margin lines set your leverage and your liquidation point
+The market owner controls market settings. The oracle owner controls price rules. The treasury owner controls the protocol fee share. For the change process and any delay, read [Governance](../governance.md).
 
-The initial margin is the share of a position's size that you must hold as collateral whenever you change the position. It sets the leverage ceiling of the market: a 10% initial margin allows 10x, and a 2% initial margin allows 50x. The fees of a fill come out of the collateral you post, so the leverage you reach sits a little under that ceiling.
-
-The maintenance margin is the lower line. A position whose equity falls under it can be liquidated. Equity is what the position would return if it closed now, so it counts your unrealized profit and loss. The liquidation fee is the rate that a liquidation charges on the size that closes.
-
-The protocol keeps the three in one order, with the liquidation fee lowest and the initial margin highest. A liquidation at the maintenance margin therefore leaves equity to return to you after the fee. Read [Margin and leverage](../trading/margin-and-leverage.md) for the two lines and [Liquidation](../trading/liquidation.md) for what that close costs.
-
-## Size limits bound what one position and one side can hold
-
-A market sets the smallest and the largest size for one position. It also caps the total size of all positions on one side. Two more values set the least size and the least collateral that one order may move. The minimums keep dust orders out of the book, and the caps bound the exposure that the vault must back. Read [Positions](../trading/positions.md) for how the minimum shapes a close.
-
-## Fees combine a trade rate, an impact rate, and a flat execution fee
-
-A market carries two trade fee rates. The higher rate applies to the part of a fill that pushes long and short exposure further apart. The lower rate applies to the part that brings them closer together.
-
-Each market also sets how fast the impact fee grows with the size of a fill, tuned to the liquidity of the asset. Every order carries a flat execution fee that pays the keeper who fills it, and a vault order carries one too. The [Keepers](../keepers.md) page covers the keeper role.
-
-The keeper share sets how much of the trade fee, the impact fee, the liquidation fee, and the vault fee reaches that keeper. The treasury share is one rate that takes a cut of the same four charges and of the borrowing charge. The treasury owner changes it, so it sits outside the market's own set. Read [Fees](../trading/fees.md) for what each charge does and where it goes.
-
-## Utilization limits what a side may reserve and prices borrowing
-
-The vault backs each side of a market with half of its balance. A market lets each side reserve up to a set share of that half, and that share is the side's capacity. Utilization is the part of its capacity that a side's open positions reserve.
-
-The first cap applies when you add size. It refuses an increase that would carry the increased side past its share, and the same capacity is the measure for that side's borrowing rate. The second cap applies when a redeem fills. It refuses a redeem that would leave either side above it. The second cap sits at or above the first, so a side that is full for new size does not lock every redeem out. A redeem still cannot pull liquidity from under the open positions.
-
-The borrowing curve uses three values. The first is the utilization where the curve bends. The second sets how steeply the rate climbs toward the bend. The third is the rate at full utilization. The side that holds more of the asset pays at the rate its own utilization sets, and the other side pays nothing. A tie charges both sides. Read [Borrowing interest](../trading/borrowing-interest.md) for who pays and what the curve costs you.
-
-## Six values shape the funding rate
-
-Funding moves value between the two sides of a market. The imbalance is how far the long and short sides differ in the asset they hold, as a share of their combined size. The crowded side is the larger one, and the funding rate builds toward it.
-
-Two speeds set how fast the rate builds and how fast it winds down. Two imbalance levels decide whether a rate that already points at the crowded side keeps building, holds, or winds down. A minimum charge is the least any payer pays whenever a side pays at all. A cap bounds the rate in either direction. Read [Funding rate](../trading/funding-rate.md) for how the rate moves and which side pays it.
-
-## Four profit levels protect the vault from a side that runs ahead
-
-Pending profit is the profit that all open positions on one side carry at the current price. Four values bound how far it may run, and each is a share of half the vault balance.
-
-Two of them govern auto-deleveraging. The upper level flags a side, and the lower level clears the flag. While the flag stands, that side takes no new size. Auto-deleveraging closes part or all of a winning position without your consent, and [Auto-deleveraging](../trading/adl.md) covers it. The third value is the level where the profit cap starts to scale down the profit that a winner realizes. [Profit and loss](../trading/pnl.md) covers that cap. The fourth value blocks a redeem while either side's pending profit sits above it, measured on the balance the redeem would leave. [Deposits and redeems](../vault/depositing.md) covers the refusal you see.
-
-The protocol holds the four in one order. The redeem block is lowest, then the level where auto-deleveraging clears, then the level where it flags, then the profit cap. Auto-deleveraging therefore starts before the cap reduces any payout, and no permitted redeem leaves a side above the clear level.
-
-## Vault orders carry a fee, a deposit minimum, and a balance cap
-
-The vault fee is two rates. The market takes one from the assets a deposit fill moves, and it takes the other from the assets a redeem fill moves. The market also sets the smallest deposit it accepts and a cap on the total balance the vault may hold. A deposit that would carry the vault past the cap is refused. Read [Deposits and redeems](../vault/depositing.md) for how an order fills and why one is refused.
-
-## Three price settings sit on the oracle and not on the market
-
-The oracle holds three values that shape the price your order fills at. The strict age limit applies to a fill. The wider age limit applies to a liquidation and to an auto-deleveraging close. The spread narrowing sets how much of the quote's spread the oracle removes before the market prices anything. The oracle owner changes all three, and every market on that oracle shares them. Read [Prices](./prices.md) for what each one does to the price you get.
-
-## Waiting periods delay an exit or a forced close
-
-The decrease lock is a short window after you add size. Until it ends, you cannot close the size you added. The lock cannot be shorter than the longest strict age limit the oracle allows. One price can therefore never open and then close the same size. Read [Positions](../trading/positions.md) for how the lock binds your close.
-
-The redeem cooldown is the wait a redeem serves before a keeper can fill it. Read [Deposits and redeems](../vault/depositing.md) for that wait.
-
-A delisted market runs two counts from the moment of the delist. The first count decides when the owner can set a settlement price and when the owner can no longer undo the delist. The second count decides when any keeper can close any remaining position. The protocol fixes both counts, so every market runs the same two. Read [Market status](./status.md) for their length and for what each one allows.
-
-## A change applies to what you already hold
-
-A change by the owner applies to positions and orders that already exist. Two values are the exception because the market records them when you act. An order keeps the execution fee it carried at creation, and added size keeps the lock it received. A fee, a margin line, or a cap can therefore differ between the day you open a position and the day you close it.
+:::warning Opening a position does not lock its settings
+Changes to fee rates, margin requirements, curves, and limits can affect positions and orders you already hold. An order keeps its recorded execution fee. Added size keeps its recorded decrease lock.
+:::

@@ -1,18 +1,19 @@
 ---
 sidebar_position: 1
 title: Strategy vault
+description: Find strategy-vault references for share tokens, conversion pricing, and market payout draws.
 ---
 
 # Strategy vault
 
-This section covers `StrategyVaultContract`, the contract that holds the liquidity backing one market and issues shares against it. The liquidity is denominated in the settlement token, which [Units and scales](../units.md) defines. Shares are an OpenZeppelin fungible token, so any account can hold and transfer them.
-
-The [factory deploy page](../factory/deploy.md) describes how the factory deploys the vault and its market together. The vault constructor registers the market as its strategy. A liquidity provider reaches the vault through the market's vault orders, described on [Vault orders](../market/vault-orders.md).
+`StrategyVaultContract` holds liquidity for one market and issues transferable shares. Its constructor fixes the paired market as its strategy. Only that market can authorize strategy deposits, redemptions, and payout draws; shareholders can transfer shares without gaining strategy authority.
 
 ## Where each entry is documented
 
 | Page | What it holds |
 | --- | --- |
-| [Constructor and share token](./share-token.md) | `__constructor` and its five arguments, the nine share token entries with the events they emit, the `query_asset` view, the share decimals rule, the storage keys with their time to live rules, the constants, and the errors of the `VaultTokenError` enum. |
-| [Share pricing](./share-pricing.md) | `strategy_deposit`, `strategy_redeem`, `preview_deposit`, `preview_redeem`, the `total_assets` view, the `net_pnl` argument, the conversion formulas with their rounding, the `Deposit` and `Withdraw` events, and the errors of the `StrategyVaultError` enum that these calls raise. |
-| [Strategy withdraw](./strategy-withdraw.md) | `strategy_withdraw`, the strategy authorization gate, the `get_strategy` view, the transfer to the strategy, its effect on the share price, the `StrategyWithdraw` event, and the errors it raises. |
+| [Constructor and share token](./share-token.md) | Constructor bindings, token entries, share decimals, storage, and token errors. |
+| [Share pricing](./share-pricing.md) | Deposits, redemptions, previews, the `net_pnl` mark, conversion formulas, and receipts. |
+| [Strategy withdraw](./strategy-withdraw.md) | Strategy authorization, market payout draws, and their effect on share backing. |
+
+Liquidity providers act through the market's [vault orders](../market/vault-orders.md). The [factory](../factory/overview.md) deploys both contracts together.

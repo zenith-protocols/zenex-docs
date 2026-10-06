@@ -1,5 +1,6 @@
 ---
 title: Errors
+description: Every market error code, its condition, and the entries that can raise it.
 sidebar_position: 18
 ---
 

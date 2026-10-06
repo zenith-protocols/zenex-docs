@@ -1,5 +1,6 @@
 ---
 title: Delay changes
+description: Delay bounds, pending changes, unlock times, events, and effects on queued calls.
 sidebar_position: 3
 ---
 

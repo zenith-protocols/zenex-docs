@@ -1,6 +1,7 @@
 ---
 sidebar_position: 11
 title: Funding rate
+description: Funding-rate evolution, payer and receiver indices, earned credit, and claims.
 ---
 
 # Funding rate
@@ -99,6 +100,10 @@ The rows below use example parameters, not deployed values: `funding_increase = 
 
 The three `Increase` rows share an `acceleration` of `500_000_000`, which is `floor(1_000_000_000 * 5 * 10^17 / 10^18)`. Over 100 seconds it moves the rate by `50_000_000_000`.
 
+:::info Funding follows the stored rate
+The current token imbalance does not identify the payer by itself. The rate can retain its sign while the imbalance reverses.
+:::
+
 ## An accrual moves the payer index up and the receiver index down
 
 ```rust
@@ -194,6 +199,10 @@ The surplus is the funding that reached no receiver, plus three roundings that f
 - The round toward zero on an earned amount holds back up to one token unit per settlement.
 
 The surplus leaves the pool once. A transition to `Retired` runs `retire`, which requires an empty book and transfers the surplus to the vault address. A transfer larger than the contract's token balance traps, and the transition reverts. The pool then backs `credit_owed` exactly, and a claim stays open on a retired market. The [Market status](./status.md) page gives that transition.
+
+:::info Earned funding becomes claimable credit
+Earned funding increases `ClaimableCredit(user)`. It does not increase position margin. `claim_credit` can pay less than the stored balance when the pool lacks realized funding.
+:::
 
 ## `claim_credit` pays the smaller of the balance and the pool
 

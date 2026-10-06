@@ -1,5 +1,6 @@
 ---
 title: Market status
+description: Market statuses, transitions, wind-down timestamps, and entry-point gates.
 sidebar_position: 4
 ---
 
@@ -109,9 +110,7 @@ fn get_retirement(e: Env) -> Option<(i128, u64)>;
 
 `get_status` returns the `Status` discriminant. The constructor writes `Active`, and `set_status` is the only other writer of the key, so the stored value is always one of the five discriminants.
 
-`get_retirement` returns `None` while `DelistedAt` is absent. That covers a market never delisted and a market whose last delist was reverted. Otherwise it returns `(terminal_price, delisted_at)`. `terminal_price` is the stored `TerminalPrice` at feed precision, or `0` while none is set. `delisted_at` is `DelistedAt` in unix seconds.
-
-Neither view raises an error. Both are read-only and leave the instance TTL as it is.
+`get_retirement` returns `None` while `DelistedAt` is absent. That covers a market never delisted and a market whose last delist was reverted. Otherwise it returns `(terminal_price, delisted_at)`. `terminal_price` is the stored `TerminalPrice` at feed precision, or `0` while none is set. `delisted_at` is `DelistedAt` in unix seconds. Neither view raises an error. Both are read-only and leave the instance TTL as it is.
 
 ## Two timing predicates read the delist anchor
 
@@ -152,6 +151,10 @@ The owner entries `set_config`, `upgrade`, and the ownership entries run in ever
 | `execute_liquidation` | `Delisted` with `deadline_passed` | waives `NotLiquidatable` (722) and closes the position whatever its settled equity. It charges `liq_fee`, capped at the equity the close frees. |
 
 `execute_order` also traps `IncreaseHalted` (705) for an increase that adds notional when the `AdlState` flag of the order's side is set. That check applies in every status that passes `Market::load`. The margin-only increase is exempt from both halts, so a trader can add margin to a position while the market is `OnIce` or `Delisted`. The [Vault orders page](./vault-orders.md) describes the instant redeem, and the [Liquidation page](./liquidation.md) describes the waived liquidation.
+
+:::warning Frozen status blocks refunds and claims
+`Frozen` blocks cancels, credit claims, and every price-bearing action. Escrow and positions remain stored until an allowed status restores those paths.
+:::
 
 ## The statuses guarantee four things across calls
 

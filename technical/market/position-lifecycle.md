@@ -1,6 +1,7 @@
 ---
 sidebar_position: 7
 title: Position lifecycle
+description: Position fields, increases, decreases, locks, aggregate invariants, and full-close sweeps.
 ---
 
 # Position lifecycle
@@ -39,7 +40,7 @@ Units follow [Units and scales](../units.md). `math::to_tokens_floor` computes `
 
 The row carries no PnL field, because PnL follows from `tokens`, `notional`, and the current price. [Pricing](./pricing.md#the-position-price-floor) gives the price floor that reads `priced_at`.
 
-`Position::store` treats a row as closed when `notional == 0 && margin == 0 && tokens == 0`. The test reads those three fields alone, so a closed row can still carry decrease order ids. `create_order` stores a row that is all zero apart from that list when a decrease rests on a side that has never opened. For an increase order on a side with no row, it stores the plain zeroed row. The trader therefore pays the rent of the entry and the fill does not. `Position::zeroed` builds the canonical closed row, with every field at `0` and an empty `decrease_orders` list. A closed position persists as that row, so the prepaid rent of the entry stays alive for a later open.
+`Position::store` treats a row as closed when `notional == 0 && margin == 0 && tokens == 0`. The test reads those three fields alone, so a closed row can still carry decrease order ids. `create_order` stores a row that is all zero apart from that list when a decrease rests on a side that has never opened. For an increase order on a side with no row, it stores the plain zeroed row. The creation transaction's fee payer therefore funds the entry's rent. `Position::zeroed` builds the canonical closed row, with every field at `0` and an empty `decrease_orders` list. A closed position persists as that row, so the prepaid rent of the entry stays alive for a later open.
 
 ## `get_position` reads without writing
 
@@ -155,7 +156,7 @@ fn decrease(&mut self, e: &Env, market: &mut Market, user: &Address, is_long: bo
 `Position::decrease` runs fifteen steps in this order:
 
 1. `Position::require_exists` traps `PositionNotFound` (720) when `self.notional` is `0`.
-2. `Position::settle` produces `settled` for the whole position. If `settled.equity` sits below the maintenance line, the call traps `PositionLiquidatable` (723). Liquidation is the only legal transition for a liquidatable position.
+2. `Position::settle` produces `settled` for the whole position. If `settled.equity` sits below the maintenance line, the call traps `PositionLiquidatable` (723). A decrease cannot close a liquidatable position. An increase can still rescue it with sufficient margin.
 3. `locked` is the value of `Position::locked` at `now`.
 4. The full-close clamp applies. If `notional >= self.notional`, or `self.notional - notional < min_position_notional`, the request is a full close. A full close with `locked > 0` traps `NotionalLocked` (721). Otherwise the call returns `close_settled(settled)`, and steps 5 to 15 do not run.
 5. A partial close with `notional > self.notional - locked` traps `NotionalLocked` (721).
@@ -212,11 +213,15 @@ The returned `Decrease` carries the full size, the gross margin from before the 
 
 ## The decrease lock stops an open-then-decrease round trip
 
-`Position::locked` returns `locked_notional` while `now < unlocks_at`, and `0` after the deadline. `Position::increase` sets the bucket at step 7 on every fill that adds size. `Config.notional_lock` is the lock length in seconds, and [Config](./config.md) gives its bounds.
-
-A full close needs `Position::locked` to return `0` at `now`. A partial close is limited to `self.notional` minus the value that `Position::locked` returns at `now`. Both violations trap `NotionalLocked` (721).
+`Position::locked` returns `locked_notional` while `now < unlocks_at`, and `0` after the deadline. `Position::increase` sets the bucket at step 7 on every fill that adds size. `Config.notional_lock` is the lock length in seconds, and [Config](./config.md) gives its bounds. A full close needs `Position::locked` to return `0` at `now`. A partial close is limited to `self.notional` minus the value that `Position::locked` returns at `now`. Both violations trap `NotionalLocked` (721).
 
 The lock gates `Position::decrease` alone, so `execute_adl` meets it and `Position::liquidate` does not read it. The reason is the price window. The oracle bounds its trade-class staleness window by `MAX_TRADE_STALENESS_SECONDS` (15 seconds), and `MIN_NOTIONAL_LOCK` (15 seconds) is sized to that ceiling. The lock therefore outlasts the validity of any single accepted price, so one price cannot both open size and decrease that same size.
+
+:::info New size can delay a voluntary close
+Each size increase grows the live lock bucket and resets its deadline. A full close needs every locked portion to unlock.
+
+Liquidation bypasses this lock. Auto-deleveraging meets the same lock as a voluntary decrease.
+:::
 
 ## A closed row sweeps its pending decrease orders
 

@@ -1,13 +1,12 @@
 ---
 title: Units and scales
+description: Token, share, price, rate, timestamp, and ledger units with exact rounding conventions.
 sidebar_position: 2
 ---
 
 # Units and scales
 
-This page covers the scale of every integer the contracts store or return, how a price meets a size, and how a result rounds. Every other technical page names a unit next to an argument, a field, or a formula, and means what this page says.
-
-Every amount in the contracts is an integer. The unit fixes what one step of that integer is worth, and the helper that computes it fixes how the last digit rounds. A wrong scale moves money by a power of ten, so each unit has one name and the pages use only these names.
+This page covers the scale of every integer the contracts store or return, how a price meets a size, and how a result rounds. Every other technical page names a unit next to an argument, a field, or a formula, and means what this page says. Every amount in the contracts is an integer. Its unit defines one indivisible step. Its computation defines how the last digit rounds.
 
 ## The six units
 
@@ -21,6 +20,10 @@ Every amount in the contracts is an integer. The unit fixes what one step of tha
 | ledger sequence | One ledger, 5 seconds on average. One day is 17280 ledgers. | Order expiry, allowance and ownership-transfer deadlines, and every storage time-to-live. |
 
 The oracle's `reduce_spread` moves `bid` and `ask` toward the midpoint and leaves the scale at 18 decimals. A market's `feed_id` is immutable, so every price on a market comes from one stream at one scale.
+
+:::warning Token decimals and price decimals differ
+Settlement amounts use the token's decimals. Prices and rates use 18 decimals. Share amounts use the vault's share decimals. Passing an integer at the wrong scale changes its value by a power of ten.
+:::
 
 ## Size in the base asset
 
@@ -59,7 +62,7 @@ A multiplication followed by a division is always one of four fixed-point helper
 | `fixed_div_floor(&self, env, y, denominator)` | `self * denominator / y` | Toward negative infinity |
 | `fixed_div_ceil(&self, env, y, denominator)` | `self * denominator / y` | Toward positive infinity |
 
-The argument `y` is the multiplier of a mul helper and the divisor of a div helper. The argument `denominator` is the scale. For example, `notional.fixed_div_floor(&price, &SCALAR_18)` is `floor(notional * SCALAR_18 / price)`. A technical page that writes `floor(a * b / c)` or `ceil(a * b / c)` means one of these helpers, named beside the formula.
+The argument `y` is the multiplier of a mul helper and the divisor of a div helper. The argument `denominator` is the scale. For example, `notional.fixed_div_floor(env, &price, &SCALAR_18)` is `floor(notional * SCALAR_18 / price)`. A technical page that writes `floor(a * b / c)` or `ceil(a * b / c)` means one of these helpers, named beside the formula.
 
 Floor rounds toward negative infinity and ceil toward positive infinity, also on a negative result. A product of `-7` over a denominator of `2` gives `-4` under floor and `-3` under ceil. The helper carries no unit of its own. The result has the unit of the two multiplied values divided by the unit of the divisor. A `SCALAR_18` rate times a token-dec amount over `SCALAR_18` is therefore token-dec again.
 
@@ -79,16 +82,12 @@ The wrappers document floor for a cut or a cap and ceil for a charge. In `to_rat
 
 ## Truncating halves
 
-Two places halve a value with plain integer division, which truncates toward zero. Both truncate before any factor applies.
-
-`half_factor` measures against half the vault balance. It sizes the trader profit cap, the auto-deleveraging (ADL) band, each side's capacity for utilization, and the withdraw allowance. The value `balance / 2` truncates first, and then the factor floors.
+Two places halve a value with plain integer division, which truncates toward zero. Both truncate before any factor applies. `half_factor` measures against half the vault balance. It sizes the trader profit cap, the auto-deleveraging (ADL) band, each side's capacity for utilization, and the withdraw allowance. The value `balance / 2` truncates first, and then the factor floors.
 
 The oracle's `reduce_spread` computes the half spread `(ask - bid) / 2` with the same truncation, then floors the cut. Both sides move inward by the same amount, except at a factor of `SCALAR_18`, which puts both on `bid + (ask - bid) / 2`. The spread narrows by at most the configured factor and often a little less.
 
 ## Overflow
 
-A helper first multiplies in `i128`. If that product overflows, the helper repeats it at 256 bits. The helper traps on a zero divisor and on a result that does not fit `i128`.
-
-Every other addition, subtraction, and multiplication on `i128` is checked and traps on overflow. Where config validation and order validation check a sum or a product themselves, the failure surfaces as `InvalidConfig` or `InvalidOrder` instead. A share mint that would overflow the total supply traps with the share token's `MathOverflow` (104).
+A helper first multiplies in `i128`. If that product overflows, the helper repeats it at 256 bits. The helper traps on a zero divisor and on a result that does not fit `i128`. Every other addition, subtraction, and multiplication on `i128` is checked and traps on overflow. Where config validation and order validation check a sum or a product themselves, the failure surfaces as `InvalidConfig` or `InvalidOrder` instead. A share mint that would overflow the total supply traps with the share token's `MathOverflow` (104).
 
 Arithmetic on seconds saturates where the contracts compare a window. That covers the staleness checks, the delist windows, and the redeem lock. Everywhere else it is checked. A trap reverts the invocation it happens in. The router isolates a failing fill or call in its own entry points, which the [batching](./router/batching.md) page describes.

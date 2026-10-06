@@ -1,5 +1,6 @@
 ---
 title: Init meta and constructor
+description: Factory constructor, deployment code hashes, treasury binding, ownership, and storage.
 sidebar_position: 3
 ---
 
@@ -101,9 +102,7 @@ The first topic is the event name symbol, the `InitMetaUpdate` struct name in lo
 |---|---|---|---|---|
 | `Symbol("InitMeta")` | instance | `FactoryInitMeta` | `__constructor`, `set_init_meta` | `deploy`, `get_init_meta` |
 
-Instance storage carries one TTL for the whole instance. `InitMeta` shares it with `OwnableStorageKey::Owner` and `UpgradeableStorageKey::SchemaVersion`, so the three entries are archived and restored together.
-
-`extend_instance` compares the remaining instance TTL with `LEDGER_THRESHOLD_INSTANCE`. If the remaining TTL is lower, it sets the TTL to `LEDGER_BUMP_INSTANCE`. Otherwise it changes nothing.
+Instance storage carries one TTL for the whole instance. `InitMeta` shares it with `OwnableStorageKey::Owner` and `UpgradeableStorageKey::SchemaVersion`, so the three entries are archived and restored together. `extend_instance` compares the remaining instance TTL with `LEDGER_THRESHOLD_INSTANCE`. If the remaining TTL is lower, it sets the TTL to `LEDGER_BUMP_INSTANCE`. Otherwise it changes nothing.
 
 | Constant | Value | Derivation | Unit and meaning |
 |---|---|---|---|

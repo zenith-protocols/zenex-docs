@@ -1,6 +1,7 @@
 ---
 sidebar_position: 8
 title: Margin and leverage
+description: Initial and maintenance requirements, settled equity, leverage, and capacity gates.
 ---
 
 # Margin and leverage
@@ -104,7 +105,7 @@ An increase onto a row that carries surplus margin can post only the incremental
 
 ## The initial margin line sets the leverage ceiling {#maximum-leverage}
 
-Check 3 holds `Position.margin` at or above the `init_margin` requirement, so a row's leverage stays at or under `1 / init_margin`. A higher `init_margin` gives a lower ceiling. The fees of a fill come out of the posted margin first, so the leverage a fill reaches sits below the ceiling.
+Check 3 holds `Position.margin` at or above the `init_margin` requirement, so a row's leverage stays at or under `1 / init_margin`. A higher `init_margin` gives a lower ceiling. The check uses margin after fees and permits equality at the initial margin line.
 
 `Config::check_valid` bounds `init_margin` from both sides.
 
@@ -175,4 +176,6 @@ Two entries call the function, and each reads the balance after its own settleme
 
 Liquidation eligibility, the gate on the front of every decrease, and check 4 of `Position::require_valid` all call `Position::is_liquidatable` on the numbers from `Position::settle`. The three uses cannot disagree. The only exception is the `force` argument of `Position::liquidate`, which waives eligibility on a delisted market after its deadline.
 
-No action leaves a liquidatable row behind, and a row under the maintenance line cannot be decreased. An increase reads no gate on the row it starts from. A row under the line can receive margin, and the fill passes once the resulting row clears both lines.
+A successful increase or decrease leaves a row above the maintenance line, or exactly at it. A row below that line cannot be decreased.
+
+An increase reads no eligibility gate on its starting row. It can add margin to a liquidatable position and pass once the result clears both lines.

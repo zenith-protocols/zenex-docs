@@ -94,13 +94,14 @@
     0 16px 48px rgba(0, 0, 0, 0.6);
   --search-local-hit-background: var(--zx-bg);
   --search-local-hit-color: var(--zx-text-primary);
+  --search-local-hit-active-color: var(--zx-bg);
   --search-local-hit-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
   --search-local-highlight-color: var(--zx-primary-text);
   --search-local-input-active-border-color: var(--zx-primary-text);
   --search-local-muted-color: #9ba1a8;
   --search-local-icon-stroke-width: 1.8;
   --ifm-navbar-search-input-background-color: var(--zx-elevated);
-  --ifm-navbar-search-input-placeholder-color: var(--zx-text-tertiary);
+  --ifm-navbar-search-input-placeholder-color: #9ba1a8;
 }
 
 /* === Dark Mode Theme === */
@@ -209,6 +210,40 @@ body {
   font-family: var(--ifm-font-family-base);
 }
 
+/* Keep prose comfortable on wide monitors without narrowing code or tables. */
+.theme-doc-markdown {
+  max-width: 52rem;
+  margin-inline: auto;
+}
+
+.theme-doc-markdown > p,
+.theme-doc-markdown > ul,
+.theme-doc-markdown > ol {
+  max-width: 46rem;
+}
+
+.theme-doc-markdown h1 {
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  margin-bottom: 1.25rem;
+}
+
+.theme-doc-markdown h2 {
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  margin-top: 2.5rem;
+  margin-bottom: 0.875rem;
+}
+
+.theme-doc-markdown h3 {
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.theme-doc-markdown li + li {
+  margin-top: 0.3rem;
+}
+
 /* Headings */
 h1, h2, h3, h4, h5, h6,
 .markdown h1,
@@ -314,7 +349,7 @@ h1, h2, h3, h4, h5, h6,
 
 /* Small gap at the top of the sidebar */
 .theme-doc-sidebar-menu {
-  padding-top: 0.75rem;
+  padding-top: 1rem;
 }
 
 /* Sidebar type size: 16px reads chunky next to 13px TOC and 16px body */
@@ -326,6 +361,19 @@ h1, h2, h3, h4, h5, h6,
 .menu {
   position: relative;
   z-index: 1;
+}
+
+.theme-doc-sidebar-menu > .menu__list-item + .menu__list-item {
+  margin-top: 0.35rem;
+}
+
+.menu__link {
+  line-height: 1.4;
+  padding-block: 0.55rem;
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  box-shadow: inset 2px 0 0 var(--zx-primary-text);
 }
 
 /* Hovering a resting item lifts it from secondary to primary text */
@@ -347,6 +395,16 @@ a {
 
 a:hover {
   text-decoration-color: var(--ifm-color-primary);
+}
+
+/* Prose links remain recognizable without relying on their color. */
+.theme-doc-markdown p a,
+.theme-doc-markdown li a,
+.theme-doc-markdown td a {
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
 }
 
 /* Buttons Base */
@@ -408,6 +466,60 @@ a:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
+/* Small route cards give overview pages a clear next step. */
+.doc-paths {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.875rem;
+  margin-block: 1.5rem 2rem;
+}
+
+.doc-path {
+  display: block;
+  height: 100%;
+  padding: 1.15rem 1.25rem;
+  background: var(--zx-surface);
+  border: 1px solid var(--zx-border);
+  border-radius: var(--ifm-global-radius);
+  color: var(--zx-text-primary);
+  text-decoration: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.doc-path:hover {
+  background: var(--zx-elevated);
+  border-color: var(--zx-primary);
+  color: var(--zx-text-primary);
+  text-decoration: none;
+}
+
+.doc-path > strong {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.doc-path > strong::after {
+  content: '';
+  flex: 0 0 auto;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-top: 1.5px solid var(--zx-primary-text);
+  border-right: 1.5px solid var(--zx-primary-text);
+  transform: rotate(45deg);
+}
+
+.doc-path > span {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--zx-text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
 /* ============================================================================
    7. CODE BLOCKS
    ============================================================================ */
@@ -450,7 +562,24 @@ div[class*="codeBlockContainer"] pre {
 table {
   border-collapse: collapse;
   border-radius: var(--ifm-global-radius);
-  overflow: hidden;
+  overflow: auto;
+  max-width: 100%;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.markdown table th,
+.markdown table td {
+  padding: 0.75rem 0.875rem;
+  vertical-align: top;
+}
+
+.markdown table th {
+  font-weight: 600;
+}
+
+.markdown table td code {
+  overflow-wrap: anywhere;
 }
 
 table thead tr {
@@ -470,16 +599,90 @@ table tbody tr {
    ============================================================================ */
 
 .theme-admonition {
+  --zx-callout-accent: #c5cad1;
+  --zx-callout-background: #1c2027;
+  --zx-callout-border: #383f4a;
+  --ifm-alert-foreground-color: var(--zx-callout-accent);
+  --ifm-alert-background-color: var(--zx-callout-background);
+  --ifm-alert-border-color: var(--zx-callout-border);
+  --ifm-alert-color: var(--zx-text-primary);
+  padding: 1rem 1.15rem;
+  margin-block: 1.5rem;
+  background: var(--zx-callout-background);
+  color: var(--zx-text-primary);
+  border: 1px solid var(--zx-callout-border);
+  border-left: 3px solid var(--zx-callout-accent);
   border-radius: var(--ifm-global-radius);
-  border-left-width: 4px;
+  box-shadow: none;
 }
 
-.theme-admonition svg {
-  transition: transform 0.3s var(--ease-float);
+.theme-admonition-info {
+  --zx-callout-accent: #72d3ea;
+  --zx-callout-background: #142329;
+  --zx-callout-border: #29434b;
 }
 
-.theme-admonition:hover svg {
-  transform: scale(1.1);
+.theme-admonition-tip {
+  --zx-callout-accent: #66ddb3;
+  --zx-callout-background: #14251f;
+  --zx-callout-border: #29473a;
+}
+
+.theme-admonition-warning,
+.theme-admonition-caution {
+  --zx-callout-accent: #f9c36b;
+  --zx-callout-background: #292217;
+  --zx-callout-border: #4b3c26;
+}
+
+.theme-admonition-danger {
+  --zx-callout-accent: #ff9a9f;
+  --zx-callout-background: #2b1b20;
+  --zx-callout-border: #503039;
+}
+
+.theme-admonition [class*='admonitionHeading'] {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--zx-callout-accent);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-transform: none;
+}
+
+.theme-admonition [class*='admonitionIcon'] {
+  display: flex;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.theme-admonition [class*='admonitionIcon'] svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: var(--zx-callout-accent);
+}
+
+.theme-admonition [class*='admonitionContent'] {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.theme-admonition a {
+  color: var(--zx-callout-accent);
+  text-decoration: underline;
+  text-decoration-color: var(--zx-callout-border);
+  text-underline-offset: 0.15em;
+}
+
+.theme-admonition a:hover {
+  text-decoration-color: currentColor;
+}
+
+.theme-admonition [class*='admonitionContent'] > :last-child {
+  margin-bottom: 0;
 }
 
 /* ============================================================================
@@ -667,6 +870,18 @@ blockquote {
   .main-wrapper::before {
     animation: none;
   }
+
+  .zen-swim,
+  .zen-float,
+  .zen-wave {
+    animation: none;
+  }
+
+  .button:hover:not(:disabled),
+  .card:hover,
+  .badge:hover {
+    transform: none;
+  }
 }
 
 /* ============================================================================
@@ -758,6 +973,30 @@ blockquote {
 
 /* Code blocks - tablet */
 @media (max-width: 768px) {
+  .theme-doc-markdown h1 {
+    font-size: 1.9rem;
+  }
+
+  .theme-doc-markdown h2 {
+    font-size: 1.4rem;
+    margin-top: 2rem;
+  }
+
+  .doc-paths {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .theme-admonition {
+    padding: 0.9rem 1rem;
+    margin-block: 1.25rem;
+  }
+
+  .markdown table th,
+  .markdown table td {
+    padding: 0.65rem 0.75rem;
+  }
+
   /* Inline code: tighten padding and shrink slightly */
   code:not(.prism-code) {
     font-size: 0.85em;

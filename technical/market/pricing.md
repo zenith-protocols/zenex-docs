@@ -1,6 +1,7 @@
 ---
 sidebar_position: 5
 title: Pricing
+description: Effective quotes, cached reports, terminal pricing, timestamps, and accrual.
 ---
 
 # Pricing
@@ -107,6 +108,12 @@ The rows below apply the rules to a cache entry with a `publish_time` of 100.
 | 100 | `false` or `true` | 100, the submitted `bid` and `ask` | unchanged |
 | 90 | `true` | 100, the cached `bid` and `ask` | unchanged |
 | 90 | `false` | 90 | unchanged |
+
+:::info A cached quote can differ from the submitted report
+Vault fills and protective entries can use a strictly newer cached quote. Trade-order fills use their submitted report after verification.
+
+A stored terminal price overrides both paths.
+:::
 
 ## `Market::store` writes the record back
 

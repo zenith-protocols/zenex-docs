@@ -1,5 +1,6 @@
 ---
 title: Deploy
+description: Market and vault deployment, address derivation, authorization, registry, events, and failures.
 sidebar_position: 2
 ---
 
@@ -119,7 +120,7 @@ No entry point or event reaches `FactoryDataKey`, so spec shaking strips it from
 | --- | --- | --- |
 | `deploy` | `trading: Address`, `vault: Address` | empty |
 
-The first topic is the event name symbol, the `Deploy` struct name in lower snake case. Both fields carry `#[topic]`, so they follow as the remaining topics in declaration order. The struct declares no data field, so the data map is empty. `trading` is the deployed market address. The topic keeps that name so an indexer decodes past events by topic name. `vault` is the deployed strategy vault address.
+The first topic is the event name symbol, the `Deploy` struct name in lower snake case. Both fields carry `#[topic]`, so they follow as the remaining topics in declaration order. The struct declares no data field, so the data map is empty. `trading` is the deployed market address. `vault` is the deployed strategy vault address.
 
 ## Failures
 
@@ -145,4 +146,4 @@ The sign check covers 24 of the 34 fields. Two of the other ten are `u64` fields
 
 A `deploy` either creates both contracts, writes the registry entry, and publishes the event, or it changes nothing. A constructor rejection, a host trap, and a failed authorization each revert the whole call, including a vault that already exists in that call. A failed call leaves the ledger unchanged and publishes no event. Unless the failure was a contract already standing at a derived address, the same `(admin, salt)` is still free, so a corrected retry succeeds.
 
-Both addresses are fixed by `(admin, salt)` alone, so a caller knows them before the call runs. The market and the vault each hold the address of the other from the moment of creation.
+On a given network, both addresses are fixed by `(admin, salt)`. The market and vault hold each other's address from construction.

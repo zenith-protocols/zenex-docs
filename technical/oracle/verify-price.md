@@ -1,5 +1,6 @@
 ---
 title: Price verification
+description: Report decoding, signature verification, freshness gates, spread reduction, and errors.
 sidebar_position: 2
 ---
 
@@ -153,7 +154,7 @@ Forward skew exists because the ledger clock trails the report source's clock. T
 
 ## Spread reduction
 
-`reduce_spread` narrows the two sides symmetrically toward their midpoint. It runs after gate 7, so the gates see the raw report values. Its price inputs are the report's `bid` and `ask`, both `i128` in feed precision with `0 < bid <= ask`. `reduce_spread` does not read `benchmark_price`. Its third input is `factor`, the stored `spread_reduction_factor`, an `i128` in the range `[0, SCALAR_18]`, where `SCALAR_18` is 10^18. The general branch computes:
+`reduce_spread` narrows the two sides symmetrically toward their midpoint. It runs after gate 7, so the gates see the raw report values. `reduce_spread` takes the report's `bid` and `ask`, both `i128` in feed precision with `0 < bid <= ask`. It does not read `benchmark_price`. Its third input is `factor`, the stored `spread_reduction_factor`, an `i128` in the range `[0, SCALAR_18]`, where `SCALAR_18` is 10^18. The general branch computes:
 
 ```
 half_spread = floor((ask - bid) / 2)
@@ -181,6 +182,10 @@ The formula moves each side toward the midpoint by the fraction `factor / SCALAR
 Integer division truncates toward zero, and `ask - bid` is never negative, so both divisions floor. The oracle computes `cut` with `fixed_mul_floor` from `SorobanFixedPoint`. It forms the product in `i128`, and when that multiplication overflows it falls back to a 256-bit product.
 
 `factor` is at most `SCALAR_18`, so `cut` never exceeds `half_spread` and the quotient fits back into `i128`. Both sides move by the same `cut`. For every `factor` in range, `bid + cut <= ask - cut` holds, so the sides never invert.
+
+:::info Raw report prices differ from effective quotes
+The oracle applies the configured spread reduction after it validates the report. Its returned bid and ask can differ from the raw report fields.
+:::
 
 ## The return carries a positive, ordered quote
 

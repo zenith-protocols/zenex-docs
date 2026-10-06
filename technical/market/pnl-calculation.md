@@ -1,6 +1,7 @@
 ---
 sidebar_position: 9
 title: PnL and the profit cap
+description: Position and side marks, rounding, profit haircuts, and capped vault marks.
 ---
 
 # PnL and the profit cap
@@ -69,7 +70,7 @@ Every row opens 100.0 of notional on a 7-decimal settlement token, so `notional`
 
 The entry price of a stored position is `notional` over `tokens`, scaled by `SCALAR_18`. The market derives it from the pair and never stores it. `Position::increase` sizes each fill at the entry side of the spread, `PriceData::entry`, which is the ask for a long and the bid for a short. A long uses `to_tokens_floor` and a short uses `to_tokens_ceil`.
 
-Entry sizing rounds against the trader, like the mark. The [Position lifecycle](./position-lifecycle.md#an-increase-buys-size-at-the-entry-side) page gives the reason. The implied entry carries the entry side and the mark carries the exit side, so the spread is the whole cost of a round trip.
+Entry sizing rounds against the trader, like the mark. The [Position lifecycle](./position-lifecycle.md#an-increase-buys-size-at-the-entry-side) page gives the reason. The implied entry uses the entry quote and the mark uses the exit quote. The price mark therefore includes the full spread cost of a round trip.
 
 Only the pair is stored, so successive increases blend on their own. Each fill adds its bought `tokens` and its paid `notional`, and the implied entry becomes the `tokens`-weighted mean of the fill prices. A partial close of `closed_notional` (token-dec) removes `prorate(tokens, closed_notional, position.notional)` from `tokens` and `closed_notional` from `notional`. The implied entry of the remainder is unchanged, apart from the rounding down inside `prorate`.
 
@@ -170,9 +171,11 @@ On a `Retired` market, `create_vault_order` redeems at once and publishes `Redee
 
 ## A receipt reproduces its PnL only below the cap
 
-The [Events](./events.md) page gives the `price` field of every fill receipt. On a close receipt, `notional` and `tokens` are the closed size at the position's own entry ratio. The pair implies the entry price of the closed chunk. `price` is what the chunk closed at.
+The [Events](./events.md) page gives the `price` field of every fill receipt. On a close receipt, `notional` and `tokens` are the closed size at the position's own entry ratio. The pair implies the entry price of the closed chunk. `price` is what the chunk closed at. Recomputing `pnl` from those three fields with `math::pnl` reproduces the emitted value only where the profit cap did not bind. Where the cap bound, the emitted value is the recomputed profit scaled down by `cap / side_pnl` at the moment of the close.
 
-Recomputing `pnl` from those three fields with `math::pnl` reproduces the emitted value only where the profit cap did not bind. Where the cap bound, the emitted value is the recomputed profit scaled down by `cap / side_pnl` at the moment of the close.
+:::info Receipts report profit after the cap
+Recomputing raw PnL from a close receipt's size and price can exceed its emitted `pnl`. The emitted value includes the profit haircut.
+:::
 
 ## What this means for a position
 

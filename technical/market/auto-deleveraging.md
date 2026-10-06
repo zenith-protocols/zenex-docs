@@ -1,6 +1,7 @@
 ---
 sidebar_position: 14
 title: Auto-deleveraging
+description: ADL flags, side profit bounds, forced-close eligibility, caller selection, and settlement.
 ---
 
 # Auto-deleveraging
@@ -86,6 +87,10 @@ Any account may submit the call, and `user` signs nothing. `keeper` is the rewar
 The call runs `Position::decrease` with `is_adl` set to `true` and a margin withdrawal of `0`. On a partial close the closed fraction realizes its PnL through the haircut that the [PnL and the profit cap](./pnl-calculation.md) page defines. On a full close `Position::close_settled` unwinds the whole position and pays the settled equity floored at zero. The [position lifecycle](./position-lifecycle.md) page documents both paths.
 
 `execute_adl` loads the price the way `update_adl_state` does, with newest-price substitution and the protective window. De-risking must land even when the freshest report is older than the strict fill window.
+
+:::warning The caller selects the position
+The contract enforces side-level profit bounds and position eligibility. It does not rank traders or enforce a fair selection order.
+:::
 
 ### Gates in code order
 

@@ -1,36 +1,24 @@
 ---
 title: Claimable credit
-sidebar_position: 8
+description: Collect earned funding and payouts held in your name.
 ---
 
 # Claimable credit
 
-Claimable credit is one balance in your name that a market holds for the funding you earn and for payouts it could not send you. You collect it with a claim. You sign the claim in your wallet, no keeper is involved, and the market pays the account that signed. You can read your balance at any time, and reading it changes nothing.
+Claimable credit is a market balance in your name. It holds earned funding and payouts the market could not send to your wallet. Each market has its own balance. A claim pays the account that authorizes it.
 
-## Two sources fill the balance
+## What adds credit
 
-**Funding you earn.** Each time your position changes, the market settles it. A settlement adds up the funding since the previous settlement into one net amount. An increase, a decrease, a close, a liquidation, and an auto-deleveraging fill all settle a position. If the net is earned, the market adds it to your credit balance. If the net is owed, your position pays it and the balance stays where it is. The balance sits apart from your collateral, so it does not move your liquidation price. For which side pays and which side earns, see [Funding rate](./funding-rate.md).
+Earned funding becomes credit when the position settles. It does not add to margin or equity. A close, redeem, or other keeper payout can also become credit if the transfer fails. For example, a classic account may have removed its token trustline. The fill still completes. The market holds the failed payout for a later claim.
 
-**Payouts the market could not send.** Several events pay you in the market's settlement token. They are a close, a partial decrease, a liquidation, an auto-deleveraging fill, a vault redeem, and the refund of a vault deposit that a keeper rejected because it fell under your minimum. Suppose the market cannot send that payout to your account. One cause is a dropped trustline, the Stellar setting that lets an account hold a token. The market then keeps the tokens and adds the amount to your credit balance. A fill that someone else submits therefore never stalls on your account. The rest of the fill completes as it would have.
+## Make a claim
 
-## A claim pays what the credit pool holds
+A claim pays at most what the market's credit pool holds. Check the balance for the right market, confirm your wallet can receive the settlement token, and submit a claim. An empty balance or pool refuses the claim. A transfer failure reverts the claim and preserves the balance. The protocol takes no claim fee. The submission still costs a [transaction fee](./fees.md#transaction-fees).
 
-The credit pool is the reserve that one market keeps for claims. It holds the funding that paying positions have settled, plus every payout the market parked. One pool backs every trader because funding that one trader pays is funding that another earns, and the market holds it in one place until the receiver claims.
+:::info A claim can be partial
+Any unpaid remainder stays in your name. Earned funding can be recorded before the paying positions settle enough funds into that pool.
+:::
 
-A claim pays the smaller of your credit balance and the pool at that moment. Any remainder stays in your balance. If the pool is empty or your balance is empty, the claim fails and nothing moves.
+## When credit waits
 
-A shortfall opens when you earn funding before the paying side settles its share. Funding builds by the second, but a payer's share reaches the pool only when that payer's position next settles. A claim by another trader can also take from the pool first. Later settlements and later parked payouts refill it.
-
-**A claim pays at most what the pool holds today.** The rest waits in your name, and each later claim faces the same cap at that moment. A claim carries no protocol fee. Like any transaction, it pays the network fee described in [Fees](./fees.md).
-
-The claim also fails if the market cannot send the tokens to your account, for example after a dropped trustline. A claim payout has no parking step, so the whole claim reverts and your balance stays where it was.
-
-## A frozen market refuses a claim
-
-Your balance stays as it is until the owner of the market lifts the freeze. Every other state accepts a claim. On a retired market the pool backs every balance in full. For the states a market moves through, see [Market status](../markets/status.md).
-
-## An untouched balance is archived after about 120 days
-
-The network stores your balance for a limited time. Credit that arrives and a claim you make each renew that time, and a read does not. After about 120 days without either, the network archives the balance.
-
-A claim on an archived balance restores it first. The restore adds to the network fee of that claim transaction. The balance returns exactly as it was, so the full amount stays claimable.
+A frozen market blocks claims until its owner lifts the freeze. Every other market state accepts them. An untouched credit entry can be archived by Stellar. A later claim restores it first, which can increase the transaction fee. Archival does not erase the balance. For market availability, use [Market status](../markets/status.md).

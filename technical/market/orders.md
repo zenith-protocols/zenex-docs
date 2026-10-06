@@ -1,5 +1,6 @@
 ---
 title: Orders
+description: All order kinds, fields, escrow, authorization, expiry, execution gates, and refunds.
 sidebar_position: 6
 ---
 
@@ -86,6 +87,10 @@ fn cancel_order(e: Env, user: Address, id: u32) -> i128
 
 `Order::refund_and_remove` transfers `Order::escrow_amount` from the market to `user` when it is above 0, then removes the row. For a decrease kind the call also removes `id` from `Position.decrease_orders` and rewrites the position. It publishes `CancelOrder` with the topics `user` and `id` and the data field `refund`, and returns `refund` (token-dec). An expired order cancels the same way and refunds in full.
 
+:::warning Expiration does not refund escrow
+`expiration` gates execution. An expired order remains stored until a cancel or a full-close sweep removes it. The cancel path refunds the escrow. Storage archival and order expiration are separate mechanisms.
+:::
+
 ## Views and ids
 
 ```rust
@@ -162,6 +167,10 @@ The fill publishes `CloseFill` when the position's `notional` is `0` after the f
 | `StopDecrease` | `bid <= trigger_price` | `ask >= trigger_price` |
 | Any increase, `price_bound != 0` | `ask <= price_bound` | `bid >= price_bound` |
 | Any decrease, `price_bound != 0` | `bid >= price_bound` | `ask <= price_bound` |
+
+:::warning A zero bound permits any accepted execution price
+`price_bound = 0` disables the price-bound check. A nonzero bound limits the quote used for the fill, not the trade or accrued fees.
+:::
 
 ## The keeper payout is a fee share plus the execution fee
 

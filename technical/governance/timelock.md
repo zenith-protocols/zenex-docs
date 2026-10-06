@@ -1,13 +1,12 @@
 ---
 title: Timelock
+description: Queued calls, execution, cancellation, immediate status forwarding, storage, and errors.
 sidebar_position: 2
 ---
 
 # Timelock
 
-The governance contract is a timelock. The owner queues a call to another contract, and the queued call unlocks after a delay. Any account can then execute it. The owner can cancel it until it runs. One owner function, `set_status`, reaches its target at once.
-
-This page covers the queue functions, the storage keys, the error codes, the events, and the `Ownable` surface. The [Delay changes](./delay.md) page covers the two functions that change the delay value.
+The governance contract is a timelock. The owner queues a call to another contract, and the queued call unlocks after a delay. Any account can then execute it. The owner can cancel it until it runs. One owner function, `set_status`, reaches its target at once. This page covers the queue functions, the storage keys, the error codes, the events, and the `Ownable` surface. The [Delay changes](./delay.md) page covers the two functions that change the delay value.
 
 Every time value is a unix timestamp in seconds. Every delay is a count of seconds. Every time-to-live (TTL) is a count of ledgers. Every nonce is a dimensionless `u32` counter. The word entry means one stored `QueuedCall`.
 
@@ -105,11 +104,13 @@ Owner only. The gates run in this order:
 1. The owner check. The owner key must exist (`OwnerNotSet` (2100)) and the owner must sign.
 2. The forwarded call to `target`.
 
-The call takes effect in the same transaction as the owner's authorization. It is the only owner function that skips the queue and the delay. It forwards one function name, `set_status`, with one argument, `status`, and writes no entry and no nonce. If the forwarded call succeeds, `set_status` publishes `status_set`. If the target returns an error, the error propagates as on `execute`.
+The call takes effect in the same transaction as the owner's authorization. It is the only owner function that skips the queue and the delay. `set_status` forwards `status` to the target's `set_status`. It writes no entry and no nonce. If the forwarded call succeeds, `set_status` publishes `status_set`. If the target returns an error, the error propagates as on `execute`.
 
-`target` is any `Address`. The contract does not check that it is a market or that it exposes `set_status`, and the forwarded call traps when it does not. `status` is a `u32` discriminant of the market `Status` enum. The target validates it. The [Market status page](../market/status.md) gives the values and what each one permits.
+`target` is any `Address`. The contract does not check that it is a market or that it exposes `set_status`, and the forwarded call traps when it does not. `status` is a `u32` discriminant of the market `Status` enum. The target validates it. The [Market status page](../market/status.md) gives the values and what each one permits. The owner-only `set_status` function on the target accepts the forwarded call when the governance contract is the owner of that target.
 
-The owner-only `set_status` function on the target accepts the forwarded call when the governance contract is the owner of that target.
+:::warning Status forwarding bypasses the queue
+The owner's `set_status` call executes immediately. The governance delay does not protect this emergency path.
+:::
 
 ## Read a queued call
 

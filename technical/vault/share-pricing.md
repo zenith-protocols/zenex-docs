@@ -1,5 +1,6 @@
 ---
 title: Share pricing
+description: Asset and share conversions, supplied profit marks, previews, strategy entries, and errors.
 sidebar_position: 3
 ---
 
@@ -83,6 +84,10 @@ In the empty case `basis_assets` is 1 and F3 reduces to a multiplication by the 
 shares = assets * 10^decimals_offset
 ```
 
+:::warning Positive input can produce zero output
+Integer rounding can mint zero shares or pay zero assets. A strategy call still consumes its positive input when the resulting output is zero. Market vault orders with positive `min_out` reject a below-minimum quote before the conversion executes.
+:::
+
 ## `strategy_deposit`
 
 ```rust
@@ -134,6 +139,10 @@ fn preview_redeem(e: Env, shares: i128, net_pnl: i128) -> i128
 Any caller can call these views. `preview_deposit` returns F3 and `preview_redeem` returns F4, at the same mark and with the same rounding as the two entries above. Both accept a zero input and return `0`, so `preview_deposit` with `assets` of `0` returns `0` while `strategy_deposit` with the same value traps. A negative input traps `InvalidAmount` (800), and `PnlExceedsAssets` (801) applies to both. `preview_redeem` does not check that any account holds the shares.
 
 Both previews only read storage. They read `VaultStorageKey::AssetAddress`, `VaultStorageKey::VirtualDecimalsOffset`, and `FungibleStorageKey::TotalSupply`, and they call `balance` on the asset token. They write no storage, publish no event, and leave the instance TTL as it is.
+
+:::info A preview depends on the supplied mark
+The preview accepts the caller's `net_pnl`. It does not obtain a price report or check the market's capacity, lock, or minimum-output gates.
+:::
 
 ## Events
 

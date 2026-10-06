@@ -10,7 +10,7 @@ hide_table_of_contents: true
 
 This page lists every contract of the live Zenex deployment on Stellar mainnet and the values those contracts run with. Check an address here before you approve a transaction that names it. Anyone can deploy a market through the factory, so a contract that carries a familiar name proves nothing on its own. The addresses below are the ones the Zenex app uses.
 
-A script writes this page from the chain. It read every value at ledger 64,737,253 on 2 October 2026, and it checked that the contracts report the same addresses about each other. An owner can change a value at any moment, so the contracts hold the value in force.
+These values were checked on 4 October 2026. The chain reads began at ledger 64,757,411 and can span several ledgers. The generator cross-checks contract addresses and code hashes. Settings can change after this check, so the contracts hold the values in force.
 
 ## Markets
 
@@ -42,9 +42,9 @@ The Zenex app sends your transactions through these contracts. They sit outside 
 | Contract | Address | What it does |
 | --- | --- | --- |
 | Market router | [`CDOF5KRURJ7RRBPORHYSSKT727X3IBNF3LGOFHZND4HBTS5FRUZRJEZT`](https://stellar.expert/explorer/public/contract/CDOF5KRURJ7RRBPORHYSSKT727X3IBNF3LGOFHZND4HBTS5FRUZRJEZT) | Lets the app create an order and fill it in one transaction, or bundle several calls into one. |
-| Fee forwarder | [`CDOAKNTCQZSBQJY7FFQI7RUURJKY37KYI6GV464H2YHTDJ7DBI27F4J5`](https://stellar.expert/explorer/public/contract/CDOAKNTCQZSBQJY7FFQI7RUURJKY37KYI6GV464H2YHTDJ7DBI27F4J5) | Takes the network fee in USDC when the app sends a transaction for you. |
+| Fee forwarder | [`CDOAKNTCQZSBQJY7FFQI7RUURJKY37KYI6GV464H2YHTDJ7DBI27F4J5`](https://stellar.expert/explorer/public/contract/CDOAKNTCQZSBQJY7FFQI7RUURJKY37KYI6GV464H2YHTDJ7DBI27F4J5) | Collects the relay fee in USDC before it invokes the requested action. |
 | Wallet factory | [`CBOKFCC24264FHSAK2PZ5U6VYMDMJWU55FORXE7ZT6EWBOLVK3TBLAOI`](https://stellar.expert/explorer/public/contract/CBOKFCC24264FHSAK2PZ5U6VYMDMJWU55FORXE7ZT6EWBOLVK3TBLAOI) | Creates the smart wallet the app sets up for you. |
-| Session policy | [`CDIFOB7JFHWKIWDTMCFWTV2EMYPSLT77KPSXESMZT5W7OSLDAMCAEOTV`](https://stellar.expert/explorer/public/contract/CDIFOB7JFHWKIWDTMCFWTV2EMYPSLT77KPSXESMZT5W7OSLDAMCAEOTV) | Holds the limits of one-click trading: the contracts a session key may call and the spending limit you choose. |
+| Session policy | [`CDIFOB7JFHWKIWDTMCFWTV2EMYPSLT77KPSXESMZT5W7OSLDAMCAEOTV`](https://stellar.expert/explorer/public/contract/CDIFOB7JFHWKIWDTMCFWTV2EMYPSLT77KPSXESMZT5W7OSLDAMCAEOTV) | Restricts a one-click session to configured markets, token transfers into those markets, and relay fees to the pinned recipient. It has no spending cap. |
 | Passkey verifier | [`CB7HENHJ7NF34I5FFXQK7D5I3WWQRGB5O5XO77D3NXMT7LM7LOKRQ5YR`](https://stellar.expert/explorer/public/contract/CB7HENHJ7NF34I5FFXQK7D5I3WWQRGB5O5XO77D3NXMT7LM7LOKRQ5YR) | Checks a passkey signature for a smart wallet. It comes with the smart-account kit the wallets are built on. |
 | Ed25519 verifier | [`CBOOZV2BK5OETGL4Q4KGEBESPRLJFN7DOFWDT7OZGLD7EQEZUVOWUEMC`](https://stellar.expert/explorer/public/contract/CBOOZV2BK5OETGL4Q4KGEBESPRLJFN7DOFWDT7OZGLD7EQEZUVOWUEMC) | Checks a key signature for a smart wallet. It comes with the same kit. |
 
