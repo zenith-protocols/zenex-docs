@@ -50,7 +50,7 @@ The fee permission names the token, maximum amount, expiry, recipient, and targe
 A whole-transaction failure reverses the token fee. A successful transaction can still pay it while a recoverable fill failure leaves the order resting.
 
 :::info Review the token approval
-When signing, `approve` grants the fee forwarder a token allowance with your maximum amount and expiry. Check its token and spender alongside the fee terms. [Fee forwarder](/technical/router/fee-abstraction) explains the collection rules.
+When signing, a token approval grants the fee forwarder an allowance of your maximum amount until its expiry. Check its token and spender alongside the fee terms. [Fee forwarder](/technical/router/fee-abstraction) explains the collection rules.
 :::
 
 ## Understand what stays flexible

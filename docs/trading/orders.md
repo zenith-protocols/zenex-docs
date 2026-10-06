@@ -61,6 +61,6 @@ Its funds stay held until you cancel. A frozen market blocks cancellation until 
 
 ## Creation and a fill in one transaction
 
-The app can create an order and attempt a fill in one transaction. A strict fill failure reverts creation. A recoverable fill failure can instead leave the order resting. In relay mode, **Instant fill** attempts execution immediately. **Strict fill** makes an unsuccessful attempt revert creation. Browser-direct market orders wait for keeper execution. Same-ledger market orders can use a recent verified report observed before creation. Other fills follow the order's price-time rules.
+The app can create an order and attempt a fill in one transaction. A strict fill failure reverts creation. A recoverable fill failure can instead leave the order resting. In relay mode, **Instant fill** attempts execution immediately. **Strict fill** makes an unsuccessful attempt revert creation. Browser-direct market orders wait for keeper execution. Same-ledger market orders can use a recent verified report observed before creation. Other fills need a report observed at or after the order's creation.
 
 Check both Orders and Positions after confirmation. See [Pending and failed transactions](../account/transactions.md).

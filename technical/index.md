@@ -71,7 +71,7 @@ The forwarder authenticates the fee payer. The router adds no authorization of i
 
 ## Deployment and administration
 
-The factory deploys each pair atomically at addresses derived from `admin` and a salt. The vault registers the market as its strategy, and the market stores its vault, token, oracle, treasury, feed, and initial configuration. Deployment requires `admin` authorization; that address becomes the market owner. The factory owner separately controls the code hashes and treasury selected for future pairs. See [deployment](./factory/deploy.md).
+On a given network, the factory deploys each pair atomically at addresses derived from `admin` and a salt. The vault registers the market as its strategy, and the market stores its vault, token, oracle, treasury, feed, and initial configuration. Deployment requires `admin` authorization; that address becomes the market owner. The factory owner separately controls the code hashes and treasury selected for future pairs. See [deployment](./factory/deploy.md).
 
 The market owner can change configuration and upgrade market code while retaining its address and authority over the vault. The vault has no upgrade entry, but its registered market's behavior can change. When governance owns a target, queued administrative calls wait for the timelock and anyone can execute them after the delay. Governance's owner can forward `set_status` immediately; the target still enforces its allowed transitions. See [ownership and upgrades](./market/dependencies.md#ownership-and-upgrade) and [governance](./governance/timelock.md).
 

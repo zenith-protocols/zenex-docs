@@ -5,7 +5,7 @@ description: Connect a wallet, review an order, and follow it through confirmati
 
 # Start trading
 
-Your first trade starts with a funded wallet and ends with a confirmed position. The order between those steps carries the terms you approve.
+Your first trade starts with a funded wallet and ends when a fill opens your position. The order between those steps carries the terms you approve.
 
 ## Before you start
 

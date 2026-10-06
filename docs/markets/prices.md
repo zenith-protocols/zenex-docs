@@ -35,7 +35,7 @@ Trade and vault fills use a strict freshness window. Liquidation and auto-deleve
 The market keeps a latest verified price. Liquidation, auto-deleveraging, accrual updates, and vault fills use the newer eligible price. Trade fills use the submitted report. Use [Deployments](../deployments.md) for current oracle settings.
 
 :::warning A stream gap can affect actions differently
-A report can be too old for your order while still fresh enough for liquidation. Once it exceeds the wider window, that close also stops.
+A report can be too old for your order while still fresh enough for liquidation. Once it exceeds the wider window, that close also stops. A delisted market that prices at its settlement price ignores reports, so a gap does not stop those closes.
 :::
 
 ## Price during a wind-down
