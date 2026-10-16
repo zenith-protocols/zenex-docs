@@ -77,12 +77,12 @@ Without an independent review of V2, its assurance comes from Zenex's own work:
 - An internal threat model, reviewed against every V1 finding above.
 - Unit, integration, fuzz and mutation tests.
 - Testnet soak campaigns with automated traders, keepers and liquidations.
-- Low launch limits on position size, open interest and vault utilization, shown in [Deployments](./deployments.md). They cap how much any single flaw can cost.
+- Low launch limits on position size, open interest and vault utilization, shown in [Deployments](./deployments.md). They reduce market exposure but do not cap the loss from a contract flaw.
 
 The owner can still upgrade the market and oracle code. Read [Governance](./governance.md).
 
 :::danger Unaudited code holds your funds
-A flaw in the V2 contracts can cost traders their margin and liquidity providers their deposits, up to the launch limits. No independent reviewer has checked V2 for such flaws. Read [Risks](./risks.md) before committing funds.
+A flaw in the V2 contracts can cost traders their margin and liquidity providers their deposits. A flaw that bypasses the launch limits is not bounded by them. No independent reviewer has checked V2 for such flaws. Read [Risks](./risks.md) before committing funds.
 :::
 
 ## Reporting a vulnerability
