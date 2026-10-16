@@ -34,6 +34,6 @@ A relayed signature permits fees and contract actions within its signed scope. D
 
 ## Owners and contract risk
 
-Owners can change parameters, freeze markets, delist them, and upgrade relevant contracts. A freeze blocks exits while exposure and elapsed costs continue. A delisted market can settle at an owner-set price. Healthy positions can later be forcibly closed. Contracts, dependencies, token issuers, and the Stellar network can fail. An audit covers a defined scope and cannot guarantee safety. Read [Governance](./governance.md), [Market status](./markets/status.md), and [Audit reports](./audits.md).
+Owners can change parameters, freeze markets, delist them, and upgrade relevant contracts. A freeze blocks exits while exposure and elapsed costs continue. A delisted market can settle at an owner-set price. Healthy positions can later be forcibly closed. Contracts, dependencies, token issuers, and the Stellar network can fail. The deployed contracts have not had an independent audit; the one published report covers an earlier version. Read [Governance](./governance.md), [Market status](./markets/status.md), and [Audit reports](./audits.md).
 
 App, relay, and funding-service access depends on each service's availability and access policy. The contract interface remains a separate integration surface.
