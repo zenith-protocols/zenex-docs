@@ -87,4 +87,4 @@ A flaw in the V2 contracts can cost traders their margin and liquidity providers
 
 ## Reporting a vulnerability
 
-Report a suspected vulnerability privately to the Zenex team through a direct message on [Discord](https://discord.gg/zenex). Do not disclose it publicly until it has been resolved.
+Report a suspected vulnerability privately to the Zenex team through a direct message on [Discord](https://discord.gg/HJ4JPEtYcR). Do not disclose it publicly until it has been resolved.
