@@ -49,4 +49,4 @@ Positions and escrow remain held. Closing, adding margin, cancelling, redeeming,
 
 ## Where are contract addresses and audit reports?
 
-Use [Deployments](./deployments.md) for addresses, code hashes, owners, and settings. Use [Audit reports](./audits.md) for published review coverage.
+Use [Deployments](./deployments.md) for addresses, code hashes, owners, and settings. Use [Audit reports](./audits.md) for the published V1 report and what it does not cover.
