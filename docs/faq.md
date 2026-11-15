@@ -54,7 +54,3 @@ Positions and escrow remain held. Closing, adding margin, cancelling, redeeming,
 ## Where are contract addresses and audit reports?
 
 Use [Deployments](./deployments.md) for addresses, code hashes, owners, and settings. Use [Audit reports](./audits.md) for the published V1 report, what it does not cover, the public contract source, and how to report a vulnerability.
-
-## Where are my positions and shares from before the market move?
-
-They stay on the previous market. Close positions, cancel orders, claim credit, and redeem shares on the previous site. See [Market migration](./markets/migration.md).
