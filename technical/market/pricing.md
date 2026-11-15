@@ -45,6 +45,8 @@ Two things carry the name `Market`. One is the trait that declares the contract 
 | `token` | `Address` | the settlement token |
 | `vault` | `Address` | the strategy vault |
 | `vault_balance` | `i128` | token-dec, `VaultClient::total_assets` at load, then tracked through the call |
+| `treasury` | `Address` | the treasury, the payee of the treasury cuts |
+| `treasury_rate` | `i128` | `SCALAR_18`, `TreasuryClient::get_rate` at load |
 | `now` | `u64` | seconds, the ledger timestamp at load |
 
 `vault_balance` is read from the vault once. Every `Settlement::settle` in the call then adds its own vault leg to the tracked value, and a draw is a negative leg. A deposit fill adds the order amount less the vault fee. Its settlement leg then adds the vault's share of that fee, which is the fee less the keeper and treasury cuts. A redeem fill subtracts the assets the vault released before its settlement leg. The utilization caps, the PnL allowances, and the `VaultInsolvent` (755) check all read this tracked value. So does the `VaultBalanceExceeded` (753) cap, which runs on a deposit fill after the settlement. The tracked value lets each gate judge the balance the call leaves behind and not the balance it found.

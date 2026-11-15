@@ -6,7 +6,7 @@ sidebar_position: 2
 
 # Constructor and share token
 
-This page covers how `StrategyVaultContract` is initialized and how its shares behave as a token. The constructor fixes the underlying asset, the decimals offset, the share metadata, and the strategy address. The vault issues shares as an OpenZeppelin fungible token with `ContractType = Vault`. The nine share token entries below are the library defaults, and only `decimals` carries a vault-specific body. A share amount is share-dec, the asset's own decimals plus the decimals offset.
+This page covers how `StrategyVaultContract` is initialized and how its shares behave as a token. The constructor fixes the underlying asset, the share metadata, and the strategy address. The decimals offset is the constant `DECIMALS_OFFSET` (6), the same for every vault. The vault issues shares as an OpenZeppelin fungible token with `ContractType = Vault`. The nine share token entries below are the library defaults, and only `decimals` carries a vault-specific body. A share amount is share-dec, the asset's own decimals plus the decimals offset. A 7-decimal asset gives 13-decimal shares.
 
 ## Constructor
 
@@ -16,19 +16,18 @@ fn __constructor(
     name: String,
     symbol: String,
     asset: Address,
-    decimals_offset: u32,
     strategy: Address,
 )
 ```
 
-The constructor runs once at deployment and needs no authorization. `name` and `symbol` are the share token metadata. `asset` is the underlying collateral token. `decimals_offset` is a count of extra decimal places, from 0 to `MAX_DECIMALS_OFFSET` (10). `strategy` is the market contract, and `strategy_deposit`, `strategy_redeem`, and `strategy_withdraw` each need its authorization.
+The constructor runs once at deployment and needs no authorization. `name` and `symbol` are the share token metadata. `asset` is the underlying collateral token. `strategy` is the market contract, and `strategy_deposit`, `strategy_redeem`, and `strategy_withdraw` each need its authorization.
 
 The factory deploys the vault before the market, so `strategy` is the derived market address. The constructor makes no call to it. The [factory deploy](../factory/deploy.md) page gives the deployment order.
 
 The effects run in a fixed order.
 
 1. `Vault::set_asset` writes `VaultStorageKey::AssetAddress`.
-2. `Vault::set_decimals_offset` writes `VaultStorageKey::VirtualDecimalsOffset`.
+2. `Vault::set_decimals_offset` writes `DECIMALS_OFFSET` to `VaultStorageKey::VirtualDecimalsOffset`. The share token library reads the stored value in `decimals`. The vault's own share pricing uses the constant.
 3. `Base::set_metadata` writes `FungibleStorageKey::Meta` with `Vault::decimals`, `name`, and `symbol`.
 4. `storage::set_strategy` writes `StrategyStorageKey::Strategy`.
 5. `storage::extend_instance` extends the instance time to live (TTL).
@@ -38,35 +37,31 @@ Step 3 makes a cross-contract `decimals` call on `asset`, so `asset` must alread
 | Step | Error | Code | Condition |
 |---|---|---|---|
 | 1 | `VaultTokenError::VaultAssetAddressAlreadySet` | 401 | `AssetAddress` already holds a value. |
-| 2 | `VaultTokenError::VaultMaxDecimalsOffsetExceeded` | 409 | `decimals_offset` is above `MAX_DECIMALS_OFFSET`. |
 | 2 | `VaultTokenError::VaultVirtualDecimalsOffsetAlreadySet` | 402 | `VirtualDecimalsOffset` already holds a value. |
-| 3 | `VaultTokenError::MathOverflow` | 410 | The sum of the asset decimals and `decimals_offset` overflows `u32`. |
+| 3 | `VaultTokenError::MathOverflow` | 410 | The sum of the asset decimals and `DECIMALS_OFFSET` overflows `u32`. |
 
-Step 2 checks the bound before it checks for a second write. A deployed vault never raises 401 or 402, because the constructor runs once per contract and starts from empty instance storage.
+A deployed vault never raises 401 or 402, because the constructor runs once per contract and starts from empty instance storage. The offset is a constant below `MAX_DECIMALS_OFFSET`, so the library's bound check on it always passes. The market constructor accepts only a 7-decimal settlement token, so a vault deployed through the factory never raises 410.
 
 ## Share decimals add the offset to the asset decimals
 
 `Vault::decimals` computes the share decimals.
 
 ```text
-share_decimals = asset_decimals + decimals_offset
+share_decimals = asset_decimals + DECIMALS_OFFSET
 ```
 
 Where:
 
 - `asset_decimals` is a `u32` count of decimal places. It is the result of the `decimals` call on the underlying asset contract, read live on every call. The symbol is `Vault::get_underlying_asset_decimals`.
-- `decimals_offset` is a `u32` count of decimal places, from 0 to 10. It is the value under `VaultStorageKey::VirtualDecimalsOffset`, or 0 when the key is unset. The symbol is `Vault::get_decimals_offset`.
+- `DECIMALS_OFFSET` is `6`, a `u32` count of decimal places. `Vault::get_decimals_offset` reads it back from `VaultStorageKey::VirtualDecimalsOffset`, where the constructor stored it.
 
-The share token carries the asset's decimals plus the offset, so each offset step adds one decimal place to every share amount. The addition is checked and traps with code 410 on overflow. The constructor stores the sum in `Metadata.decimals`. The exported `decimals` entry recomputes the sum on every call and does not read that stored field.
+The share token carries the asset's decimals plus the offset, so a share amount has six more decimal places than an asset amount. The addition is checked and traps with code 410 on overflow. The constructor stores the sum in `Metadata.decimals`. The exported `decimals` entry recomputes the sum on every call and does not read that stored field.
 
-| `asset_decimals` | `decimals_offset` | `share_decimals` |
+| `asset_decimals` | `DECIMALS_OFFSET` | `share_decimals` |
 |---|---|---|
-| 7 | 0 | 7 |
-| 7 | 3 | 10 |
-| 6 | 10 | 16 |
-| 4294967295 | 1 | Traps with 410. |
+| 7 | 6 | 13 |
 
-The offset also enters the share price as a count of virtual shares. The [share pricing](./share-pricing.md) page gives that formula.
+The market constructor rejects a settlement token whose decimals are not 7, so every vault the factory deploys has 13-decimal shares. The offset also enters the share price as `10^6` virtual shares. The [share pricing](./share-pricing.md) page gives that formula.
 
 ## The underlying asset
 
@@ -121,7 +116,7 @@ Each call checks its gates in the order below. The first failure traps.
 | `FungibleTokenError::LessThanZero` | 103 | `transfer`, `transfer_from`, and `approve`, when `amount` is below 0. |
 | `FungibleTokenError::UnsetMetadata` | 105 | `name` and `symbol`, when `Meta` is unset. The constructor sets it, so a deployed vault does not raise it. |
 | `VaultTokenError::VaultAssetAddressNotSet` | 400 | `decimals`, when `AssetAddress` is unset. The constructor sets it, so a deployed vault does not raise it. |
-| `VaultTokenError::MathOverflow` | 410 | `decimals`, when the sum of the asset decimals and the decimals offset overflows `u32`. |
+| `VaultTokenError::MathOverflow` | 410 | `decimals`, when the sum of the asset decimals and the decimals offset overflows `u32`. A 7-decimal asset does not raise it. |
 
 ## Events
 
@@ -160,6 +155,13 @@ The vault defines the instance TTL constants.
 | `ONE_DAY_LEDGERS` | 17280 | ledgers, about 5 seconds each |
 | `LEDGER_THRESHOLD_INSTANCE` | 518400, or 30 days | ledgers |
 | `LEDGER_BUMP_INSTANCE` | 535680, or 31 days | ledgers |
+
+The vault also fixes the share scale.
+
+| Symbol | Value | Unit |
+|---|---|---|
+| `DECIMALS_OFFSET` | 6 | decimal places |
+| `VIRTUAL_SHARES` | 1_000_000, or `10^DECIMALS_OFFSET` | share-dec |
 
 The share token library defines the rest.
 

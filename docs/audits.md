@@ -87,4 +87,10 @@ A flaw in the V2 contracts can cost traders their margin and liquidity providers
 
 ## Reporting a vulnerability
 
-Report a suspected vulnerability privately to the Zenex team through a direct message on [Discord](https://discord.gg/HJ4JPEtYcR). Do not disclose it publicly until it has been resolved.
+Report a suspected vulnerability privately to the Zenex team through a direct message on [Discord](https://discord.gg/HJ4JPEtYcR). Do not disclose it publicly until it has been resolved. The contracts repository's [SECURITY.md](https://github.com/zenex-trade/zenex-contracts/blob/main/SECURITY.md) lists the contacts, the bounty scope, and the behaviour that is accepted by design.
+
+## Source code and release builds
+
+The contract source is public at [zenex-trade/zenex-contracts](https://github.com/zenex-trade/zenex-contracts). Version 1.0.0 is published there as one release per contract, each with the build file, its SHA-256 hash, and a build provenance attestation. The release workflow also submits each hash to [stellar.expert](https://stellar.expert) for source validation. A deployed contract's code hash equals the SHA-256 of its release file, so you can compare a hash on [Deployments](./deployments.md) with a release.
+
+Published source is not an audit. Version 1.0.0 includes changes that no independent reviewer has checked.

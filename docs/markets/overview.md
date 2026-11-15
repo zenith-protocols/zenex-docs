@@ -11,6 +11,7 @@ A market trades one asset and settles in one token. Its own vault backs the posi
 | --- | --- |
 | [Prices](./prices.md) | Understand displayed prices, execution quotes, and report freshness. |
 | [Market status](./status.md) | Check which actions a state allows and how a wind-down works. |
+| [Market migration](./migration.md) | Close and withdraw from the previous market during its wind-down. |
 | [Market parameters](./market-parameters.md) | Identify the settings that affect your costs and exposure. |
 | [Keepers](../keepers.md) | Understand who executes orders and why execution can wait. |
 | [Governance](../governance.md) | Understand owners, upgrades, and optional delays. |

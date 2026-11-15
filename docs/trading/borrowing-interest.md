@@ -17,7 +17,7 @@ Each side has a liquidity capacity. Utilization measures how much of that capaci
 
 ## What you owe
 
-Interest accrues against the size entered, over elapsed time. It settles when the position changes, including a liquidation or auto-deleveraging action. For illustration, 10,000 USDC of size at a constant 20% annual rate costs about 5.48 USDC per day. Real rates vary. When your side becomes the smaller side, new interest stops accruing. It still owes what accrued earlier. Read [Liquidation](./liquidation.md) for the effect on equity. Use [Deployments](../deployments.md) for the configured borrowing curve.
+Interest accrues against the size entered, over elapsed time. It settles when the position changes, including a liquidation or auto-deleveraging action. For illustration, 10,000 USDC of size at a constant 20% annual rate costs about 5.48 USDC per day. Real rates vary. When your side becomes the smaller side, new interest stops accruing. It still owes what accrued earlier. The vault counts interest you owe in its [share value](../vault/share-value.md#pending-borrowing) before you pay it. That does not change the amount you owe. Read [Liquidation](./liquidation.md) for the effect on equity. Use [Deployments](../deployments.md) for the configured borrowing curve.
 
 :::warning Time can consume the margin buffer
 Interest owed lowers equity before settlement. The asset price can remain unchanged while the position moves closer to liquidation. Lower leverage gives the same position size more collateral to absorb that cost.

@@ -111,6 +111,7 @@ Three keys sit outside `DataKey`. `OwnableStorageKey::Owner` holds the owner `Ad
 | `tokens` | `SidePair` | base-dec. Base size per side, the sum of each position's `tokens`. |
 | `funding_idx` | `SidePair` | `SCALAR_18`. The cumulative funding index per side, signed. |
 | `borrowing_idx` | `SidePair` | `SCALAR_18`. The cumulative borrowing index per side, non-decreasing. |
+| `borrowing_weight` | `SidePair` | token-dec times `SCALAR_18`. Per side, the sum over open positions of `notional * borrowing_idx` at each position's last checkpoint. [Borrowing rate](./borrowing-rate.md#pending-borrowing) gives its use. |
 | `funding_rate` | `i128` | `SCALAR_18` per second, signed. Positive means longs pay. |
 | `accrued_at` | `u64` | seconds. The last accrual timestamp. Both indices share it. |
 | `credit_pool` | `i128` | token-dec. The ledger of funding claims, parked payouts included. It is a ledger and not a balance. |
@@ -118,7 +119,7 @@ Three keys sit outside `DataKey`. `OwnableStorageKey::Owner` holds the owner `Ad
 
 The [funding rate page](./funding-rate.md) holds the writers of `credit_pool` and `credit_owed`, the surplus between them, and the invariant. It also states that the retirement sweep traps when the ledger exceeds the contract's token balance.
 
-The fields `notional`, `margin`, `tokens`, `funding_idx`, and `borrowing_idx` use `SidePair`:
+The fields `notional`, `margin`, `tokens`, `funding_idx`, `borrowing_idx`, and `borrowing_weight` use `SidePair`:
 
 ```rust
 pub struct SidePair {

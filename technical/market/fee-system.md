@@ -6,7 +6,7 @@ description: Trade and impact fees, execution fees, settlement legs, and payout 
 
 # Fees and settlement
 
-Every keeper entry that moves funds ends in one settlement, and a settlement pays four legs: the trader, the vault, the keeper, and the treasury. `Market::trade_fees` computes the two fees that a change of size pays. `Settlement` holds one action's legs and names the treasury recipient. Four builders shape the legs, and `Settlement::fee_split` builds the fee legs that three of them share. `Settlement::settle` transfers the legs. This page gives those computations, the execution fee, the keeper payout, and the credit that catches a failed trader payout.
+Every keeper entry that moves funds ends in one settlement, and a settlement pays four legs: the trader, the vault, the keeper, and the treasury. `Market::trade_fees` computes the two fees that a change of size pays. `Settlement` holds one action's legs. Four builders shape the legs, and `Settlement::fee_split` builds the fee legs that three of them share. `Settlement::settle` transfers the legs. This page gives those computations, the execution fee, the keeper payout, and the credit that catches a failed trader payout.
 
 The funding and borrowing accruals reach a settlement inside the `Fees` struct, on [Position lifecycle](./position-lifecycle.md). Their rates are on [Funding rate](./funding-rate.md) and [Borrowing rate](./borrowing-rate.md). The liquidation fee is on [Liquidation](./liquidation.md). The profit haircut that sets a decrease's `pnl` is on [PnL and the profit cap](./pnl-calculation.md). Each `Config` field named below has its bound on [Config](./config.md).
 
@@ -108,8 +108,7 @@ The market's `exec_fee` pays the keeper when an order resolves by execution. A f
 | `trader` | `i128` | Paid to `user`. |
 | `vault` | `i128` | A positive leg is paid to the vault. A negative leg is drawn from the vault. |
 | `keeper` | `i128` | Paid to the `keeper` address the caller named. |
-| `treasury` | `i128` | Paid to `treasury_address`. |
-| `treasury_address` | `Address` | The `Treasury` address from instance storage. |
+| `treasury` | `i128` | Paid to `Market.treasury`, the `Treasury` address from instance storage. |
 
 ```rust
 fn fee_split(e: &Env, market: &Market, fees: &Fees, liq_fee: i128) -> Self;
@@ -128,7 +127,7 @@ Where `keeper_rate` and `t_rate` are `SCALAR_18` ratios and every other term is 
 
 `math::apply_factor_floor` computes each cut, so both cuts round down and the vault banks the remainder. Both cuts read the same gross `split_fee`, so the keeper's cut does not dilute the treasury's. The treasury's cut on borrowing floors apart from its cut on the trade fee, so the two roundings do not merge. The keeper takes no share of borrowing. `fees.funding` enters no leg at all. Paid funding stays on the contract in `credit_pool`, and earned funding becomes a claimable credit, as [Funding rate](./funding-rate.md) documents.
 
-`fee_split` raises no `MarketError`. It reads the treasury rate through a cross-contract call, and a failure in that call traps the settlement. The builder does not raise it.
+`fee_split` raises no `MarketError`. `t_rate` is `Market.treasury_rate`, which `Market::load` read from the treasury once for the call.
 
 The first fill above carries through. Its `fees.base` is `2_100_000` and its `fees.impact` is `250_000`, so `split_fee` is `2_350_000`. With `keeper_rate` and `t_rate` at 10% each and `fees.borrowing` at `100_000`, the keeper leg is `235_000`. The treasury leg is `235_000 + 10_000 = 245_000`. The vault leg is `2_350_000 + 100_000 - 235_000 - 245_000 = 1_970_000`.
 
@@ -150,7 +149,7 @@ Three of the four builders take an outcome struct, and `compute_vault_order` tak
 | `compute_liquidation` | `execute_liquidation` | `fee_split` runs with the `liq_fee`. `trader = liquidation.returned + refund`. `vault -= liquidation.pnl + liquidation.bad_debt`. No `exec_fee`, because a liquidation consumes no order. |
 | `compute_vault_order` | `fill_deposit`, `fill_redeem`, `reject` | It splits `vault_fee` itself, below. `reject` passes `vault_fee` and `trader` as `0`, so only the keeper leg, `exec_fee`, is non-zero. |
 
-`compute_vault_order` takes the fill's `vault_fee` (token-dec), the `trader` amount, and the order's `exec_fee`. `keeper_rate` is `Config.keeper_rate` and `t_rate` is the treasury's live rate, both `SCALAR_18` ratios.
+`compute_vault_order` takes the fill's `vault_fee` (token-dec), the `trader` amount, and the order's `exec_fee`. `keeper_rate` is `Config.keeper_rate` and `t_rate` is `Market.treasury_rate`, both `SCALAR_18` ratios.
 
 ```text
 keeper_cut = floor(vault_fee * keeper_rate / SCALAR_18)
@@ -175,7 +174,7 @@ fn settle(&self, e: &Env, market: &mut Market, keeper: &Address, user: &Address)
 | 2 | The `vault` leg is negative | `VaultClient::strategy_withdraw` moves the draw from the vault to the market. |
 | 3 | The `vault` leg is above `0` | Transfers it to the `Vault` address. |
 | 4 | The `keeper` leg is above `0` | Transfers it to the `keeper` address. |
-| 5 | The `treasury` leg is above `0` | Transfers it to `treasury_address`. |
+| 5 | The `treasury` leg is above `0` | Transfers it to `Market.treasury`. |
 | 6 | The `trader` leg is above `0` | Runs `pay_trader`. |
 | 7 | Always | Adds the `vault` leg to `market.vault_balance`. |
 

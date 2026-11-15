@@ -35,7 +35,7 @@ Every row names the entries that raise the code. Token amounts are in token-dec,
 | Code | Variant | Condition | Raised by |
 |---|---|---|---|
 | 600 | `UpgradeNotOwner` | `operator` is not the stored owner | `upgrade` |
-| 700 | `InvalidConfig` | Rules 2 to 20 of `Config::check_valid` fail, or `feed_id` does not start with `0x00 0x03` | `__constructor`, `set_config` |
+| 700 | `InvalidConfig` | Rules 2 to 20 of `Config::check_valid` fail, `feed_id` does not start with `0x00 0x03`, or the settlement token does not have 7 decimals | `__constructor`, `set_config` |
 | 701 | `InvalidPrice` | The flat settlement price is not strictly positive | `set_terminal_price` |
 | 702 | `InvalidStatus` | `set_status` receives an unknown discriminant, a same-status set, or a move out of `Retired`. It also rejects a move to `Active` or `OnIce` once the delist grace window (`DELIST_GRACE`, 86,400 seconds) has passed. `set_terminal_price` runs while the status is not `Delisted` or the grace window is open. `create_vault_order` receives a deposit on a `Retired` market. | `set_status`, `set_terminal_price`, `create_vault_order` |
 | 703 | `MarketNotAccrued` | A borrowing or funding rate parameter changes while the status is not `Frozen`, and `MarketData.accrued_at` is not the current ledger timestamp | `set_config` |
@@ -64,7 +64,7 @@ Every row names the entries that raise the code. Token amounts are in token-dec,
 | 750 | `VaultOrderNotFound` | No `VaultOrder(user, id)` row exists | `get_vault_order`, `cancel_vault_order`, `execute_vault_order` |
 | 751 | `VaultOrderLocked` | A redeem fill runs before `redeem_lock` seconds have passed since `created_at` | `execute_vault_order` |
 | 753 | `VaultBalanceExceeded` | A deposit fill leaves the settled vault balance above `max_vault_balance` | `execute_vault_order` |
-| 754 | `PendingPnlExceeded` | A redeem fill leaves a side's pending profit and loss (PnL) above `max_pnl_withdraw` of half the settled vault balance | `execute_vault_order` |
+| 754 | `PendingPnlExceeded` | A redeem fill leaves a side's pending profit and loss (PnL) above `max_pnl_withdraw` of half the settled vault balance, or a deposit fill runs while a side's pending PnL is above `max_pnl_trader` of half the vault balance before the deposit | `execute_vault_order` |
 | 755 | `VaultInsolvent` | The vault leg of a settlement is negative and larger than the tracked vault balance. Only a decrease fill can raise it on `execute_order`. | `execute_order`, `execute_liquidation`, `execute_adl` |
 | 760 | `NothingToClaim` | The claimable amount, capped by the credit pool, is not positive | `claim_credit` |
 | 770 | `AdlNotTriggered` | The side carries no ADL flag, or its pending PnL is at or below `adl_clear_target` of half the vault balance | `execute_adl` |

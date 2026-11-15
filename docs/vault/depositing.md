@@ -19,7 +19,7 @@ If the fill returns less than your minimum, the order ends. Your deposit tokens 
 
 Use **Vault**, then **Deposit**. Review the amount, estimated shares, minimum received, and fees before signing. Creation escrows the deposit tokens and a separate execution fee. At the fill, the vault fee reduces the deposited amount and the vault mints shares.
 
-A deposit must meet the market's minimum. Its fill must leave the vault within its balance cap. A capacity failure leaves the order waiting. The fill uses a verified report observed at or after order creation and lands in a later ledger.
+A deposit must meet the market's minimum. Its fill must leave the vault within its balance cap. A deposit also cannot fill while either side's pending trader profit is above the [profit cap](../trading/pnl.md). Either failure leaves the order waiting. The fill uses a verified report observed at or after order creation and lands in a later ledger.
 
 ## Withdraw
 
@@ -28,7 +28,7 @@ Use **Vault**, then **Withdraw**. Enter the shares to redeem and review the esti
 The fill reads the current cooldown setting. A change can affect an order already waiting. At the fill, the vault burns shares and pays the token amount after the vault fee. See [Share value](./share-value.md) for how it values that exchange.
 
 :::warning The cooldown is not a guaranteed withdrawal date
-A redeem also needs enough available assets, enough liquidity behind positions, and acceptable pending trader profit. It can remain unfilled after the cooldown for as long as those checks fail.
+A redeem also needs enough available assets, enough liquidity behind positions, and acceptable pending trader profit. Its payout cannot exceed the tokens the vault holds. Share value counts [interest the vault has not collected yet](./share-value.md#pending-borrowing), so a redeem of nearly all shares can price above that balance. A redeem can remain unfilled after the cooldown for as long as any of these checks fails.
 :::
 
 ## Follow the fill
@@ -39,7 +39,7 @@ Rejection below the minimum differs from a liquidity or capacity failure, which 
 | --- | --- |
 | Successful | Shares or token payout arrive, after vault fees. |
 | Below minimum received | Principal returns, execution fee is paid, and the order is removed. |
-| Cooldown, liquidity, or capacity check fails | The order stays resting with escrow held. |
+| Cooldown, liquidity, capacity, or pending-profit check fails | The order stays resting with escrow held. |
 
 A payout the market cannot send can become [Claimable credit](../trading/claimable-credit.md).
 

@@ -57,15 +57,15 @@ The order row is immutable while the order rests, so the `create_order` payload 
 | `deposit_fill` | `assets` | token-dec | The gross deposit principal taken from escrow, `order.amount`. It excludes `exec_fee`. |
 | `deposit_fill` | `shares` | share-dec | The vault shares minted to the user. |
 | `deposit_fill` | `fee` | token-dec | The vault fee charged. |
-| `deposit_fill` | `net_pnl` | token-dec, signed | The capped net pending trader profit and loss (PnL) that the share mint priced against. |
+| `deposit_fill` | `net_pnl` | token-dec, signed | The mark that the share mint priced against: the capped net pending trader profit and loss (PnL) less the vault's share of pending borrowing. |
 | `redeem_fill` | `keeper` | Address | The reward recipient the fill's caller named. |
 | `redeem_fill` | `shares` | share-dec | The vault shares burned. |
 | `redeem_fill` | `assets` | token-dec | The gross assets redeemed from the vault. |
 | `redeem_fill` | `fee` | token-dec | The vault fee charged. |
-| `redeem_fill` | `net_pnl` | token-dec, signed | The capped net pending trader PnL that the share burn priced against. |
+| `redeem_fill` | `net_pnl` | token-dec, signed | The mark that the share burn priced against, built the same way. |
 | `reject_vault_order` | `keeper` | Address | The reward recipient the fill's caller named. |
 | `reject_vault_order` | `quoted` | share-dec (deposit) or token-dec (redeem) | What the fill would have paid, below the order's `min_out`. It is the shares a deposit would mint, or a redeem's assets net of the vault fee. |
-| `reject_vault_order` | `net_pnl` | token-dec, signed | The capped net pending trader PnL that the quote priced against. |
+| `reject_vault_order` | `net_pnl` | token-dec, signed | The mark that the quote priced against, built the same way. |
 
 A deposit fill mints shares against `assets - fee`, and that amount raises the vault's tracked balance when the assets move. The vault leg of `fee` raises the balance a second time when the settlement legs move. `Settlement::compute_vault_order` splits `fee` into the keeper, treasury, and vault legs and adds `exec_fee` to the keeper leg. A redeem fill pays the user `assets - fee` on the `trader` leg. [Deposit fill](./vault-orders.md#deposit-fill) and [Redeem fill](./vault-orders.md#redeem-fill) list the steps in order.
 

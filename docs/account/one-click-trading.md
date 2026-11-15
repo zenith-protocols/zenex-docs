@@ -19,7 +19,7 @@ The current policy restricts contracts and destinations. It does not set a maxim
 
 ## Enable and use it
 
-Select the one-click mode in the app's settings. Confirm the session setup with your passkey, then wait for the on-chain confirmation.
+The app offers the mode only when it publishes a session policy for the market. Where it does not, use another [submission mode](./wallets-and-funds.md#choose-a-wallet). Select the one-click mode in the app's settings. Confirm the session setup with your passkey, then wait for the on-chain confirmation.
 
 The browser holds a local session key. Eligible actions use it until the session expires or its permission is revoked. A browser compromise can misuse an active session to trade. Restricting transfer destinations does not prevent losses through trading.
 

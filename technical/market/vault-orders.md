@@ -21,7 +21,7 @@ This page covers the vault order, the row it stores, the three calls that create
 
 `VaultOrder` is a `#[contracttype]` in persistent user-tier storage under `DataKey::VaultOrder(user, id)`. It is the `order` field of the `CreateVaultOrder` event and the return of `get_vault_order`. A write or an on-chain read of the key extends its time-to-live (TTL) to `LEDGER_BUMP_USER` (120 days) when the remaining TTL is below `LEDGER_THRESHOLD_USER` (100 days). The [storage](./storage.md) page gives both constants.
 
-token-dec is the settlement token's decimals. share-dec is those decimals plus the vault's decimals offset, which `Vault::get_decimals_offset` holds. The [units and scales](../units.md) page defines both.
+token-dec is the settlement token's decimals. share-dec is those decimals plus the vault's fixed offset of 6. The settlement token has 7 decimals, so shares have 13. The [units and scales](../units.md) page defines both.
 
 | Field | Type | Unit | Meaning |
 |---|---|---|---|
@@ -117,25 +117,28 @@ After step 5 the call decodes `order.kind`. Creation validated that field, so `U
 
 `fill_deposit` runs these steps in order.
 
-1. `apply_factor_floor` takes `vault_fee` (token-dec) from `order.amount` (token-dec) at the `deposit_fee` rate. `deposit_assets = order.amount - vault_fee`, in token-dec.
-2. `Market::capped_net_pnl` at `maximize = false` gives `net_pnl` (token-dec, signed). The minimized mark reads each side's pending profit as low as the price allows. The vault's effective backing is its total assets less `net_pnl`, so a lower `net_pnl` raises the backing and the deposit mints fewer shares. The difference stays in the vault for the other shareholders.
-3. If `min_out > 0`, `preview_deposit` on the vault quotes the shares (share-dec) that `deposit_assets` mints at that `net_pnl`. If the quote is below `min_out`, the path rejects the order under [Rejection](#rejection) and returns. Nothing has moved. If `min_out` is `0`, the step is skipped.
-4. `Settlement::compute_vault_order` splits `vault_fee` with a trader leg of `0`, because shares pay the depositor.
-5. The vault pulls the assets inside its own call frame, which the market's own authorization does not cover. The market therefore authorizes exactly one sub-invocation as itself, a `transfer` on the settlement token from the market to the vault for `deposit_assets`. It then calls `strategy_deposit` with `deposit_assets`, `user` as the receiver, the market as `from`, and that `net_pnl`. The vault mints `shares` (share-dec) to `user`. When `min_out > 0`, `shares` equals the quote at step 3. The tracked vault balance rises by `deposit_assets`.
-6. The path removes the row and publishes `DepositFill { user, id, keeper, assets, shares, fee, net_pnl }`, with `user` and `id` as topics. `assets` is the gross `order.amount` and `fee` is `vault_fee`.
-7. The fee legs settle after the mint, so the vault's cut of the fee prices against the balance from before the fee. The settlement raises the tracked balance by that cut.
-8. If the tracked vault balance is above `max_vault_balance`, the fill traps with `VaultBalanceExceeded` (753).
+1. The deposit gate compares each side's maximized pending PnL with the trader allowance, `half_factor(vault_balance, max_pnl_trader)`. `vault_balance` is the tracked balance before the deposit. If either side is above the allowance, the fill traps with `PendingPnlExceeded` (754).
+2. `apply_factor_floor` takes `vault_fee` (token-dec) from `order.amount` (token-dec) at the `deposit_fee` rate. `deposit_assets = order.amount - vault_fee`, in token-dec.
+3. `Market::lp_net_pnl` at `maximize = false` gives `net_pnl` (token-dec, signed). The minimized mark reads each side's pending profit as low as the price allows and rounds the vault's pending borrowing income up. The vault's effective backing is its total assets less `net_pnl`, so a lower `net_pnl` raises the backing and the deposit mints fewer shares. The difference stays in the vault for the other shareholders.
+4. If `min_out > 0`, `preview_deposit` on the vault quotes the shares (share-dec) that `deposit_assets` mints at that `net_pnl`. If the quote is below `min_out`, the path rejects the order under [Rejection](#rejection) and returns. Nothing has moved. If `min_out` is `0`, the step is skipped.
+5. `Settlement::compute_vault_order` splits `vault_fee` with a trader leg of `0`, because shares pay the depositor.
+6. The vault pulls the assets inside its own call frame, which the market's own authorization does not cover. The market therefore authorizes exactly one sub-invocation as itself, a `transfer` on the settlement token from the market to the vault for `deposit_assets`. It then calls `strategy_deposit` with `deposit_assets`, `user` as the receiver, the market as `from`, and that `net_pnl`. The vault mints `shares` (share-dec) to `user`, or traps with `SupplyLimitExceeded` (802) when the mint would leave no room for the virtual shares. When `min_out > 0`, `shares` equals the quote at step 4. The tracked vault balance rises by `deposit_assets`.
+7. The path removes the row and publishes `DepositFill { user, id, keeper, assets, shares, fee, net_pnl }`, with `user` and `id` as topics. `assets` is the gross `order.amount` and `fee` is `vault_fee`.
+8. The fee legs settle after the mint, so the vault's cut of the fee prices against the balance from before the fee. The settlement raises the tracked balance by that cut.
+9. If the tracked vault balance is above `max_vault_balance`, the fill traps with `VaultBalanceExceeded` (753).
 
-The size cap at step 8 reads the settled balance, so the vault's cut of the fee counts toward it. The [PnL and the profit cap](./pnl-calculation.md) page defines `capped_net_pnl` and the mark it carries to the vault.
+Step 1 uses the allowance of the [profit cap](./pnl-calculation.md). Above it, a deposit would raise the allowance and pay part of itself to the winning side. The gate reads the book before the deposit, so no deposit fills into an overhang. It reads the maximized mark even though step 3 prices at the minimized one.
+
+The size cap at step 9 reads the settled balance, so the vault's cut of the fee counts toward it. The [PnL and the profit cap](./pnl-calculation.md) page defines `lp_net_pnl` and the mark it carries to the vault.
 
 ### The redeem fill marks against the redeemer {#redeem-fill}
 
 `fill_redeem` runs these steps in order.
 
 1. If the ledger timestamp is below `created_at + redeem_lock`, the fill traps with `VaultOrderLocked` (751). The sum saturates. A `redeem_lock` of `0` leaves the fill open as soon as a later ledger exists.
-2. `Market::capped_net_pnl` at `maximize = true` gives `net_pnl` (token-dec, signed). The maximized mark reads each side's pending profit as high as the price allows. A higher `net_pnl` lowers the vault's effective backing, so the redeem pays fewer assets. The difference stays in the vault for the other shareholders.
+2. `Market::lp_net_pnl` at `maximize = true` gives `net_pnl` (token-dec, signed). The maximized mark reads each side's pending profit as high as the price allows and rounds the vault's pending borrowing income down. A higher `net_pnl` lowers the vault's effective backing, so the redeem pays fewer assets. The difference stays in the vault for the other shareholders.
 3. If `min_out > 0`, `preview_redeem` on the vault quotes the assets (token-dec) that `order.amount` shares redeem at that `net_pnl`. `apply_factor_floor` takes the `redeem_fee` cut from the quote. If the net quote is below `min_out`, the path rejects the order under [Rejection](#rejection) and returns. Nothing has moved. If `min_out` is `0`, the step is skipped.
-4. `strategy_redeem` burns `order.amount` shares with the market as both receiver and owner, at that `net_pnl`. It returns `redeemed` (token-dec). When `min_out > 0`, `redeemed` equals the gross quote at step 3. The tracked vault balance falls by `redeemed`.
+4. `strategy_redeem` burns `order.amount` shares with the market as both receiver and owner, at that `net_pnl`. It returns `redeemed` (token-dec), or traps with `PayoutExceedsAssets` (803) when the payout is above the vault's asset balance. The mark counts pending borrowing the vault does not hold yet, so a redeem of nearly all shares can price above the balance. When `min_out > 0`, `redeemed` equals the gross quote at step 3. The tracked vault balance falls by `redeemed`.
 5. `apply_factor_floor` takes `vault_fee` (token-dec) from `redeemed` at the `redeem_fee` rate. `to_user = redeemed - vault_fee`, in token-dec.
 6. `Settlement::compute_vault_order` splits `vault_fee` and carries `to_user` on the trader leg.
 7. The path removes the row and publishes `RedeemFill { user, id, keeper, shares, assets, fee, net_pnl }`, with `user` and `id` as topics. `shares` is `order.amount`, `assets` is the gross `redeemed`, and `fee` is `vault_fee`.
@@ -177,7 +180,7 @@ The current lock duration, utilization gates, and pending-profit gate all apply 
 
 ### A quote below `min_out` rejects the order {#rejection}
 
-`reject` runs when step 3 of either fill finds the quote under `min_out`. It runs before any asset moves, so the escrow is intact. A redeem reaches it after the `redeem_lock` check, so only a mature redeem rejects.
+`reject` runs when the `min_out` step of either fill finds the quote under `min_out`. It runs before any asset moves, so the escrow is intact. A redeem reaches it after the `redeem_lock` check, so only a mature redeem rejects.
 
 1. A deposit refunds `order.amount` (token-dec) to `user` through `pay_trader`. A refund that the token contract rejects parks as a claimable credit, under the rule on the [fees and settlement](./fee-system.md) page. A redeem transfers `order.amount` shares from the market to `user` on the share token, and that transfer needs no trustline.
 2. The path removes the row.
@@ -186,7 +189,7 @@ The current lock duration, utilization gates, and pending-profit gate all apply 
 
 A rejection charges no vault fee, and the user keeps the whole principal. The `exec_fee` is the cost of the rejected attempt. It pays the keeper, so a rejection never costs the keeper. The first fill attempt after maturity settles the order either way. `min_out` therefore bounds slippage and cannot hold an order for a better price.
 
-The capacity gates trap instead. These are the size cap of a deposit and the two exit gates of a redeem. A trap reverts the whole call, so the order stays in place and fills later.
+The capacity gates trap instead. These are the pending-profit gate and the size cap of a deposit, the two exit gates of a redeem, and the vault's own `SupplyLimitExceeded` (802) and `PayoutExceedsAssets` (803) checks. A trap reverts the whole call, so the order stays in place and can fill later.
 
 :::warning Rejection consumes the execution fee
 A below-minimum quote removes the order and refunds its principal. The keeper receives `exec_fee`. The order does not wait for a better quote.
@@ -252,7 +255,7 @@ The [Config](./config.md) page gives the validation rules for each field.
 | `max_vault_balance` | token-dec | The ceiling on the settled balance after a deposit fill. |
 | `max_util_withdraw` | `SCALAR_18` | The utilization cap after a redeem fill. |
 | `max_pnl_withdraw` | `SCALAR_18` | The factor in the withdraw allowance after a redeem fill. |
-| `max_pnl_trader` | `SCALAR_18` | The per-side profit cap in `capped_net_pnl`, on both fills. |
+| `max_pnl_trader` | `SCALAR_18` | The per-side profit cap in `lp_net_pnl`, on both fills, and the allowance of the deposit gate. |
 | `keeper_rate` | `SCALAR_18` | The keeper's share of the vault fee, on both fills. |
 
 ## Escrow leaves the market by three routes

@@ -100,7 +100,7 @@ The market reads most settings when an action executes. A change can affect open
 
 `Config::check_valid` evaluates the rules in the order below and returns the first failure. `Config::require_valid` runs it from both `set_config` and `__constructor`. Every comparison uses the raw integer in the unit the field table gives. The constants section gives the value, unit, and scale of every bound a rule names.
 
-Rule 1 raises `NegativeValueNotAllowed` (710). Rules 2 to 20 raise `InvalidConfig` (700). The [Constructor and dependencies](./dependencies.md) page gives the constructor check order, including the `feed_id` check that runs before these rules.
+Rule 1 raises `NegativeValueNotAllowed` (710). Rules 2 to 20 raise `InvalidConfig` (700). The [Constructor and dependencies](./dependencies.md) page gives the constructor check order, including the `feed_id` check that runs before these rules and the token decimals check that runs after them.
 
 | # | Rule (must hold) | Reason |
 | --- | --- | --- |
@@ -109,7 +109,7 @@ Rule 1 raises `NegativeValueNotAllowed` (710). Rules 2 to 20 raise `InvalidConfi
 | 3 | `init_margin >= MIN_MARGIN` and `impact_scalar > 0`. | `MIN_MARGIN` caps leverage at 1000x. A positive `impact_scalar` keeps the impact fee denominator nonzero. |
 | 4 | `notional_lock >= MIN_NOTIONAL_LOCK`. | The lock must outlast the oracle's trade staleness window. Otherwise one accepted stale price could open and then close the same size. |
 | 5 | `min_position_notional > 0` and `max_position_notional > min_position_notional`. | Position size stays inside a band of positive width. |
-| 6 | `max_open_interest >= max_position_notional`. | The per-side ceiling must admit at least one maximum-size position. |
+| 6 | `max_position_notional <= max_open_interest <= MAX_OPEN_INTEREST`. | The per-side ceiling must admit at least one maximum-size position. The upper bound keeps the borrowing weight inside `i128`. |
 | 7 | `min_order_notional > 0`, `min_order_margin > 0`, and `min_order_notional <= min_position_notional`. | Both dust floors are positive. An order sized to a minimum position must not fall under the notional floor. |
 | 8 | `exec_fee <= min_order_margin`. | A larger fee would make dust orders net-negative escrow. |
 | 9 | `min_deposit > 0`. | The deposit floor keeps dust fills out. |
@@ -130,7 +130,7 @@ Read together, the rules imply four orderings:
 - `0 <= liq_fee < maintenance_margin < init_margin <= MAX_MARGIN`, with `init_margin >= MIN_MARGIN`.
 - `MIN_ADL_CLEAR <= adl_clear_target <= adl_max_pnl <= max_pnl_trader < SCALAR_18`, with `adl_max_pnl >= MIN_ADL_TRIGGER` and `0 < max_pnl_withdraw <= adl_clear_target`.
 - `0 < max_util_open <= max_util_withdraw <= MAX_UTIL`.
-- `0 < min_order_notional <= min_position_notional < max_position_notional <= max_open_interest`.
+- `0 < min_order_notional <= min_position_notional < max_position_notional <= max_open_interest <= MAX_OPEN_INTEREST`.
 
 Eight `i128` fields sit outside rule 1. Each rejects a negative value through its own rule, which raises `InvalidConfig` (700).
 
@@ -145,7 +145,7 @@ Eight `i128` fields sit outside rule 1. Each rejects a negative value through it
 | `max_util_withdraw` | 11 |
 | `max_vault_balance` | 16 |
 
-`notional_lock` and `redeem_lock` are `u64` and cannot be negative. Rules 5 and 6 bound `max_position_notional` and `max_open_interest` from below only.
+`notional_lock` and `redeem_lock` are `u64` and cannot be negative. Rule 5 bounds `max_position_notional` from below only. Rule 6 bounds `max_open_interest` on both ends.
 
 ### Rule 20 sets a floor on the impact scalar {#impact-scalar-floor}
 
@@ -190,6 +190,7 @@ The market's protocol-level constants bound every `Config` and time the wind-dow
 | `DELIST_GRACE` | `86_400` (1 day) | seconds from `DelistedAt` | `set_status`, which blocks a return to a trading status once the window has elapsed. `set_terminal_price`, which unlocks after it. |
 | `DELIST_DEADLINE` | `7 * 86_400` (7 days) | seconds from `DelistedAt` | `execute_liquidation`, which waives `NotLiquidatable` (722) on a `Delisted` market after the deadline. Any remaining position then closes whatever its margin health. |
 | `MAX_REDEEM_LOCK` | `2_592_000` (30 days) | seconds | Rule 2, the cap on `redeem_lock`. |
+| `MAX_OPEN_INTEREST` | `100_000_000_000 * 10^7` (`10^11` tokens) | token-dec | Rule 6, the cap on `max_open_interest`. It keeps `notional * borrowing_idx`, summed over both sides, inside `i128` while the two side indices sum to less than 170. |
 | `MIN_DEPOSIT_DIVISOR` | `100` | plain integer | Rule 17, the multiplier on `min_deposit`. It holds the deposit floor at or under a hundredth of `max_vault_balance`. |
 | `MAX_ORDERS_PER_SIDE` | `8` | count (`u32`) | `create_order`, which traps `TooManyOrders` (733) when a side already lists this many decrease orders. The cap bounds the sweep, with refunds, when a position closes. |
 

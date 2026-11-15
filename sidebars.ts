@@ -45,7 +45,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Markets and safety',
       link: { type: 'doc', id: 'markets/overview' },
-      items: ['markets/prices', 'markets/status', 'markets/market-parameters', 'keepers', 'governance', 'risks'],
+      items: ['markets/prices', 'markets/status', 'markets/migration', 'markets/market-parameters', 'keepers', 'governance', 'risks'],
     },
     {
       type: 'category',

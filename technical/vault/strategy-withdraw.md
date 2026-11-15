@@ -70,7 +70,7 @@ A redemption prices against `StrategyVault::effective_assets`. That value is `Va
 
 `strategy_withdraw` lowers `Vault::total_assets` by `amount` and leaves the share supply at its previous value. At a fixed `net_pnl` the backing falls by `amount`, so the same shares redeem for fewer assets.
 
-The rows below use a vault with a `decimals_offset` of 0, so share-dec equals token-dec. The vault holds 1000.0 of the asset against 1000.0 shares, and a holder redeems 100.0 shares. The draw is 200.0.
+The rows below are in whole tokens and whole shares for a 7-decimal asset. The vault holds 1000.0 of the asset against 1000.0 shares, and a holder redeems 100.0 shares. The draw is 200.0.
 
 | State | `total_assets` | `net_pnl` | Assets paid for 100.0 shares |
 | --- | --- | --- | --- |
@@ -80,7 +80,7 @@ The rows below use a vault with a `decimals_offset` of 0, so share-dec equals to
 
 The third row equals the second because the payout settles the profit that the mark already counted. The first row applies when the mark has not counted that profit. Then the draw lowers the redemption value from 100.0 to 80.0.
 
-The market supplies `net_pnl` from `Market::capped_net_pnl`, and only two paths call it. `fill_deposit` calls it with `maximize` set to `false`, and `fill_redeem` calls it with `maximize` set to `true`. A redeem on a `Retired` market runs `instant_redeem` and passes a `net_pnl` of 0, so that path never calls `Market::capped_net_pnl`. `Market::capped_net_pnl` caps the mark that each side of the book adds to `net_pnl`, as [PnL and the profit cap](../market/pnl-calculation.md) defines. [Fees and settlement](../market/fee-system.md) gives the settlement legs that move the balance.
+The market supplies `net_pnl` from `Market::lp_net_pnl`, and only two paths call it. `fill_deposit` calls it with `maximize` set to `false`, and `fill_redeem` calls it with `maximize` set to `true`. A redeem on a `Retired` market runs `instant_redeem` and passes a `net_pnl` of 0, so that path never calls `Market::lp_net_pnl`. `Market::lp_net_pnl` caps the mark that each side of the book adds to `net_pnl` and subtracts the vault's share of pending borrowing, as [PnL and the profit cap](../market/pnl-calculation.md) defines. [Fees and settlement](../market/fee-system.md) gives the settlement legs that move the balance.
 
 ## What a withdrawal means for a shareholder
 
