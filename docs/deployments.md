@@ -8,19 +8,19 @@ hide_table_of_contents: true
 
 # Deployments
 
-This page lists every contract of the live Zenex deployment on Stellar mainnet and the values those contracts run with. Check an address here before you approve a transaction that names it. Anyone can deploy a market through the factory, so a contract that carries a familiar name proves nothing on its own. The addresses below are the ones the Zenex app uses.
+This page lists every contract of the live Zenex deployment on Stellar mainnet and the values those contracts run with. Check an address here before you approve a transaction that names it. Anyone can deploy a market through the factory, so a contract that carries a familiar name proves nothing on its own. The addresses below are the ones the Zenex app uses, unless a section says otherwise.
 
-These values were checked on 6 October 2026. The chain reads began at ledger 64,805,963 and can span several ledgers. The generator cross-checks contract addresses and code hashes. Settings can change after this check, so the contracts hold the values in force.
+These values were checked on 17 November 2026. The chain reads began at ledger 65,528,169 and can span several ledgers. The generator cross-checks contract addresses and code hashes. Settings can change after this check, so the contracts hold the values in force.
 
 ## Markets
 
 | Market | XLM-USD |
 | --- | --- |
 | Status | Active |
-| Market contract | [`CAOZCITWHWAXH5FRU4EULQ5EN2HMTCHICRNC4R5ZAOVD7XHCCQSJ42IB`](https://stellar.expert/explorer/public/contract/CAOZCITWHWAXH5FRU4EULQ5EN2HMTCHICRNC4R5ZAOVD7XHCCQSJ42IB) |
-| Vault | [`CB2MX4WXJHOHCTDTN5DCFC7G3TLFLOYLCRCINPK7G2A3EUVW2AYVA56N`](https://stellar.expert/explorer/public/contract/CB2MX4WXJHOHCTDTN5DCFC7G3TLFLOYLCRCINPK7G2A3EUVW2AYVA56N) |
+| Market contract | [`CCFAGINF6GMNNPIHXDIUM6KOSDMTKIU5J67O5Y75MGOJAYVOVHYUP5ZB`](https://stellar.expert/explorer/public/contract/CCFAGINF6GMNNPIHXDIUM6KOSDMTKIU5J67O5Y75MGOJAYVOVHYUP5ZB) |
+| Vault | [`CBUVUGE7HY7AEBCYWG2GV5XCGP7D3THKR7VWCOPQEXYV2N45WWYCHTLD`](https://stellar.expert/explorer/public/contract/CBUVUGE7HY7AEBCYWG2GV5XCGP7D3THKR7VWCOPQEXYV2N45WWYCHTLD) |
 | Price stream | Chainlink Data Streams, `0x000358cb12b1f5bbeca8b5b4666025a40b15520af1f82516ee2fb9a335055e9a` |
-| Vault shares | Zenex XLM USDC Vault, shown in a wallet as xvXLMUSDC |
+| Vault shares | Zenex XLM USDC Vault, shown in a wallet as zXLMUSDC |
 
 Every market settles in USDC, the stablecoin Circle issues on Stellar. Its contract is [`CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75`](https://stellar.expert/explorer/public/contract/CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75).
 
@@ -28,9 +28,9 @@ Every market settles in USDC, the stablecoin Circle issues on Stellar. Its contr
 
 | Contract | Address | What it does |
 | --- | --- | --- |
-| Factory | [`CDFEZPO7ZMXMZUMOIT2CZF5FUEIGD3CC5VOROUKF4KZEQQEDZBGSQYPQ`](https://stellar.expert/explorer/public/contract/CDFEZPO7ZMXMZUMOIT2CZF5FUEIGD3CC5VOROUKF4KZEQQEDZBGSQYPQ) | Deployed every market and its vault. It answers whether it deployed a given market. |
-| Oracle | [`CBQP3O5NW6S4ZRE4SZAUO3VDOR32OMO22FLLMP3DJMO3TXJEPNW65XXU`](https://stellar.expert/explorer/public/contract/CBQP3O5NW6S4ZRE4SZAUO3VDOR32OMO22FLLMP3DJMO3TXJEPNW65XXU) | Checks every price report before a market uses it. |
-| Treasury | [`CDDEOTFOD5O2GOVMANJUIKLLQ5UDJCU3XFBXGTUWQYOUV5HF4OV6AU7U`](https://stellar.expert/explorer/public/contract/CDDEOTFOD5O2GOVMANJUIKLLQ5UDJCU3XFBXGTUWQYOUV5HF4OV6AU7U) | Receives the protocol's share of the fees. |
+| Factory | [`CAAV74JF5VYH2JIZDUBBSHIEGPOTCCIJSCKDLY6QV5YIA5UHMAOTKBR3`](https://stellar.expert/explorer/public/contract/CAAV74JF5VYH2JIZDUBBSHIEGPOTCCIJSCKDLY6QV5YIA5UHMAOTKBR3) | Deployed every market and its vault. It answers whether it deployed a given market. |
+| Oracle | [`CB5BZHXMRRR3KEYGLI63VNMMUD63XAVOLNAMVR7XKUMG5NZQKRGDCL7U`](https://stellar.expert/explorer/public/contract/CB5BZHXMRRR3KEYGLI63VNMMUD63XAVOLNAMVR7XKUMG5NZQKRGDCL7U) | Checks every price report before a market uses it. |
+| Treasury | [`CDRHGQD77L3BAFI6A7DPSGLDQZ4BAS7A4OXDD6CTJK3HLLNBCRKY3JCY`](https://stellar.expert/explorer/public/contract/CDRHGQD77L3BAFI6A7DPSGLDQZ4BAS7A4OXDD6CTJK3HLLNBCRKY3JCY) | Receives the protocol's share of the fees. |
 | Price report verifier | [`CAKA3NBYPC6OBEUEGNIYGNYG3ES2GPQK736B5SR7ASGUXRDAKXI2JCQI`](https://stellar.expert/explorer/public/contract/CAKA3NBYPC6OBEUEGNIYGNYG3ES2GPQK736B5SR7ASGUXRDAKXI2JCQI) | Chainlink's contract that checks the signatures on each price report. The oracle is fixed to it. |
 
 Each vault belongs to one market, so the vaults appear with their markets above.
@@ -43,18 +43,43 @@ The Zenex app sends your transactions through these contracts. They sit outside 
 | --- | --- | --- |
 | Market router | [`CDOF5KRURJ7RRBPORHYSSKT727X3IBNF3LGOFHZND4HBTS5FRUZRJEZT`](https://stellar.expert/explorer/public/contract/CDOF5KRURJ7RRBPORHYSSKT727X3IBNF3LGOFHZND4HBTS5FRUZRJEZT) | Lets the app create an order and fill it in one transaction, or bundle several calls into one. |
 | Fee forwarder | [`CDOAKNTCQZSBQJY7FFQI7RUURJKY37KYI6GV464H2YHTDJ7DBI27F4J5`](https://stellar.expert/explorer/public/contract/CDOAKNTCQZSBQJY7FFQI7RUURJKY37KYI6GV464H2YHTDJ7DBI27F4J5) | Collects the relay fee in USDC before it invokes the requested action. |
-| Wallet factory | [`CBOKFCC24264FHSAK2PZ5U6VYMDMJWU55FORXE7ZT6EWBOLVK3TBLAOI`](https://stellar.expert/explorer/public/contract/CBOKFCC24264FHSAK2PZ5U6VYMDMJWU55FORXE7ZT6EWBOLVK3TBLAOI) | Creates the smart wallet the app sets up for you. |
-| Session policy | [`CDIFOB7JFHWKIWDTMCFWTV2EMYPSLT77KPSXESMZT5W7OSLDAMCAEOTV`](https://stellar.expert/explorer/public/contract/CDIFOB7JFHWKIWDTMCFWTV2EMYPSLT77KPSXESMZT5W7OSLDAMCAEOTV) | Restricts a one-click session to configured markets, token transfers into those markets, and relay fees to the pinned recipient. It has no spending cap. |
+| Wallet factory | [`CD7CBMLDXJNXOGJPAPSE62WIHMKGNSXPY4CW6Z5UWNDTBUDEYWMWNHHQ`](https://stellar.expert/explorer/public/contract/CD7CBMLDXJNXOGJPAPSE62WIHMKGNSXPY4CW6Z5UWNDTBUDEYWMWNHHQ) | Creates the smart wallet the app sets up for you. |
 | Passkey verifier | [`CB7HENHJ7NF34I5FFXQK7D5I3WWQRGB5O5XO77D3NXMT7LM7LOKRQ5YR`](https://stellar.expert/explorer/public/contract/CB7HENHJ7NF34I5FFXQK7D5I3WWQRGB5O5XO77D3NXMT7LM7LOKRQ5YR) | Checks a passkey signature for a smart wallet. It comes with the smart-account kit the wallets are built on. |
 | Ed25519 verifier | [`CBOOZV2BK5OETGL4Q4KGEBESPRLJFN7DOFWDT7OZGLD7EQEZUVOWUEMC`](https://stellar.expert/explorer/public/contract/CBOOZV2BK5OETGL4Q4KGEBESPRLJFN7DOFWDT7OZGLD7EQEZUVOWUEMC) | Checks a key signature for a smart wallet. It comes with the same kit. |
 
-The fee forwarder pays the fees it takes to the account [`GA3E5GCBNYXFC4PEOVC5KAR5OH43ZRBOZDYFGTCFFEYIL3JONTRFCYNL`](https://stellar.expert/explorer/public/account/GA3E5GCBNYXFC4PEOVC5KAR5OH43ZRBOZDYFGTCFFEYIL3JONTRFCYNL).
+The fee forwarder pays the fees it takes to the account [`GA3E5GCBNYXFC4PEOVC5KAR5OH43ZRBOZDYFGTCFFEYIL3JONTRFCYNL`](https://stellar.expert/explorer/public/account/GA3E5GCBNYXFC4PEOVC5KAR5OH43ZRBOZDYFGTCFFEYIL3JONTRFCYNL). The app has no session policy for this market, so [one-click trading](./account/one-click-trading.md) is not available on it.
+
+## Deployed, not yet used by the app
+
+These are newer builds of the market router and the fee forwarder. They are deployed, but the Zenex app does not send transactions through them.
+
+| Contract | Address | What it does |
+| --- | --- | --- |
+| Market router | [`CAD4IGDU5BUR4WES5KCHXHZPCYABRNK55LVFV3TY3B2KDEUPLED6YUJ2`](https://stellar.expert/explorer/public/contract/CAD4IGDU5BUR4WES5KCHXHZPCYABRNK55LVFV3TY3B2KDEUPLED6YUJ2) | Lets the app create an order and fill it in one transaction, or bundle several calls into one. |
+| Fee forwarder | [`CCQCLMQT2YFE4VKCAGNCHCEAKVCEKZNRMF7PC6VGW2X2STSTZPU42UH5`](https://stellar.expert/explorer/public/contract/CCQCLMQT2YFE4VKCAGNCHCEAKVCEKZNRMF7PC6VGW2X2STSTZPU42UH5) | Collects the relay fee in USDC before it invokes the requested action. |
+
+## Previous market
+
+The app served this market before the one above. It is winding down and takes no new position size. You can still close a position there at [app.zenex.trade/old](https://app.zenex.trade/old/). [Market status](./markets/status.md) covers what each stage of a wind-down allows.
+
+| Previous market | XLM-USD |
+| --- | --- |
+| Status | Delisted on 16 November 2026 at 16:25 UTC |
+| Market contract | [`CAOZCITWHWAXH5FRU4EULQ5EN2HMTCHICRNC4R5ZAOVD7XHCCQSJ42IB`](https://stellar.expert/explorer/public/contract/CAOZCITWHWAXH5FRU4EULQ5EN2HMTCHICRNC4R5ZAOVD7XHCCQSJ42IB) |
+| Vault | [`CB2MX4WXJHOHCTDTN5DCFC7G3TLFLOYLCRCINPK7G2A3EUVW2AYVA56N`](https://stellar.expert/explorer/public/contract/CB2MX4WXJHOHCTDTN5DCFC7G3TLFLOYLCRCINPK7G2A3EUVW2AYVA56N) |
+
+The app for the previous market uses the market router and the fee forwarder under [App contracts](#app-contracts), and these contracts of its own.
+
+| Contract | Address | What it does |
+| --- | --- | --- |
+| Wallet factory | [`CBOKFCC24264FHSAK2PZ5U6VYMDMJWU55FORXE7ZT6EWBOLVK3TBLAOI`](https://stellar.expert/explorer/public/contract/CBOKFCC24264FHSAK2PZ5U6VYMDMJWU55FORXE7ZT6EWBOLVK3TBLAOI) | Created the smart wallets the app set up before the current wallet factory. |
+| Session policy | [`CDIFOB7JFHWKIWDTMCFWTV2EMYPSLT77KPSXESMZT5W7OSLDAMCAEOTV`](https://stellar.expert/explorer/public/contract/CDIFOB7JFHWKIWDTMCFWTV2EMYPSLT77KPSXESMZT5W7OSLDAMCAEOTV) | Restricts a one-click session to configured markets, token transfers into those markets, and relay fees to the pinned recipient. It has no spending cap. |
 
 ## Who controls the contracts
 
-The account [`GBDCXZDDDJWW2OOZ7LDS7AECDFJXUAXXW6U3YM2QJPRIAXONV5SOQNDX`](https://stellar.expert/explorer/public/account/GBDCXZDDDJWW2OOZ7LDS7AECDFJXUAXXW6U3YM2QJPRIAXONV5SOQNDX) owns the factory, the oracle, the treasury, and the XLM-USD market. It is one account and not a timelock, so a change it makes applies at once, with no wait.
+The account [`GBDCXZDDDJWW2OOZ7LDS7AECDFJXUAXXW6U3YM2QJPRIAXONV5SOQNDX`](https://stellar.expert/explorer/public/account/GBDCXZDDDJWW2OOZ7LDS7AECDFJXUAXXW6U3YM2QJPRIAXONV5SOQNDX) owns the factory, the oracle, the treasury, the XLM-USD market, and the previous XLM-USD market. It is one account and not a timelock, so a change it makes applies at once, with no wait.
 
-The vault, the market router, the fee forwarder, the wallet factory, and the session policy have no owner. [Governance](./governance.md) covers what an owner can change.
+The vault, the market router, the fee forwarder, and the wallet factory have no owner. Neither do the contracts the app does not use yet, the previous market's vault, its wallet factory, and its session policy. [Governance](./governance.md) covers what an owner can change.
 
 ## XLM-USD parameters
 
@@ -62,14 +87,14 @@ The owner of the market can change any of these values at any moment, but only i
 
 | Parameter | Value | Protocol limit |
 | --- | --- | --- |
-| Maximum leverage | 20x, from a 5% initial margin | 2x to 1000x, from an initial margin of 50% down to 0.1% |
-| Maintenance margin | 2% of the position size | Above the liquidation fee. The initial margin must exceed it by more than the lower trade fee plus 0.1%. |
+| Maximum leverage | 25x, from a 4% initial margin | 2x to 1000x, from an initial margin of 50% down to 0.1% |
+| Maintenance margin | 1% of the position size | Above the liquidation fee. The initial margin must exceed it by more than the lower trade fee plus 0.1%. |
 | Liquidation fee | 0.5% of the size that closes | Up to 25%, and below the maintenance margin |
-| Position size | 1 USDC to 500 USDC | The smallest above zero and the largest above the smallest. No ceiling. |
-| Total size per side | 50,000 USDC | At least the largest position size. No ceiling. |
+| Position size | 1 USDC to 2,000 USDC | The smallest above zero and the largest above the smallest. No ceiling. |
+| Total size per side | 500,000 USDC | At least the largest position size. No ceiling. |
 | Minimum per order | 1 USDC of size and 1 USDC of collateral | Both above zero, and the size at most the smallest position size |
 | Trade fee | 0.06% on the part of a fill that pushes the sides apart and 0.04% on the part that brings them together | Each up to 1%, and the first never below the second |
-| Impact fee | 0.005% of the fill at the largest position size of 500 USDC. The rate doubles when the size doubles. | Never more than 10% of the fill. A fill of the smallest position size pays at most 0.1%. |
+| Impact fee | 0.02% of the fill at the largest position size of 2,000 USDC. The rate doubles when the size doubles. | Never more than 10% of the fill. A fill of the smallest position size pays at most 0.1%. |
 | Execution fee | 0.01 USDC per order | At most the minimum collateral per order |
 | Keeper share | 10% of the trade fee, the impact fee, the liquidation fee, and the vault fee | Up to 50% |
 | Utilization cap | 80% of half the vault balance for an increase and 90% for a redeem | The increase cap above 0% and up to 1,000%. The redeem cap from the increase cap to 1,000%. |
@@ -83,10 +108,10 @@ The owner of the market can change any of these values at any moment, but only i
 | Funding wind-down speed | From the cap to nothing in about 2 days. No imbalance falls under a 0% level, so this speed never applies on this market. | At most 1,000% a year removed each second |
 | Auto-deleveraging | Flags a side at 55% of half the vault balance and clears the flag at 40% | The flag from 45% to below 100%. The clear level from 40% up to the flag. |
 | Profit cap | Starts at 90% of half the vault balance | From the flag level to below 100% |
-| Redeem block | Refuses a redeem while a side's pending profit sits above 15% of half the vault balance the redeem would leave | Above 0%, and at most the clear level |
+| Redeem block | Refuses a redeem while a side's pending profit sits above 35% of half the vault balance the redeem would leave | Above 0%, and at most the clear level |
 | Vault fee | 0.1% of the assets a deposit fill moves and 0.25% of the assets a redeem fill moves | Each up to 1% |
 | Minimum deposit | 10 USDC | Above zero, and at most 1/100 of the vault balance cap |
-| Vault balance cap | 100,000 USDC | Above zero. No ceiling. |
+| Vault balance cap | 500,000 USDC | Above zero. No ceiling. |
 | Redeem cooldown | 1 hour | Up to 30 days |
 | Lock on new size | 30 seconds | 15 seconds to 1 day |
 
@@ -103,18 +128,23 @@ The oracle and the treasury serve every market, so their settings sit apart from
 
 ## The code at each address
 
-The core contracts run the release build of the Zenex contracts at commit `644a4c4`, deployed on 2026-09-29. The app contracts run [zenex-util-contracts v0.0.2](https://github.com/zenith-protocols/zenex-util-contracts/releases/tag/v0.0.2), deployed on 2026-10-02. Each hash below is the hash of the code the chain holds at that address, and the script checked it against the build it names.
+The core contracts run the v1.0.0 release builds of [zenex-contracts](https://github.com/zenex-trade/zenex-contracts/releases), built from commit `68d2e73` and deployed on 2026-11-16. The app contracts run release builds of [zenex-util-contracts](https://github.com/zenex-trade/zenex-util-contracts/releases): v0.0.2 (deployed on 2026-10-02) and v1.0.0 (deployed on 2026-11-16). Each hash below is the hash of the code the chain holds at that address, and the script checked it against the hash recorded for the build the table names.
 
-| Contract | Code hash |
-| --- | --- |
-| Market (XLM-USD) | `02aa342f5e6e084c8e5728b74aee77864f77ea720896e61a689da8252f95943c` |
-| Vault (XLM-USD) | `464026c214f8700408715b370fcc26e1eb8b688d3ff468bfc6ade751e0aab20e` |
-| Oracle | `90e0f43192ac14389c7721b67b5f5a3ca92b24f0a5c677241e303084b9c38f55` |
-| Treasury | `555210f70b30010aec58c08382a95ecf2c584db1e793ea2e9f43bf9fc028faa3` |
-| Factory | `cfb3489b1b5f975efd763a75c42656903d0bbaafa548e3d1c603d7e1d2fdc19f` |
-| Market router | `19032576681e48afab44bde4560c156a69fe5c94037f48cc7ceb418f3719b125` |
-| Fee forwarder | `d501d20cfea6676b51ff341b408bbe4e406a17e4a21516064d8ea9663994088e` |
-| Wallet factory | `a7f32705c1ceeda07496520a3b16a1c6a64f1d68e4425752e892633d6009f035` |
-| Session policy | `7c25590eb09bcf93065840df7d59dbeafbfc0648731068d5b0fad3b12603dfad` |
+| Contract | Build | Code hash |
+| --- | --- | --- |
+| Market (XLM-USD) | zenex-contracts v1.0.0 | `2eff6a590f4253b156f452ad6a28d7c7c9ad5cf10463edcf2074625c968640c5` |
+| Vault (XLM-USD) | zenex-contracts v1.0.0 | `ca34e419a25de410fbba32e9d6f930d9315bd123688efe498d614cfd536c6d84` |
+| Oracle | zenex-contracts v1.0.0 | `e36b8bd684c78be9c91bfcb022c90efc19633023a1ae65c00db93ac4b52328a0` |
+| Treasury | zenex-contracts v1.0.0 | `555707f0c623d8cd3bd2814338f39da5c1bca24656ecebcc169cab1e105a19d1` |
+| Factory | zenex-contracts v1.0.0 | `83024ed5dc7db8463eb4b3bb4aba1bcdfb11173ba6f9a2748316e142574afbdc` |
+| Market router | zenex-util-contracts v0.0.2 | `19032576681e48afab44bde4560c156a69fe5c94037f48cc7ceb418f3719b125` |
+| Fee forwarder | zenex-util-contracts v0.0.2 | `d501d20cfea6676b51ff341b408bbe4e406a17e4a21516064d8ea9663994088e` |
+| Wallet factory | zenex-util-contracts v1.0.0 | `4db7ee0b0a1d6a2d0de0e51a5a14ce05bbc5d567643ca198a97e5b51aaa8606f` |
+| Market router, not yet used | zenex-util-contracts v1.0.0 | `534d67eb873c8f0e971130309240ccb064a0d78b9676a87156abd49d58d39289` |
+| Fee forwarder, not yet used | zenex-util-contracts v1.0.0 | `f3444fe6d06a4fc399c1b472f74953d13d3000c8ed8b5832a6562a41ac1fa3aa` |
+| Previous market (XLM-USD) | Zenex contracts at commit `644a4c4` | `02aa342f5e6e084c8e5728b74aee77864f77ea720896e61a689da8252f95943c` |
+| Previous vault (XLM-USD) | Zenex contracts at commit `644a4c4` | `464026c214f8700408715b370fcc26e1eb8b688d3ff468bfc6ade751e0aab20e` |
+| Previous wallet factory | zenex-util-contracts v0.0.2 | `a7f32705c1ceeda07496520a3b16a1c6a64f1d68e4425752e892633d6009f035` |
+| Previous session policy | zenex-util-contracts v0.0.2 | `7c25590eb09bcf93065840df7d59dbeafbfc0648731068d5b0fad3b12603dfad` |
 
 The factory installs the same market and vault code, and wires the same treasury, into every market it deploys from now on.
