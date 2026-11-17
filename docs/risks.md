@@ -9,6 +9,8 @@ Trading and providing liquidity expose funds to prices, contract behavior, count
 
 :::danger Funds can be lost or held
 A position can lose all its margin. Vault shares can lose value. Market checks or a freeze can delay access to funds.
+
+The deployed contracts have not had an independent audit. The one published report covers an earlier version. Read [Audit reports](./audits.md).
 :::
 
 ## Trading risks

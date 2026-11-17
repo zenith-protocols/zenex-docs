@@ -5,6 +5,10 @@ description: Check published security review coverage and its limits.
 
 # Audit reports
 
+:::danger Unaudited code holds your funds
+A flaw in the V2 contracts can cost traders their margin and liquidity providers their deposits. A flaw that bypasses the launch limits is not bounded by them. No independent reviewer has checked V2 for such flaws. Read [Risks](./risks.md) before committing funds.
+:::
+
 The contracts deployed on mainnet have not had an independent audit. The one published report covers Zenex V1, an earlier design that was never deployed. The contracts in [Deployments](./deployments.md) are V2, a rewrite that no auditor has reviewed.
 
 ## Zellic: Zenex V1
@@ -80,10 +84,6 @@ Without an independent review of V2, its assurance comes from Zenex's own work:
 - Low launch limits on position size, open interest and vault utilization, shown in [Deployments](./deployments.md). They reduce market exposure but do not cap the loss from a contract flaw.
 
 The owner can still upgrade the market and oracle code. Read [Governance](./governance.md).
-
-:::danger Unaudited code holds your funds
-A flaw in the V2 contracts can cost traders their margin and liquidity providers their deposits. A flaw that bypasses the launch limits is not bounded by them. No independent reviewer has checked V2 for such flaws. Read [Risks](./risks.md) before committing funds.
-:::
 
 ## Reporting a vulnerability
 
