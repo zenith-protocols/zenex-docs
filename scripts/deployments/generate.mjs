@@ -4,15 +4,19 @@
  *
  * Each value has one source:
  * - record.mainnet.json, reviewed and committed: the network, the factory, the
- *   wallet factory, and the code each contract must run. Nothing on chain
- *   points to those, so a person records them.
+ *   wallet factory, the contracts that are deployed but not yet used, the
+ *   previous market's app, and the code hash of the release build each
+ *   contract must run. Nothing on chain points to those, so a person records
+ *   them. The release builds are files of the GitHub releases, not of the
+ *   source tree, so their hashes are recorded and not computed here.
  * - configUrl, the public config the Zenex app loads: the markets, the market
  *   router, the fee forwarder, and the smart-wallet contracts the app uses.
  * - The chain, through STELLAR_RPC_URL: every parameter, owner, status, and
  *   code hash, and the oracle, treasury, vault, and token each market reports.
  * - zenex-contracts at the recorded commit (ZENEX_CONTRACTS_DIR, default
- *   ../zenex-contracts): the protocol limits and the release builds that the
- *   code hashes must match.
+ *   ../zenex-contracts): the protocol limits. The commit is one of the public
+ *   repository the record names, so the directory must be a clone that holds
+ *   it.
  *
  * Every cross-check failure stops the run, so the page is never written from
  * values that disagree with each other.
@@ -20,7 +24,6 @@
  * Usage: STELLAR_RPC_URL=<mainnet rpc> npm run deployments
  */
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -91,8 +94,8 @@ async function tryView(contractId, method) {
   return rpc.Api.isSimulationError(sim) ? undefined : scValToNative(sim.result.retval);
 }
 
-/** The hash of the code the chain holds for a contract, or null for a Stellar asset contract. */
-async function codeHash(contractId) {
+/** The instance the chain holds for a contract: its code and its instance storage. */
+async function instance(contractId) {
   const key = xdr.LedgerKey.contractData(
     new xdr.LedgerKeyContractData({
       contract: new Address(contractId).toScAddress(),
@@ -102,9 +105,20 @@ async function codeHash(contractId) {
   );
   const { entries } = await server.getLedgerEntries(key);
   check(entries.length === 1, `no contract instance at ${contractId}`);
-  const executable = entries[0].val.contractData().val().instance().executable();
+  return entries[0].val.contractData().val().instance();
+}
+
+/** The hash of the code the chain holds for a contract, or null for a Stellar asset contract. */
+async function codeHash(contractId) {
+  const executable = (await instance(contractId)).executable();
   if (executable.switch().name !== 'contractExecutableWasm') return null;
   return executable.wasmHash().toString('hex');
+}
+
+/** Whether a contract's instance storage holds the given 32 bytes as a value. */
+async function instanceHolds(contractId, bytesHex) {
+  const storage = (await instance(contractId)).storage() ?? [];
+  return storage.some((entry) => entry.val().switch().name === 'scvBytes' && hex(entry.val().bytes()) === bytesHex);
 }
 
 async function latestLedger() {
@@ -126,7 +140,7 @@ function gitShow(file) {
       maxBuffer: 64 * 1024 * 1024,
     });
   } catch {
-    return fail(`cannot read ${file} at ${record.core.commit} in ${CONTRACTS_DIR}`);
+    return fail(`cannot read ${file} at ${record.core.commit} in ${CONTRACTS_DIR}. Point ZENEX_CONTRACTS_DIR at a clone of ${record.core.repo}.`);
   }
 }
 
@@ -310,7 +324,6 @@ const contractLink = (id) => `[\`${id}\`](${explorer('contract', id)})`;
 const accountLink = (id) => `[\`${id}\`](${explorer('account', id)})`;
 const addressLink = (id) => (id.startsWith('C') ? contractLink(id) : accountLink(id));
 const hex = (bytes) => Buffer.from(bytes).toString('hex');
-const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 function list(items) {
   if (items.length <= 2) return items.join(' and ');
@@ -323,6 +336,77 @@ function table(header, rows) {
 }
 
 // -------------------------------------------------------------------- read
+
+const DOES = {
+  router: 'Lets the app create an order and fill it in one transaction, or bundle several calls into one.',
+  forwarder: (symbol) => `Collects the relay fee in ${symbol} before it invokes the requested action.`,
+  walletFactory: 'Creates the smart wallet the app sets up for you.',
+  session:
+    'Restricts a one-click session to configured markets, token transfers into those markets, and relay fees to the pinned recipient. It has no spending cap.',
+};
+
+/**
+ * Pins a util contract to the release the record names for its address: the
+ * code on chain must be that release's build. Returns the contract with the
+ * hash and the release tag.
+ */
+async function pinUtil(contract) {
+  const what = `${contract.name.toLowerCase()} ${contract.id}`;
+  const release = record.util.releases.find((r) => r.codeHashes[contract.id]);
+  check(release, `record.mainnet.json has no code hash for the ${what}`);
+  const hash = release.codeHashes[contract.id];
+  check((await codeHash(contract.id)) === hash, `the ${what} runs code other than zenex-util-contracts ${release.tag}`);
+  return { ...contract, hash, tag: release.tag };
+}
+
+/**
+ * The market the app served before, which its old site still serves while it
+ * winds down. The record names that site's config; the chain gives the status.
+ */
+async function readPrevious(liveMarkets, router, forwarder) {
+  const prev = record.previous;
+  if (!prev) return null;
+  const config = await (await fetch(prev.configUrl)).json();
+  check(Array.isArray(config.markets) && config.markets.length > 0, `${prev.configUrl} lists no market`);
+  const markets = [];
+  for (const entry of config.markets) {
+    const id = entry.trading;
+    const label = entry.id.toUpperCase();
+    check(!liveMarkets.some((m) => m.id === id), `${prev.configUrl} serves the live market ${id}. Remove "previous" from the record.`);
+    const [vault, status, owner, retirement] = await Promise.all([
+      view(id, 'get_vault'),
+      view(id, 'get_status'),
+      view(id, 'get_owner'),
+      view(id, 'get_retirement'),
+    ]);
+    check(vault === entry.vault, `previous ${label}: the market reports vault ${vault}, its app config says ${entry.vault}`);
+    check((await view(vault, 'get_strategy')) === id, `previous ${label}: the vault does not answer to the market`);
+    check(
+      (await view(prev.factory, 'is_deployed', nativeToScVal(id, { type: 'address' }))) === true,
+      `previous ${label}: the factory ${prev.factory} did not deploy the market ${id}`,
+    );
+    check((await codeHash(id)) === prev.codeHashes.market, `previous ${label}: the market code is not the recorded build`);
+    check((await codeHash(vault)) === prev.codeHashes.vault, `previous ${label}: the vault code is not the recorded build`);
+    check(
+      Number(status) >= 3 && retirement,
+      `previous ${label}: the market is ${STATUS[Number(status)]}, not winding down. Rewrite the previous market section first.`,
+    );
+    markets.push({ id, label, vault, status: Number(status), owner, delistedAt: Number(retirement[1]) });
+  }
+  check(
+    config.contracts.router === router && config.feeForwarder.contract === forwarder,
+    'the previous market and the live market use different routers or fee forwarders. Extend the generator first.',
+  );
+  const contracts = [await pinUtil({ name: 'Wallet factory', id: prev.walletFactory, does: 'Created the smart wallets the app set up before the current wallet factory.' })];
+  check(
+    await instanceHolds(prev.walletFactory, config.smartAccount.wasmHash),
+    `the previous wallet factory ${prev.walletFactory} does not create wallets from the account code ${config.smartAccount.wasmHash} its app config names`,
+  );
+  if (config.smartAccount.session) {
+    contracts.push(await pinUtil({ name: 'Session policy', id: config.smartAccount.session, does: DOES.session }));
+  }
+  return { markets, contracts };
+}
 
 async function main() {
   checkRules();
@@ -337,9 +421,12 @@ async function main() {
   check(Array.isArray(config.markets) && config.markets.length > 0, `${record.configUrl} lists no market`);
 
   const factory = record.core.factory;
-  const releaseHash = Object.fromEntries(
-    Object.entries(record.core.releaseBuilds).map(([name, file]) => [name, sha256(gitShow(file))]),
-  );
+  // The hash of each core release build, as recorded. Every one is checked
+  // below against the code the chain holds.
+  const releaseHash = record.core.codeHashes;
+  for (const name of ['market', 'vault', 'oracle', 'treasury', 'factory']) {
+    check(/^[0-9a-f]{64}$/.test(releaseHash[name] ?? ''), `record.mainnet.json has no ${name} code hash`);
+  }
 
   const markets = [];
   for (const entry of config.markets) {
@@ -412,30 +499,45 @@ async function main() {
   check((await codeHash(factory)) === releaseHash.factory, 'the factory code is not the release build');
 
   const app = [
-    { name: 'Market router', id: config.contracts.router, does: 'Lets the app create an order and fill it in one transaction, or bundle several calls into one.' },
-    {
-      name: 'Fee forwarder',
-      id: config.feeForwarder.contract,
-      does: `Collects the relay fee in ${tokenSymbol} before it invokes the requested action.`,
-    },
-    { name: 'Wallet factory', id: record.util.walletFactory, does: 'Creates the smart wallet the app sets up for you.' },
-    {
-      name: 'Session policy',
-      id: config.smartAccount.session,
-      does: 'Restricts a one-click session to configured markets, token transfers into those markets, and relay fees to the pinned recipient. It has no spending cap.',
-    },
+    { name: 'Market router', id: config.contracts.router, does: DOES.router },
+    { name: 'Fee forwarder', id: config.feeForwarder.contract, does: DOES.forwarder(tokenSymbol) },
+    { name: 'Wallet factory', id: record.util.walletFactory, does: DOES.walletFactory },
+    // The app offers one-click trading only when its config names a session policy.
+    ...(config.smartAccount.session ? [{ name: 'Session policy', id: config.smartAccount.session, does: DOES.session }] : []),
   ];
-  for (const contract of app) {
+  for (const [at, contract] of app.entries()) {
     check(contract.id, `the app config has no ${contract.name.toLowerCase()}`);
-    const expected = record.util.codeHashes[contract.id];
-    check(expected, `record.mainnet.json has no code hash for the ${contract.name.toLowerCase()} ${contract.id}`);
-    check((await codeHash(contract.id)) === expected, `the ${contract.name.toLowerCase()} runs code other than ${record.util.tag}`);
-    contract.hash = expected;
+    app[at] = await pinUtil(contract);
   }
+  check(
+    await instanceHolds(record.util.walletFactory, config.smartAccount.wasmHash),
+    `the wallet factory ${record.util.walletFactory} does not create wallets from the account code ${config.smartAccount.wasmHash} the app config names`,
+  );
+
+  // Deployed, but the app config does not name them. Once it does, the record
+  // is stale and the page would say the opposite of the truth.
+  const notYetUsed = [];
+  for (const [name, id, inUse, does] of [
+    ['Market router', record.util.notYetUsed?.marketRouter, config.contracts.router, DOES.router],
+    ['Fee forwarder', record.util.notYetUsed?.feeForwarder, config.feeForwarder.contract, DOES.forwarder(tokenSymbol)],
+  ]) {
+    if (!id) continue;
+    check(id !== inUse, `the app config now names the ${name.toLowerCase()} ${id}. Remove it from notYetUsed in the record.`);
+    notYetUsed.push(await pinUtil({ name, id, does }));
+  }
+
+  const previous = await readPrevious(markets, config.contracts.router, config.feeForwarder.contract);
+
   // The page says these contracts have no owner. Each one's code is pinned to
   // a reviewed build above, and each must also leave the usual owner and admin
   // getters unanswered on chain, so a new build with an admin stops the run.
-  const ownerless = [...markets.map((m) => ({ name: `${m.label} vault`, id: m.vault })), ...app];
+  const ownerless = [
+    ...markets.map((m) => ({ name: `${m.label} vault`, id: m.vault })),
+    ...app,
+    ...notYetUsed,
+    ...(previous?.markets ?? []).map((m) => ({ name: `previous ${m.label} vault`, id: m.vault })),
+    ...(previous?.contracts ?? []),
+  ];
   for (const contract of ownerless) {
     for (const getter of ['get_owner', 'owner', 'get_admin', 'admin']) {
       const who = await tryView(contract.id, getter);
@@ -458,6 +560,7 @@ async function main() {
     ['the oracle', oracleOwner],
     ['the treasury', treasuryOwner],
     ...markets.map((m) => [`the ${m.label} market`, m.owner]),
+    ...(previous?.markets ?? []).map((m) => [`the previous ${m.label} market`, m.owner]),
   ];
   const owners = new Map();
   for (const [what, who] of owned) owners.set(who, [...(owners.get(who) ?? []), what]);
@@ -481,7 +584,7 @@ async function main() {
     }
   }
 
-  return { ledger, config, markets, tokenId, tokenSymbol, tokenDecimals, issuer, oracle, verifier, tradeStaleness, closeStaleness, spreadFactor, treasury, treasuryRate, initMeta, factory, releaseHash, app, walletVerifiers, ownerLines, market, oracleLimits };
+  return { ledger, config, markets, tokenId, tokenSymbol, tokenDecimals, issuer, oracle, verifier, tradeStaleness, closeStaleness, spreadFactor, treasury, treasuryRate, initMeta, factory, releaseHash, app, notYetUsed, previous, walletVerifiers, ownerLines, market, oracleLimits };
 }
 
 // ------------------------------------------------------------------ render
@@ -489,7 +592,9 @@ async function main() {
 function render(d) {
   const { market: C, oracleLimits: O } = d;
   const amount = (value) => `${decimal(value, 10n ** BigInt(d.tokenDecimals), d.tokenDecimals)} ${d.tokenSymbol}`;
-  const date = new Date(d.ledger.closeTime * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const day = (seconds) => new Date(seconds * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const clock = (seconds) => new Date(seconds * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+  const date = day(d.ledger.closeTime);
   const issuerName = record.knownIssuers[d.issuer];
   const leverage = (margin) => (SCALAR % margin === 0n ? `${(SCALAR / margin).toString()}x` : `${about(SCALAR, margin)}x`);
   const maxYear = (rate) => {
@@ -562,16 +667,26 @@ function render(d) {
           ? 'Each side of the quote moves half the way to the middle of the spread'
           : `Each side of the quote moves ${pct(d.spreadFactor)} of the way to the middle of the spread`;
 
+  const coreBuild = `zenex-contracts ${record.core.tag}`;
+  const utilBuild = (c) => `zenex-util-contracts ${c.tag}`;
+  const previousBuild = `Zenex contracts at commit \`${record.previous?.commit.slice(0, 7)}\``;
   const codeRows = [
     ...d.markets.flatMap((m) => [
-      [`Market (${m.label})`, `\`${d.releaseHash.market}\``],
-      [`Vault (${m.label})`, `\`${d.releaseHash.vault}\``],
+      [`Market (${m.label})`, coreBuild, `\`${d.releaseHash.market}\``],
+      [`Vault (${m.label})`, coreBuild, `\`${d.releaseHash.vault}\``],
     ]),
-    ['Oracle', `\`${d.releaseHash.oracle}\``],
-    ['Treasury', `\`${d.releaseHash.treasury}\``],
-    ['Factory', `\`${d.releaseHash.factory}\``],
-    ...d.app.map((c) => [c.name, `\`${c.hash}\``]),
+    ['Oracle', coreBuild, `\`${d.releaseHash.oracle}\``],
+    ['Treasury', coreBuild, `\`${d.releaseHash.treasury}\``],
+    ['Factory', coreBuild, `\`${d.releaseHash.factory}\``],
+    ...d.app.map((c) => [c.name, utilBuild(c), `\`${c.hash}\``]),
+    ...d.notYetUsed.map((c) => [`${c.name}, not yet used`, utilBuild(c), `\`${c.hash}\``]),
+    ...(d.previous?.markets ?? []).flatMap((m) => [
+      [`Previous market (${m.label})`, previousBuild, `\`${record.previous.codeHashes.market}\``],
+      [`Previous vault (${m.label})`, previousBuild, `\`${record.previous.codeHashes.vault}\``],
+    ]),
+    ...(d.previous?.contracts ?? []).map((c) => [`Previous ${c.name.toLowerCase()}`, utilBuild(c), `\`${c.hash}\``]),
   ];
+  const utilReleases = record.util.releases.map((r) => `${r.tag} (deployed on ${r.deployedOn})`);
   const sameCode = hex(d.initMeta.market_hash) === d.releaseHash.market && hex(d.initMeta.vault_hash) === d.releaseHash.vault;
   const sameTreasury = d.initMeta.treasury === d.treasury;
 
@@ -586,7 +701,7 @@ hide_table_of_contents: true
 
 # Deployments
 
-This page lists every contract of the live Zenex deployment on Stellar mainnet and the values those contracts run with. Check an address here before you approve a transaction that names it. Anyone can deploy a market through the factory, so a contract that carries a familiar name proves nothing on its own. The addresses below are the ones the Zenex app uses.
+This page lists every contract of the live Zenex deployment on Stellar mainnet and the values those contracts run with. Check an address here before you approve a transaction that names it. Anyone can deploy a market through the factory, so a contract that carries a familiar name proves nothing on its own. The addresses below are the ones the Zenex app uses, unless a section says otherwise.
 
 These values were checked on ${date}. The chain reads began at ledger ${d.ledger.sequence.toLocaleString('en-US')} and can span several ledgers. The generator cross-checks contract addresses and code hashes. Settings can change after this check, so the contracts hold the values in force.`);
 
@@ -630,13 +745,60 @@ The Zenex app sends your transactions through these contracts. They sit outside 
 
 ${table(['Contract', 'Address', 'What it does'], [...d.app, ...d.walletVerifiers].map((c) => [c.name, contractLink(c.id), c.does]))}
 
-The fee forwarder pays the fees it takes to the account ${accountLink(d.config.feeForwarder.feeRecipient)}.`);
+The fee forwarder pays the fees it takes to the account ${accountLink(d.config.feeForwarder.feeRecipient)}.${
+    d.app.some((c) => c.name === 'Session policy')
+      ? ''
+      : ` The app has no session policy for ${d.markets.length === 1 ? 'this market' : 'these markets'}, so [one-click trading](./account/one-click-trading.md) is not available on ${d.markets.length === 1 ? 'it' : 'them'}.`
+  }`);
+
+  if (d.notYetUsed.length > 0) {
+    sections.push(`## Deployed, not yet used by the app
+
+These are newer builds of ${list(d.notYetUsed.map((c) => `the ${c.name.toLowerCase()}`))}. They are deployed, but the Zenex app does not send transactions through them.
+
+${table(['Contract', 'Address', 'What it does'], d.notYetUsed.map((c) => [c.name, contractLink(c.id), c.does]))}`);
+  }
+
+  if (d.previous) {
+    const retired = d.previous.markets.every((m) => m.status === 4);
+    sections.push(`## Previous market
+
+The app served ${d.previous.markets.length === 1 ? 'this market' : 'these markets'} before the one above. ${
+      retired
+        ? 'It is retired.'
+        : `It is winding down and takes no new position size. You can still close a position there at [${record.previous.appUrl.replace(/^https:\/\/|\/$/g, '')}](${record.previous.appUrl}).`
+    } [Market status](./markets/status.md) covers what each stage of a wind-down allows.
+
+${d.previous.markets
+  .map((m) =>
+    table(
+      ['Previous market', m.label],
+      [
+        ['Status', m.status === 3 ? `Delisted on ${day(m.delistedAt)} at ${clock(m.delistedAt)} UTC` : (STATUS[m.status] ?? `Unknown (${m.status})`)],
+        ['Market contract', contractLink(m.id)],
+        ['Vault', contractLink(m.vault)],
+      ],
+    ),
+  )
+  .join('\n\n')}
+
+The app for the previous market uses the market router and the fee forwarder under [App contracts](#app-contracts), and these contracts of its own.
+
+${table(['Contract', 'Address', 'What it does'], d.previous.contracts.map((c) => [c.name, contractLink(c.id), c.does]))}`);
+  }
 
   sections.push(`## Who controls the contracts
 
 ${d.ownerLines.join('\n\n')}
 
-${capital(list([d.markets.length === 1 ? 'the vault' : 'the vaults', ...d.app.map((c) => `the ${c.name.toLowerCase()}`)]))} have no owner. [Governance](./governance.md) covers what an owner can change.`);
+${capital(list([d.markets.length === 1 ? 'the vault' : 'the vaults', ...d.app.map((c) => `the ${c.name.toLowerCase()}`)]))} have no owner.${
+    d.notYetUsed.length > 0 || d.previous
+      ? ` Neither do ${list([
+          ...(d.notYetUsed.length > 0 ? ['the contracts the app does not use yet'] : []),
+          ...(d.previous ? [`the previous market's vault`, ...d.previous.contracts.map((c) => `its ${c.name.toLowerCase()}`)] : []),
+        ])}.`
+      : ''
+  } [Governance](./governance.md) covers what an owner can change.`);
 
   for (const m of d.markets) {
     sections.push(`## ${m.label} parameters
@@ -662,9 +824,9 @@ ${table(
 
   sections.push(`## The code at each address
 
-The core contracts run the release build of the Zenex contracts at commit \`${record.core.commit.slice(0, 7)}\`, deployed on ${record.core.deployedOn}. The app contracts run [zenex-util-contracts ${record.util.tag}](${record.util.repo}/releases/tag/${record.util.tag}), deployed on ${record.util.deployedOn}. Each hash below is the hash of the code the chain holds at that address, and the script checked it against the build it names.
+The core contracts run the ${record.core.tag} release builds of [zenex-contracts](${record.core.repo}/releases), built from commit \`${record.core.commit.slice(0, 7)}\` and deployed on ${record.core.deployedOn}. The app contracts run release builds of [zenex-util-contracts](${record.util.repo}/releases): ${list(utilReleases)}. Each hash below is the hash of the code the chain holds at that address, and the script checked it against the hash recorded for the build the table names.
 
-${table(['Contract', 'Code hash'], codeRows)}
+${table(['Contract', 'Build', 'Code hash'], codeRows)}
 
 ${
   sameCode && sameTreasury

@@ -1,34 +1,65 @@
 {
-  "$comment": "Reviewed record of the live Zenex mainnet deployment, read by generate.mjs. It holds only what nothing on chain points to: the factory, the wallet factory, and the code each contract must run. Copied from the zenex-ops stack mainnet-shadow-20260929 (initial manifest 2026-09-29, util contracts 2026-10-02). Everything else on the page is read from the chain and from configUrl.",
+  "$comment": "Reviewed record of the live Zenex mainnet deployment, read by generate.mjs. It holds only what nothing on chain points to: the factory, the wallet factory, the contracts that are deployed but not yet used by the app, the previous market's app, and the code hash each contract must run. Core: the zenex-ops stack mainnet-v4-20261116 (initial manifest 2026-11-16); its code hashes are the SHA-256 of the v1.0.0 release files of zenex-trade/zenex-contracts. Util: the v0.0.2 contracts of 2026-10-02 and the v1.0.0 contracts of 2026-11-16; the v1.0.0 hashes are the SHA-256 of the release files of zenex-trade/zenex-util-contracts. Previous: the zenex-ops stack mainnet-shadow-20260929, whose market was delisted on 2026-11-16. Remove notYetUsed entries once the app config names them, and remove previous once its market is gone from the old app. Everything else on the page is read from the chain and from the config URLs.",
   "network": {
     "name": "Stellar mainnet",
     "passphrase": "Public Global Stellar Network ; September 2015",
     "explorer": "https://stellar.expert/explorer/public"
   },
-  "configUrl": "https://api.zenex.trade/v1/config",
+  "configUrl": "https://api-v4.zenex.trade/v1/config",
   "core": {
-    "commit": "644a4c4c1b4ab78dda5f9efae80d2f44d8f6fa32",
-    "deployedOn": "2026-09-29",
-    "factory": "CDFEZPO7ZMXMZUMOIT2CZF5FUEIGD3CC5VOROUKF4KZEQQEDZBGSQYPQ",
-    "releaseBuilds": {
-      "market": "wasm/market.wasm",
-      "vault": "wasm/strategy_vault.wasm",
-      "oracle": "wasm/oracle.wasm",
-      "treasury": "wasm/treasury.wasm",
-      "factory": "wasm/factory.wasm"
+    "repo": "https://github.com/zenex-trade/zenex-contracts",
+    "tag": "v1.0.0",
+    "commit": "68d2e735828cfc482e401dec3db16695ae3e6fca",
+    "deployedOn": "2026-11-16",
+    "factory": "CAAV74JF5VYH2JIZDUBBSHIEGPOTCCIJSCKDLY6QV5YIA5UHMAOTKBR3",
+    "codeHashes": {
+      "market": "2eff6a590f4253b156f452ad6a28d7c7c9ad5cf10463edcf2074625c968640c5",
+      "vault": "ca34e419a25de410fbba32e9d6f930d9315bd123688efe498d614cfd536c6d84",
+      "oracle": "e36b8bd684c78be9c91bfcb022c90efc19633023a1ae65c00db93ac4b52328a0",
+      "treasury": "555707f0c623d8cd3bd2814338f39da5c1bca24656ecebcc169cab1e105a19d1",
+      "factory": "83024ed5dc7db8463eb4b3bb4aba1bcdfb11173ba6f9a2748316e142574afbdc"
     }
   },
   "util": {
-    "repo": "https://github.com/zenith-protocols/zenex-util-contracts",
-    "tag": "v0.0.2",
-    "commit": "d99d0139922efbd1bc6df9e4c940dba71782367f",
-    "deployedOn": "2026-10-02",
+    "repo": "https://github.com/zenex-trade/zenex-util-contracts",
+    "walletFactory": "CD7CBMLDXJNXOGJPAPSE62WIHMKGNSXPY4CW6Z5UWNDTBUDEYWMWNHHQ",
+    "notYetUsed": {
+      "marketRouter": "CAD4IGDU5BUR4WES5KCHXHZPCYABRNK55LVFV3TY3B2KDEUPLED6YUJ2",
+      "feeForwarder": "CCQCLMQT2YFE4VKCAGNCHCEAKVCEKZNRMF7PC6VGW2X2STSTZPU42UH5"
+    },
+    "releases": [
+      {
+        "tag": "v0.0.2",
+        "commit": "d99d0139922efbd1bc6df9e4c940dba71782367f",
+        "deployedOn": "2026-10-02",
+        "codeHashes": {
+          "CDOF5KRURJ7RRBPORHYSSKT727X3IBNF3LGOFHZND4HBTS5FRUZRJEZT": "19032576681e48afab44bde4560c156a69fe5c94037f48cc7ceb418f3719b125",
+          "CDOAKNTCQZSBQJY7FFQI7RUURJKY37KYI6GV464H2YHTDJ7DBI27F4J5": "d501d20cfea6676b51ff341b408bbe4e406a17e4a21516064d8ea9663994088e",
+          "CBOKFCC24264FHSAK2PZ5U6VYMDMJWU55FORXE7ZT6EWBOLVK3TBLAOI": "a7f32705c1ceeda07496520a3b16a1c6a64f1d68e4425752e892633d6009f035",
+          "CDIFOB7JFHWKIWDTMCFWTV2EMYPSLT77KPSXESMZT5W7OSLDAMCAEOTV": "7c25590eb09bcf93065840df7d59dbeafbfc0648731068d5b0fad3b12603dfad"
+        }
+      },
+      {
+        "tag": "v1.0.0",
+        "commit": "e2070b47636d1b5489569a1e8b2251cd8550de73",
+        "deployedOn": "2026-11-16",
+        "codeHashes": {
+          "CD7CBMLDXJNXOGJPAPSE62WIHMKGNSXPY4CW6Z5UWNDTBUDEYWMWNHHQ": "4db7ee0b0a1d6a2d0de0e51a5a14ce05bbc5d567643ca198a97e5b51aaa8606f",
+          "CAD4IGDU5BUR4WES5KCHXHZPCYABRNK55LVFV3TY3B2KDEUPLED6YUJ2": "534d67eb873c8f0e971130309240ccb064a0d78b9676a87156abd49d58d39289",
+          "CCQCLMQT2YFE4VKCAGNCHCEAKVCEKZNRMF7PC6VGW2X2STSTZPU42UH5": "f3444fe6d06a4fc399c1b472f74953d13d3000c8ed8b5832a6562a41ac1fa3aa"
+        }
+      }
+    ]
+  },
+  "previous": {
+    "configUrl": "https://api.zenex.trade/v1/config",
+    "appUrl": "https://app.zenex.trade/old/",
+    "commit": "644a4c4c1b4ab78dda5f9efae80d2f44d8f6fa32",
+    "factory": "CDFEZPO7ZMXMZUMOIT2CZF5FUEIGD3CC5VOROUKF4KZEQQEDZBGSQYPQ",
     "walletFactory": "CBOKFCC24264FHSAK2PZ5U6VYMDMJWU55FORXE7ZT6EWBOLVK3TBLAOI",
     "codeHashes": {
-      "CDOF5KRURJ7RRBPORHYSSKT727X3IBNF3LGOFHZND4HBTS5FRUZRJEZT": "19032576681e48afab44bde4560c156a69fe5c94037f48cc7ceb418f3719b125",
-      "CDOAKNTCQZSBQJY7FFQI7RUURJKY37KYI6GV464H2YHTDJ7DBI27F4J5": "d501d20cfea6676b51ff341b408bbe4e406a17e4a21516064d8ea9663994088e",
-      "CBOKFCC24264FHSAK2PZ5U6VYMDMJWU55FORXE7ZT6EWBOLVK3TBLAOI": "a7f32705c1ceeda07496520a3b16a1c6a64f1d68e4425752e892633d6009f035",
-      "CDIFOB7JFHWKIWDTMCFWTV2EMYPSLT77KPSXESMZT5W7OSLDAMCAEOTV": "7c25590eb09bcf93065840df7d59dbeafbfc0648731068d5b0fad3b12603dfad"
+      "market": "02aa342f5e6e084c8e5728b74aee77864f77ea720896e61a689da8252f95943c",
+      "vault": "464026c214f8700408715b370fcc26e1eb8b688d3ff468bfc6ade751e0aab20e"
     }
   },
   "knownIssuers": {

@@ -41,13 +41,16 @@ page.
 `STELLAR_RPC_URL=<mainnet rpc> npm run deployments` rewrites it. The script in
 `scripts/deployments/` takes each value from one source:
 
-- `record.mainnet.json`, reviewed: the factory, the wallet factory, and the code
-  each contract must run. Nothing on chain points to these.
+- `record.mainnet.json`, reviewed: the factory, the wallet factory, the
+  contracts that are deployed but not yet used by the app, the previous market's
+  app, and the code hash of the release build each contract must run. Nothing on
+  chain points to these. Take each hash from the release files on GitHub.
 - The app's public config (`configUrl` in the record): the markets, the router,
   the fee forwarder, and the smart-wallet contracts.
 - The chain: every parameter, owner, status, and code hash.
-- `../zenex-contracts` at the recorded commit: the protocol limits and the
-  release builds the code hashes must match.
+- `zenex-contracts` at the recorded commit: the protocol limits. The commit is
+  one of the public `zenex-trade/zenex-contracts`, so set `ZENEX_CONTRACTS_DIR`
+  to a clone of it when `../zenex-contracts` does not hold the commit.
 
 Every cross-check failure stops the run. Re-run it after a deploy, a config
 change, or an oracle or treasury change, and update the record when a contract
