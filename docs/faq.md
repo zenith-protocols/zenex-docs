@@ -39,6 +39,10 @@ The current policy restricts contracts and destinations, but has no spending cap
 
 The vault also needs available assets and liquidity, with pending trader profit within its limits. See [Deposits and withdrawals](./vault/depositing.md).
 
+## Why is my deposit still waiting?
+
+A deposit waits while the vault is at its balance cap, or while either side's pending trader profit is above the profit cap. It fills once the check passes, or you can cancel it. See [Deposits and withdrawals](./vault/depositing.md).
+
 ## Why did my vault order disappear without a fill?
 
 A result below minimum received rejects the order. Principal returns, the keeper keeps the execution fee, and the order ends. See [Minimum received](./vault/depositing.md#the-minimum-received).
@@ -49,4 +53,4 @@ Positions and escrow remain held. Closing, adding margin, cancelling, redeeming,
 
 ## Where are contract addresses and audit reports?
 
-Use [Deployments](./deployments.md) for addresses, code hashes, owners, and settings. Use [Audit reports](./audits.md) for the published V1 report and what it does not cover.
+Use [Deployments](./deployments.md) for addresses, code hashes, owners, and settings. Use [Audit reports](./audits.md) for the published V1 report, what it does not cover, the public contract source, and how to report a vulnerability.

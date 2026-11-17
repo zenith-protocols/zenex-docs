@@ -21,7 +21,6 @@ fn deploy(
     config: Config,
     vault_name: String,
     vault_symbol: String,
-    vault_decimals_offset: u32,
 ) -> (Address, Address);
 ```
 
@@ -37,11 +36,10 @@ The return is the pair `(market, vault)`, in that order.
 | `config` | `Config` | The initial market configuration, 34 fields. |
 | `vault_name` | `String` | The share token name. |
 | `vault_symbol` | `String` | The share token symbol. |
-| `vault_decimals_offset` | `u32` | The count of extra decimals that share-dec adds to the decimals of the settlement token. |
 
 The factory declares `Config` as a mirror of the market's `Config`. Both use the same fields in the same order and the same XDR (External Data Representation, the Stellar encoding of contract values). That match lets the market constructor decode the value the factory hands it. [Config](../market/config.md) gives every field, its unit, and its bound.
 
-The factory passes `token`, `oracle`, `feed_id`, and `config` unchanged to the two constructors. Every check on these values runs in the constructors. The market constructor checks that `feed_id` carries the `0x0003` prefix of a V3 stream and checks every `config` bound. If a check fails, the whole call aborts. The market stores `token` and `oracle` as given. The vault constructor calls `decimals` on `token`.
+The factory passes `token`, `oracle`, `feed_id`, and `config` unchanged to the two constructors. Every check on these values runs in the constructors. The market constructor checks that `feed_id` carries the `0x0003` prefix of a V3 stream, checks every `config` bound, and checks that `token` has 7 decimals. If a check fails, the whole call aborts. The market stores `token` and `oracle` as given. The vault constructor also calls `decimals` on `token`, and sets the share decimals to that count plus its fixed offset of 6.
 
 ## Authorization
 
@@ -81,7 +79,7 @@ One `(admin, salt)` therefore yields one market and one vault across every facto
 
 The factory creates the vault, then the market, then the registry entry. `deploy_v2` is the host call that creates a contract and runs its constructor.
 
-1. `deploy_v2` on the vault deployer installs `vault_hash` from `FactoryInitMeta`. It passes the positional constructor tuple `(vault_name, vault_symbol, token, vault_decimals_offset, market_address)`. The vault stores the market address as its immutable strategy and makes no call to it.
+1. `deploy_v2` on the vault deployer installs `vault_hash` from `FactoryInitMeta`. It passes the positional constructor tuple `(vault_name, vault_symbol, token, market_address)`. The vault stores the market address as its immutable strategy and makes no call to it.
 2. `deploy_v2` on the market deployer installs `market_hash`. It passes the positional constructor tuple `(admin, token, vault_address, oracle, treasury, feed_id, config)`. `treasury` is the address held in `FactoryInitMeta`. The market stores the vault address and makes no call to it.
 3. The factory writes the registry entry for the market address.
 4. `deploy` publishes `Deploy` and returns the pair.
@@ -134,8 +132,8 @@ Every failure of `deploy` traps in the host. The host reports the failure as `Er
 | `vault_hash` or `market_hash` names code that does not fit its constructor tuple | `Error(WasmVm, UnexpectedSize)`, with no contract error code. |
 | `feed_id` is not a V3 stream id, or a `config` value breaks a bound, a positivity rule, or an ordering rule | `MarketError::InvalidConfig` (700) from the market constructor. |
 | A `config` field inside the sign check of `Config::check_valid` is negative | `MarketError::NegativeValueNotAllowed` (710) from the market constructor. |
-| `vault_decimals_offset` is above `MAX_DECIMALS_OFFSET`, 10 decimals | `VaultTokenError::VaultMaxDecimalsOffsetExceeded` (409) from the vault constructor. |
-| The sum of the decimals of `token` and `vault_decimals_offset` overflows `u32` | `VaultTokenError::MathOverflow` (410) from the vault constructor. |
+| `decimals` on `token` returns a count other than 7 | `MarketError::InvalidConfig` (700) from the market constructor. |
+| The sum of the decimals of `token` and the vault's fixed offset of 6 overflows `u32` | `VaultTokenError::MathOverflow` (410) from the vault constructor. |
 | `token` is not a live contract | `Error(Storage, MissingValue)` from the `decimals` call of the vault constructor. |
 | `token` is a contract with no `decimals` function | `Error(WasmVm, MissingValue)` from the `decimals` call of the vault constructor. |
 | `decimals` on `token` returns a value that does not decode as `u32` | `Error(WasmVm, InvalidAction)` from the `decimals` call of the vault constructor. |

@@ -28,7 +28,7 @@ The position's margin bounds its trading loss. Separate orders, relay fees, and 
 
 ## Liquidity risks
 
-The vault pays trader profits and absorbs losses beyond trader margin. Fee income can be smaller than those outflows. A deposit and redeem use different adverse marks and each pays its applicable vault fee. A quick round trip can lose value. A redeem can remain blocked after its cooldown because liquidity or pending profit checks fail. A minimum-received rejection returns principal but spends the execution fee. Read [Share value](./vault/share-value.md) and [Deposits and withdrawals](./vault/depositing.md).
+The vault pays trader profits and absorbs losses beyond trader margin. Fee income can be smaller than those outflows. A deposit and redeem use different adverse marks and each pays its applicable vault fee. A quick round trip can lose value. Share value counts borrowing interest before the vault collects it. A deposit can wait while pending trader profit is above the profit cap. A redeem can remain blocked after its cooldown because liquidity or pending profit checks fail. A minimum-received rejection returns principal but spends the execution fee. Read [Share value](./vault/share-value.md) and [Deposits and withdrawals](./vault/depositing.md).
 
 ## Permissions and services
 

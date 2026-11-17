@@ -31,7 +31,7 @@ The host runs the constructor once, at deploy, and it needs no signature. `Facto
 | `token` | The settlement token. Every notional, margin, fee, and payout is in its decimals (token-dec). |
 | `vault` | The strategy vault that backs the market. |
 | `oracle` | The oracle contract that turns a submitted price report into a `PriceData`. |
-| `treasury` | The protocol fee sink. The market reads its rate at every settlement. |
+| `treasury` | The protocol fee sink. The market reads its rate on every price-bearing entry. |
 | `feed_id` | The 32-byte price stream id, fixed at deploy. Byte 0 must be `0x00` and byte 1 must be `0x03`. That `0x0003` prefix marks a V3 stream, the only report shape the oracle decodes. |
 | `config` | The full `Config` singleton. |
 
@@ -42,8 +42,9 @@ The constructor checks in this order and traps on the first failure.
 | 1 | `InvalidConfig` (700) | `feed_id` byte 0 is not `0x00`, or byte 1 is not `0x03`. |
 | 2 | `NegativeValueNotAllowed` (710) | Rule 1 of `Config::check_valid` fails. |
 | 3 | `InvalidConfig` (700) | Any of rules 2 to 20 of `Config::check_valid` fails. |
+| 4 | `InvalidConfig` (700) | `decimals` on `token` does not return `TOKEN_DECIMALS` (7). |
 
-`Config::require_valid` runs steps 2 and 3 and traps with the first violated rule. The [Config page](./config.md) numbers the rules and gives every field bound.
+`Config::require_valid` runs steps 2 and 3 and traps with the first violated rule. Step 4 is a cross-contract `decimals` call on `token`. The config bounds and the vault's 13 share decimals assume a 7-decimal settlement token, which every Stellar asset contract has. The [Config page](./config.md) numbers the rules and gives every field bound.
 
 After the checks the constructor writes in this order:
 
@@ -91,7 +92,7 @@ fn get_rate(e: Env) -> i128;
 
 `TreasuryClient` is generated from the `TreasuryInterface` trait. The return is the treasury's share of every protocol fee (`SCALAR_18`). The call extends the treasury's instance TTL, then reads the `Rate` instance key. An unset key reads as `0`, so the call raises no error code.
 
-The market reads the rate once per settlement. `Settlement::fee_split` makes the call for `execute_order` on an increase or a decrease, for `execute_liquidation`, and for `execute_adl`. `Settlement::compute_vault_order` makes it for each `execute_vault_order`, including a rejected order. The [Fees and settlement page](./fee-system.md) gives the legs the rate splits. The [fee rate page](../treasury/fee-rate.md) gives the bound the treasury holds the rate to.
+The market reads the rate once per call, in `Market::load`, and carries it as `Market.treasury_rate`. Every price-bearing entry therefore makes the call, whether or not it settles. `Settlement::fee_split` and `Settlement::compute_vault_order` split fees at that rate, and `Market::lp_net_pnl` uses it for the vault's share of pending borrowing. The [Fees and settlement page](./fee-system.md) gives the legs the rate splits. The [fee rate page](../treasury/fee-rate.md) gives the bound the treasury holds the rate to.
 
 ### The vault prices shares and funds payouts
 
@@ -130,20 +131,22 @@ The market passes itself as `from` on `strategy_deposit` and as `owner` on `stra
 | `preview_deposit` | `InvalidAmount` (800) | `assets` is negative. |
 | `preview_redeem` | `InvalidAmount` (800) | `shares` is negative. |
 | `strategy_deposit`, `strategy_redeem`, `preview_deposit`, `preview_redeem` | `PnlExceedsAssets` (801) | `net_pnl` is above `total_assets`. |
+| `strategy_deposit` | `SupplyLimitExceeded` (802) | The minted shares would lift the supply above `i128::MAX` less the virtual shares. |
+| `strategy_redeem` | `PayoutExceedsAssets` (803) | The priced assets are above `total_assets`. |
 | `strategy_redeem` | `InsufficientBalance` (100) | `owner` holds fewer shares than `shares`. |
 | `transfer` | `InsufficientBalance` (100) | `from` holds fewer shares than `amount`. |
 | `transfer` | `LessThanZero` (103) | `amount` is negative. |
 
-On `strategy_deposit` and `strategy_redeem`, code 800 is checked before code 801. `strategy_deposit` then raises the asset token's own error when `from` cannot cover `assets`. `strategy_redeem` burns the shares from `owner` before it pays, so code 100 comes first. The asset token's own error follows when the vault balance falls short of the assets. `strategy_withdraw` raises the asset token's own error when the vault balance falls short of `amount`. `total_assets` and `balance` raise no error code.
+On `strategy_deposit` and `strategy_redeem`, code 800 is checked before code 801. `strategy_deposit` then raises the asset token's own error when `from` cannot cover `assets`. `strategy_deposit` checks code 802 after it prices the shares and before it pulls the assets. `strategy_redeem` checks code 803 after it prices the assets, and then burns the shares from `owner` before it pays, so code 803 comes before code 100. `strategy_withdraw` raises the asset token's own error when the vault balance falls short of `amount`. `total_assets` and `balance` raise no error code.
 
-The `InsufficientBalance`, `LessThanZero`, `InsufficientAllowance` (101), and `MathOverflow` (104) codes are `FungibleTokenError` variants from stellar-tokens 0.7.2. The [share pricing page](../vault/share-pricing.md) gives the full error table of the two strategy entries. That table covers the allowance path that an `owner` other than the strategy takes and the share-mint overflow. The [share token page](../vault/share-token.md) gives the codes of `transfer`.
+The `InsufficientBalance`, `LessThanZero`, `InsufficientAllowance` (101), and `MathOverflow` (104) codes are `FungibleTokenError` variants from stellar-tokens 0.7.2. The [share pricing page](../vault/share-pricing.md) gives the full error table of the two strategy entries. That table covers the allowance path that an `owner` other than the strategy takes. The [share token page](../vault/share-token.md) gives the codes of `transfer`.
 
 | Function | Where the market calls it |
 | --- | --- |
 | `total_assets` | `Market::load`, once per price-bearing entry. The market tracks the return as `vault_balance`. |
-| `preview_deposit` | `execute_vault_order` on a deposit fill, only when the order's `min_out` is above 0. `assets` is the order amount less the deposit fee, and `net_pnl` is the capped net PnL marked adverse to the depositor. The call runs before the mint. |
+| `preview_deposit` | `execute_vault_order` on a deposit fill, only when the order's `min_out` is above 0. `assets` is the order amount less the deposit fee, and `net_pnl` is `Market::lp_net_pnl` marked adverse to the depositor. The call runs before the mint. |
 | `strategy_deposit` | `execute_vault_order` on a deposit fill. `from` is the market and `receiver` is the depositor. |
-| `preview_redeem` | `execute_vault_order` on a redeem fill, only when the order's `min_out` is above 0. `shares` is the order amount, and `net_pnl` is the capped net PnL marked adverse to the redeemer. The call runs before the burn. |
+| `preview_redeem` | `execute_vault_order` on a redeem fill, only when the order's `min_out` is above 0. `shares` is the order amount, and `net_pnl` is `Market::lp_net_pnl` marked adverse to the redeemer. The call runs before the burn. |
 | `strategy_redeem` | `execute_vault_order` on a redeem fill, with `receiver` and `owner` both the market. `create_vault_order` on a `Retired` market, with `receiver` the redeemer, `owner` the market, and `net_pnl` 0. |
 | `strategy_withdraw` | `execute_order` on a decrease fill, `execute_liquidation`, and `execute_adl`, each when the settled vault leg is negative. The call moves the amount from the vault to the market and lowers `total_assets`. |
 | `transfer` | `create_vault_order` on a redeem, for the share escrow, and on a `Retired` market, for the shares of the instant redeem. `cancel_vault_order` on a redeem, for the share refund. `execute_vault_order` on a redeem that fails `min_out`, for the same refund. |

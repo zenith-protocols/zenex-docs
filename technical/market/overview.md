@@ -23,7 +23,7 @@ The owner can [upgrade market code](./dependencies.md#ownership-and-upgrade) whi
 | [Pricing](./pricing.md) | `accrue`, price selection, cache behavior, and the position price floor. |
 | [Fees and settlement](./fee-system.md) | Trade and impact fees, escrowed execution fees, settlement legs, and payout fallback. |
 | [Funding rate](./funding-rate.md) | Funding accrual, `claim_credit`, `get_claimable_credit`, and the credit pool. |
-| [Borrowing rate](./borrowing-rate.md) | Utilization, the borrowing curve, and side reserves. |
+| [Borrowing rate](./borrowing-rate.md) | Utilization, the borrowing curve, side reserves, and pending borrowing. |
 
 ## Forced closes and liquidity
 

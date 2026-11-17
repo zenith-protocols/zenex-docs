@@ -1,7 +1,7 @@
 ---
 sidebar_position: 9
 title: PnL and the profit cap
-description: Position and side marks, rounding, profit haircuts, and capped vault marks.
+description: Position and side marks, rounding, profit haircuts, and the vault's share-price mark.
 ---
 
 # PnL and the profit cap
@@ -15,7 +15,7 @@ Four symbols do the work:
 - `math::pnl` marks one position.
 - `MarketData::side_pnl` marks a whole side.
 - `Market::haircut_pnl` caps a realized profit.
-- `Market::capped_net_pnl` marks the book for the vault share price.
+- `Market::lp_net_pnl` marks the book for the vault share price.
 
 Every mark reads one stored pair. `Position` holds `tokens` (base-dec) and `notional` (token-dec). `MarketData` holds the same pair per side, and it holds `margin`, the posted margin per side (token-dec). The four symbols fail only where a fixed-point helper traps.
 
@@ -94,11 +94,12 @@ The result is then floored at `-margin.get(is_long)`, the negated `MarketData` p
 `maximize` selects the side of the spread and the rounding direction. `maximize = true` reads the side's profit as high as the quote allows, and `maximize = false` reads it as low as the quote allows. These callers read the high mark:
 
 - `Market::haircut_pnl`, for the profit cap.
-- `Market::capped_net_pnl`, on a redeem fill.
+- `Market::lp_net_pnl`, on a redeem fill.
 - The redeem gate on `execute_vault_order`, which compares each side with `max_pnl_withdraw` of half the remaining balance.
+- The deposit gate on `execute_vault_order`, which compares each side with `max_pnl_trader` of half the balance before the deposit.
 - `update_adl_state` and `execute_adl`, for the trigger and the clear allowance of auto-deleveraging (ADL).
 
-A deposit fill reads the low mark through `Market::capped_net_pnl`. Both marks favor the vault's existing shareholders.
+A deposit fill reads the low mark through `Market::lp_net_pnl`. Both marks favor the vault's existing shareholders.
 
 The rows below use one quote, bid 9.00 and ask 11.00. The long holds 2 base units at notional 20.0 on margin 10.0. The short holds 0.5 base units at notional 5.0 on margin 3.0.
 
@@ -132,7 +133,7 @@ Where:
 - `cap` is that factor of half the vault balance (token-dec), one allowance per side.
 - `side_pnl` is the pending profit of the closing side at the high mark (token-dec).
 
-While the side's pending profit stays above `cap`, every realized profit on that side pays the fraction `cap / side_pnl`. `haircut_pnl` and `capped_net_pnl` take `cap` from the vault balance as it stands when they run.
+While the side's pending profit stays above `cap`, every realized profit on that side pays the fraction `cap / side_pnl`. `haircut_pnl` and `lp_net_pnl` take `cap` from the vault balance as it stands when they run.
 
 The rows below use a long side with a pending profit of 20.0 and a `max_pnl_trader` of 90%.
 
@@ -149,25 +150,41 @@ A realized profit is measured on the book before the closing mutation. `Position
 
 Each slice of a close reads a smaller overhang than the last, so slicing partly escapes the cap. The 20.0 profit above pays 4.5 in one close. Four quarter slices pay 1.125, 1.33125, 1.6973437, and 2.6308827, which total 6.7844764. Each slice lowers the side's pending profit and the vault balance before the next one. ADL bounds how far the overhang can grow, and the [Auto-deleveraging](./auto-deleveraging.md) page gives that bound.
 
-## The vault mark sums both capped sides
+## The vault mark sums both capped sides and subtracts pending borrowing {#the-vault-mark-sums-both-capped-sides}
 
 ```rust
-pub fn capped_net_pnl(&self, e: &Env, maximize: bool) -> i128
+pub fn lp_net_pnl(&self, e: &Env, maximize: bool) -> i128
 ```
 
-`Market::capped_net_pnl` returns the signed token-dec value the vault marks its shares against. It takes `cap = half_factor(vault_balance, config.max_pnl_trader)`, the allowance the profit cap uses. `vault_balance` is the vault's `total_assets` (token-dec) and `config.max_pnl_trader` is a `SCALAR_18` factor. The return is:
+`Market::lp_net_pnl` returns the signed token-dec value the vault marks its shares against. It has two parts. The first is the pending trader PnL, with each side's profit capped. The second is the vault's share of the borrowing that positions have accrued and not yet settled.
 
 ```text
-min(side_pnl(long, maximize), cap) + min(side_pnl(short, maximize), cap)
+cap     = half_factor(vault_balance, config.max_pnl_trader)
+pnl     = min(side_pnl(long, maximize), cap) + min(side_pnl(short, maximize), cap)
+pending = pending_borrowing(maximize)
+income  = floor(pending * (SCALAR_18 - treasury_rate) / SCALAR_18)   if maximize
+income  = ceil(pending * (SCALAR_18 - treasury_rate) / SCALAR_18)    otherwise
+lp_net_pnl = pnl - income
 ```
 
-The cap binds per side. A losing side passes through at its margin-floored value, so the sum can be negative. With a `cap` of 18.0, a long side at +30.0 counts 18.0 and a short side at -5.0 counts -5.0, so the mark is 13.0.
+Where:
+
+- `vault_balance` is the vault's `total_assets` (token-dec) and `config.max_pnl_trader` is a `SCALAR_18` factor. `cap` is the allowance the profit cap uses.
+- `pending_borrowing` is `MarketData::pending_borrowing` (token-dec), the borrowing both sides owe and no position has settled. The [Borrowing rate](./borrowing-rate.md#pending-borrowing) page defines it.
+- `treasury_rate` is the treasury's rate at load (`SCALAR_18`), in `[0, SCALAR_18 / 2]`. The treasury takes that share of borrowing at settlement, so the vault's share is the rest.
+- `income` is token-dec and never negative.
+
+The cap binds per side. A losing side passes through at its margin-floored value, so `pnl` can be negative. With a `cap` of 18.0, a long side at +30.0 counts 18.0 and a short side at -5.0 counts -5.0, so `pnl` is 13.0.
+
+The pending borrowing is a claim on posted margin and not a price mark, so the cap does not clip it. It also counts in full when a side's loss is already floored at its margin. With the 13.0 above, a pending borrowing of 4.0, and a `treasury_rate` of 10%, `income` is 3.6 and the mark is 9.4. A book at zero PnL with the same borrowing marks at -3.6, which raises the vault's backing by 3.6.
+
+`income` rounds with the mark. The redeem mark floors the pending total and the vault's share, and the deposit mark ceils both. Each rounding prices against the liquidity provider who transacts.
 
 `execute_vault_order` passes the result to the vault as the `net_pnl` argument. A deposit fill marks with `maximize = false` and a redeem fill marks with `maximize = true`. When the order's `min_out` is above zero, the vault first quotes the fill with `preview_deposit` or `preview_redeem` at that mark. If the quote is at or above `min_out`, `strategy_deposit` or `strategy_redeem` runs at the same mark. The [Vault orders](./vault-orders.md) page gives the gates around it.
 
 The mark rides out on the receipt. A filled deposit publishes it as `DepositFill.net_pnl` and a filled redeem as `RedeemFill.net_pnl`. A rejected order publishes it as `RejectVaultOrder.net_pnl`, and `RejectVaultOrder.quoted` carries the shortfall quote. That quote is the shares a deposit would mint, or the assets a redeem would pay net of `redeem_fee`.
 
-On a `Retired` market, `create_vault_order` redeems at once and publishes `RedeemFill` with id `0` and `net_pnl` `0`. `capped_net_pnl` does not run on that path.
+On a `Retired` market, `create_vault_order` redeems at once and publishes `RedeemFill` with id `0` and `net_pnl` `0`. `lp_net_pnl` does not run on that path.
 
 ## A receipt reproduces its PnL only below the cap
 

@@ -9,7 +9,7 @@ The connected wallet owns your orders, positions, vault shares, and claimable cr
 
 ## Choose a wallet
 
-The app supports browser wallets and passkey smart wallets. Available submission modes depend on the wallet's signing capabilities.
+The app supports browser wallets and passkey smart wallets. Available submission modes depend on the wallet's signing capabilities. On mainnet the browser wallet list includes MetaMask, which submits in Browser direct mode. The testnet app does not list it.
 
 | Mode | What you approve | Transaction fee |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ The app supports browser wallets and passkey smart wallets. Available submission
 | Relay | Contract permissions for the relayer to submit. | The configured fee token, within your signed cap. |
 | Relay + One-Click | A session permission first, then local signatures for eligible actions. | Relayed token fees. |
 
-Passkey wallets use contract permissions and a separate submitter. One-click trading is available for supported passkey wallets. See [What you sign](./signing.md) and [One-click trading](./one-click-trading.md).
+Passkey wallets use contract permissions and a separate submitter. One-click trading is available for supported passkey wallets on markets where the app offers it. See [What you sign](./signing.md) and [One-click trading](./one-click-trading.md).
 
 ## Fund the trading address
 

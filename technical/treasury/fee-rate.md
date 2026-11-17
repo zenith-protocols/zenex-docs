@@ -6,7 +6,7 @@ sidebar_position: 2
 
 # Fee rate and withdrawal
 
-This page covers the constructor and the three trait entries of the treasury, `get_rate`, `set_rate`, and `withdraw`. The treasury holds one number, the protocol fee rate, and a balance in every token that reaches its address. The market reads the rate at each settlement and pays the treasury cut by a plain token transfer.
+This page covers the constructor and the three trait entries of the treasury, `get_rate`, `set_rate`, and `withdraw`. The treasury holds one number, the protocol fee rate, and a balance in every token that reaches its address. The market reads the rate on each price-bearing call and pays the treasury cut by a plain token transfer.
 
 `TreasuryContract` implements the `Treasury` trait, and the crate generates a `TreasuryClient` from it. `__constructor` sits outside that trait, so the client carries no method for it.
 
@@ -74,7 +74,7 @@ The body calls `transfer` on `token` with the treasury contract address as the s
 | `LEDGER_THRESHOLD_INSTANCE` | 518400 | ledgers | About 30 days. The remaining TTL below which the entry extends. |
 | `LEDGER_BUMP_INSTANCE` | 535680 | ledgers | About 31 days. The TTL after the extension. |
 
-`extend_instance` runs in `get_rate`, `set_rate`, and `withdraw`. `__constructor` leaves it out, so the first extension happens on the first call to one of those three entries. A call that traps extends nothing, because a trap reverts every effect of the invocation. The market reads the rate at every settlement, so market activity alone keeps the instance and the `Rate` entry alive.
+`extend_instance` runs in `get_rate`, `set_rate`, and `withdraw`. `__constructor` leaves it out, so the first extension happens on the first call to one of those three entries. A call that traps extends nothing, because a trap reverts every effect of the invocation. The market reads the rate on every price-bearing call, so market activity alone keeps the instance and the `Rate` entry alive.
 
 ## The owner controls the rate and the balance {#ownership}
 

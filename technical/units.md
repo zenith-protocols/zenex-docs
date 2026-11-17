@@ -12,8 +12,8 @@ This page covers the scale of every integer the contracts store or return, how a
 
 | Unit | One step is | Used for |
 |---|---|---|
-| token-dec | The smallest indivisible amount of the settlement token, `10^-d` of one token for `d` decimals. A Stellar classic asset such as USDC has 7 decimals. | Notional, margin, fees, profit and loss, escrow, credit balances, and vault assets. `impact_scalar`, the denominator of the impact fee, is token-dec as well. |
-| share-dec | One indivisible vault share. Share decimals are the settlement token's decimals plus the vault's `decimals_offset`. | Share balances and every share amount that a vault order or fill carries. |
+| token-dec | The smallest indivisible amount of the settlement token, `10^-d` of one token for `d` decimals. Every Stellar asset contract has 7 decimals, and the market constructor rejects a token with any other count. | Notional, margin, fees, profit and loss, escrow, credit balances, and vault assets. `impact_scalar`, the denominator of the impact fee, is token-dec as well. |
+| share-dec | One indivisible vault share. Share decimals are the settlement token's decimals plus the vault's fixed offset of 6. The market accepts only a 7-decimal settlement token, so shares have 13 decimals. | Share balances and every share amount that a vault order or fill carries. |
 | price (18 decimals) | `10^-18` of the quote currency. Chainlink Data Streams V3 reports carry `bid` and `ask` at this scale, and the oracle keeps it without rescaling. Pages that say "feed precision" mean this scale. | Every price. This covers the oracle's bid and ask, an order's trigger and bound, the terminal price, and the price on every fill event. |
 | `SCALAR_18` | `10^-18`, so `SCALAR_18` itself is 100%. | Every rate, ratio, and cumulative index. A borrowing or funding rate is `SCALAR_18` per second. |
 | seconds | One unix second from the ledger timestamp. | Order and accrual timestamps, staleness windows, lock windows, the delist windows, and the governance delay. |

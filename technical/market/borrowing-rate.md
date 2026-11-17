@@ -1,14 +1,14 @@
 ---
 sidebar_position: 12
 title: Borrowing rate
-description: Side reserves, utilization, the borrowing curve, and per-second index accrual.
+description: Side reserves, utilization, the borrowing curve, per-second index accrual, and pending borrowing.
 ---
 
 # Borrowing rate
 
 Borrowing is a charge on the side of the market that holds the greater base-token exposure. A token tie charges both sides. The charge pays for the vault liquidity that the side's open positions reserve, and the vault and the treasury split it. The rate is a kink curve over that side's own reserve utilization, priced per second in `SCALAR_18`. The [fees and settlement](./fee-system.md) page gives the split of the collected amount.
 
-Borrowing moves in two stages. An accrual raises one or both sides of `MarketData.borrowing_idx`, for whole sides at once. A position change then settles the index of the position's own side against the snapshot in `Position.borrowing_idx` and debits the charge from margin. This page holds the side reserve, the utilization, the kink rate, and the accrual. The [funding rate](./funding-rate.md) page holds the settlement of an index into a position.
+Borrowing moves in two stages. An accrual raises one or both sides of `MarketData.borrowing_idx`, for whole sides at once. A position change then settles the index of the position's own side against the snapshot in `Position.borrowing_idx` and debits the charge from margin. Between the two stages the charge is pending, and the vault's share price counts it. This page holds the side reserve, the utilization, the kink rate, the accrual, and the pending amount. The [funding rate](./funding-rate.md) page holds the settlement of an index into a position.
 
 Five units appear on this page.
 
@@ -138,6 +138,37 @@ borrowing_idx[side] += rate * elapsed   (SCALAR_18)
 :::info A token tie charges both sides
 The side selection compares base-token exposure. Equal token counts accrue both side indices, each at its own reserve-utilization rate.
 :::
+
+## Pending borrowing is tracked per side {#pending-borrowing}
+
+```rust
+pub fn pending_borrowing(&self, e: &Env, maximize: bool) -> i128;
+```
+
+`MarketData::pending_borrowing` returns the borrowing that both sides have accrued and no position has settled yet (token-dec). It reads three `MarketData` fields per side and visits no position.
+
+```text
+side_pending = notional[side] * borrowing_idx[side] - borrowing_weight[side]
+pending      = floor((long_pending + short_pending) / SCALAR_18)   if maximize
+pending      = ceil((long_pending + short_pending) / SCALAR_18)    otherwise
+```
+
+Where:
+
+- `notional[side]` is the side's open interest (token-dec).
+- `borrowing_idx[side]` is the side's cumulative index (`SCALAR_18`).
+- `borrowing_weight[side]` is `MarketData.borrowing_weight`. It is the sum over the side's open positions of `Position.notional * Position.borrowing_idx`, each at the position's last checkpoint (token-dec times `SCALAR_18`, exact).
+- `pending` is token-dec. `maximize = true` is the trader-best mark and rounds down. `maximize = false` rounds up.
+
+Each position's snapshot is at or below the side index, so a side's difference is never negative. The two sides sum exactly and round once. The method raises no `MarketError`. An overflowing product traps.
+
+`Position::set_checkpoint` keeps the weight current. Every change to a position's `notional` or `borrowing_idx` goes through it: an increase, a decrease, a liquidation, and the snapshot update in `Position::settle_accruals`. It removes the position's old `notional * borrowing_idx` from the side's weight and adds the new one. A settled position therefore contributes nothing to `pending` until the index moves again.
+
+Take a long side with 100.0 of notional checkpointed at index 0.01. At an index of 0.05 the side owes exactly 4.0. After every position settles at 0.05, the weight equals `notional * borrowing_idx` and the pending amount is 0.
+
+`Config::check_valid` holds `max_open_interest` at or below `MAX_OPEN_INTEREST`, which is `10^11` tokens per side. That bound keeps the products inside `i128` while the two side indices sum to less than 170.
+
+`Market::lp_net_pnl` subtracts the vault's share of the pending amount from the mark that prices vault shares, as [PnL and the profit cap](./pnl-calculation.md#the-vault-mark-sums-both-capped-sides) documents. Deposits and redemptions therefore price in borrowing as it accrues, before any position pays it.
 
 ## What this means for a position
 

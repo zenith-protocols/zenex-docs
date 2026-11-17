@@ -164,7 +164,7 @@ The instance entry holds the instance keys and the reference to the contract cod
 
 ## Errors
 
-`GovernanceError` is the contract error enum. Governance owns the 810 to 812 domain. The strategy vault uses 800 and 801 from the same 8xx range. The table is the complete set of `GovernanceError` codes.
+`GovernanceError` is the contract error enum. Governance owns the 810 to 812 domain. The strategy vault uses 800 to 803 from the same 8xx range. The table is the complete set of `GovernanceError` codes.
 
 | Error | Code | Condition |
 | --- | --- | --- |
